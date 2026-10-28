@@ -1,0 +1,4 @@
+# Nick builds on Windows: keep line endings LF in the repo.
+* text=auto eol=lf
+*.png binary
+*.pdf binary
