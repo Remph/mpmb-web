@@ -1,7 +1,7 @@
 # Project conventions
 
 MPMB Web (`mpmb-web`): a web version of MorePurpleMoreBetter's D&D 5.5e (2024) Character Record Sheet,
-first for Nick's group (four 13-inch laptops, some with touch, and one iPad). Static site: Vite, Svelte 5,
+first for the owner's play group (four 13-inch laptops, some with touch, and one iPad). Static site: Vite, Svelte 5,
 TypeScript, built with pnpm. Public repo, GPL-3.0-or-later.
 
 ## What to read
@@ -20,14 +20,14 @@ In the repo root: `pnpm install`, `pnpm test` (Vitest), `pnpm check` (svelte-che
 
 ## Git (human in the loop)
 
-- Claude writes the code; Nick (GitHub `Remph`) reviews every diff, may edit it, and merges.
+- Claude writes the code; The owner (GitHub `Remph`) reviews every diff, may edit it, and merges.
 - Every change goes on its own `feature/<short-name>` branch (never `claude/...`) with a pull request
   (template in `.github/pull_request_template.md`). Never commit or push to `main`, never force-push,
   never rebase (merge `main` in instead).
 - One thread pushes to a branch at a time: the review thread during the review, the building thread
-  again afterwards. After a merge, new work goes on a new branch. If Nick merged a PR before its review
+  again afterwards. After a merge, new work goes on a new branch. If the owner merged a PR before its review
   finished, further fixes go on a new branch with a new PR.
-- No deploy yet. From M5 on, `main` deploys to a folder on nick-scherer.de; this section will say how.
+- No deploy yet. From M5 on, `main` deploys to a folder on the owner's website; this section will say how.
 - The private repo `mpmb-web-dev` has its own rules (Claude merges there itself); see its `CLAUDE.md`.
 
 ## Checks (no CI on pull requests)
@@ -38,11 +38,11 @@ that could not run, with the reason). A review runs them again on the branch.
 
 ## Reviews
 
-- Every code feature or fix gets an independent review in a new thread before Nick merges. Docs-only
+- Every code feature or fix gets an independent review in a new thread before the owner merges. Docs-only
   and text-only changes need none.
 - A thread never reviews its own work. When done, it reports "ready for review"; the project's
   coordinator starts the review thread on the same branch, one review thread per PR.
-- The review fixes what it judges worth fixing on the same branch without asking, and asks Nick only
+- The review fixes what it judges worth fixing on the same branch without asking, and asks the owner only
   about design choices, one at a time.
 - A small fix round is one build thread, one branch, one PR and one review thread; bigger milestones
   get a thread each.
@@ -60,7 +60,7 @@ that could not run, with the reason). A review runs them again on the branch.
   from 1024 to 2560 px wide, one clear main action per place. The iPad (768 to 1180 px) must work.
 - Every visible text in German and English (`src/i18n.ts`; a missing key is a type error).
 - Comment non-obvious code; explain the "why", not the "what".
-- Nick builds on Windows: never add two files whose names differ only in case.
+- The owner builds on Windows: never add two files whose names differ only in case.
 
 ## Licence, content and public identity
 
