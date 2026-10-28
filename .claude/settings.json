@@ -14,9 +14,12 @@
       "Bash(git log:*)",
       "Bash(git show:*)",
       "Bash(git branch:*)",
-      "Bash(git --no-optional-locks:*)"
+      "Bash(git --no-optional-locks status:*)",
+      "Bash(git --no-optional-locks diff:*)",
+      "Bash(git --no-optional-locks log:*)"
     ],
     "deny": [
+      "Bash(git rebase:*)",
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",
       "Bash(git push --force-with-lease:*)",
