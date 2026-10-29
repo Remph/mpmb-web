@@ -48,10 +48,11 @@ describe.each(REFERENCE_CHARACTERS)('%s', (name) => {
   const host = new ScriptedHost();
   const engine = openSheet(referenceSheet(name), host);
 
-  test('opens without script errors, asking only for the Patreon reminder', () => {
+  test('opens without script errors or pop-ups (the Patreon reminder is held back)', () => {
     expect(engine.stats.errors).toEqual([]);
-    expect(host.asked.map((a) => a.what)).toEqual(['SUPPORT ON PATREON DIALOG']);
-    expect(engine.stats.missing).toEqual({ 'util.iconStreamFromIcon': 1 });
+    expect(host.asked).toEqual([]);
+    expect(engine.pendingTimers().map((t) => t.expr)).toEqual(['PatreonStatement();']);
+    expect(engine.stats.missing).toEqual({});
   });
 
   test('every field on every page matches Acrobat after opening', () => {

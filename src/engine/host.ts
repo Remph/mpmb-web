@@ -74,6 +74,11 @@ export interface Host {
   alert(request: AlertRequest): AlertReply | null;
   /** Shows the dialog (first call) or its new state (later calls); null when it can't wait. */
   dialog(view: DialogView, first: boolean): DialogReply | null;
+  /**
+   * The dialog shown last has closed. Dialogs can open from a dialog's handlers, so the page keeps
+   * them as a stack; an element event doesn't tell the page whether its handler ended the dialog.
+   */
+  dialogClosed?(): void;
   /** Shows a pop-up menu; returns the chosen item's cReturn, or null for none. */
   popUpMenu(items: MenuItem[]): string | null;
   launchURL?(url: string): void;

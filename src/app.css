@@ -6,6 +6,10 @@
   --surface: #ffffff;
   --line: #dedae3;
   --accent: #4f46a5;
+  --on-accent: #ffffff;
+  --hover: #efedf5;
+  --danger: #b3261e;
+  --ok: #1e7b3a;
   color-scheme: light dark;
 }
 
@@ -17,6 +21,10 @@
     --surface: #211f27;
     --line: #36333e;
     --accent: #a9a2f0;
+    --on-accent: #16151a;
+    --hover: #2c2934;
+    --danger: #ff8a80;
+    --ok: #7bd88f;
   }
 }
 
@@ -43,4 +51,59 @@ body {
     sans-serif;
   font-size: 1rem;
   line-height: 1.5;
+}
+
+/* Buttons everywhere: 44 px touch targets; one primary (filled) button per place. */
+button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:not(:disabled):hover {
+  background: var(--hover);
+}
+
+button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+button.primary:not(:disabled):hover {
+  background: var(--accent);
+  filter: brightness(1.1);
+}
+
+button.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+button.quiet {
+  border-color: transparent;
+  background: none;
+  color: var(--ink-muted);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

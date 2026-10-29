@@ -3,6 +3,7 @@ import { REFERENCE_CHARACTERS, referenceSheet } from '../../test/characters.ts';
 import blankData from './data/colorful-a4.json';
 import { applyCharacter, baseFieldOf, diffCharacter, packSheet, unpackSheet } from './sheet-data.ts';
 import type { PackedSheet } from './sheet-data.ts';
+import { SHEET_ID } from './sheet-id.ts';
 import { blankSheet } from './sheet.ts';
 
 describe('packed blank sheet', () => {
@@ -11,10 +12,11 @@ describe('packed blank sheet', () => {
     expect(packSheet(unpackSheet(packed))).toEqual(packed);
   });
 
-  test('is the Colorful A4 sheet v24.2.0', () => {
+  test('is the Colorful A4 sheet v24.2.0, as SHEET_ID tells the page', () => {
     const blank = blankSheet();
     expect(blank.info.SheetType).toBe('Colorful - A4');
     expect(blank.info.SheetVersion).toBe('24.2.0');
+    expect(SHEET_ID).toEqual({ type: blank.info.SheetType, version: blank.info.SheetVersion });
     expect(Object.keys(blank.templates)).toContain('SSfront');
   });
 });

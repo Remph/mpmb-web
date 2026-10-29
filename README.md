@@ -4,9 +4,10 @@ A web version of [MorePurpleMoreBetter's D&D 5.5e (2024) Character Record Sheet]
 for playing and building characters in the browser on laptops and tablets. It runs MPMB's own sheet
 logic in the browser, so it behaves like the PDF without needing Adobe Acrobat.
 
-**Status:** in development, nothing to use yet. Built for a single play group first. The engine (MPMB's
-scripts on a stand-in for Acrobat) works and matches Acrobat on the reference characters; there is no
-sheet to fill in yet.
+**Status:** in development. Built for a single play group first. You can import characters from filled
+MPMB PDFs (Colorful A4 v24.2.0, with the add-on scripts in them), keep them in the browser, and move
+them between devices with backup files. The play view comes next. The engine (MPMB's scripts on a
+stand-in for Acrobat) matches Acrobat on the reference characters.
 
 ## Develop
 
@@ -30,6 +31,9 @@ pnpm format:check   # Prettier
 - `src/worker/`: the engine in a Web Worker, with pop-ups that wait for the user. That needs a
   cross-origin isolated page: `pnpm dev` and `pnpm preview` send the headers, the live site gets them
   from `public/.htaccess`.
+- `src/store/`: characters in the browser (IndexedDB) and backup files.
+- `src/popups/`: the page's side of MPMB's pop-ups (alerts, menus, dialogs) and the app's own questions.
+- `src/views/`, `src/App.svelte`, `src/session.svelte.ts`: the pages and what they do.
 - `test/`: the reference characters (made in Acrobat, SRD only) and the tests that compare the engine
   with them. `test/browser/engine-check.html` runs one of them through the worker in a browser: open it
   under `pnpm dev`.

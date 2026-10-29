@@ -4,17 +4,19 @@
 //
 // One worker holds one open sheet. MPMB's scripts keep their state in globals, so a second sheet gets
 // a fresh worker (EngineClient does that) instead of reusing this global scope.
+import { addOnsOf } from '../engine/add-ons.ts';
 import { Engine } from '../engine/engine.ts';
 import type { AlertReply, DialogReply, Host } from '../engine/host.ts';
 import { currentRealm } from '../engine/realm.ts';
 import { mpmbScripts } from '../engine/scripts.ts';
 import { diffCharacter } from '../engine/sheet-data.ts';
 import { blankSheet, characterSheet } from '../engine/sheet.ts';
-import type { SheetSnapshot } from '../engine/types.ts';
+import { allowTimer } from '../engine/startup.ts';
+import type { Bookmark, SheetSnapshot } from '../engine/types.ts';
 import { readSheetPdf } from '../pdf/read-sheet.ts';
 import { waitForAnswer } from './channel.ts';
 import type { Channel } from './channel.ts';
-import type { Answer, Ask, Command, FromWorker, ToWorker } from './protocol.ts';
+import type { Answer, Ask, Command, FailureCode, FromWorker, MenuNode, Opened, ToWorker } from './protocol.ts';
 import { changedViews, viewsOf } from './views.ts';
 import type { FieldViews } from './views.ts';
 
@@ -29,6 +31,18 @@ const post = (message: FromWorker): void => scope.postMessage(message);
 let channel: Channel | null = null;
 let engine: Engine | null = null;
 let shown: FieldViews = {};
+let shownMenu = '';
+
+/** A failure the page explains in the player's language (see FailureCode). */
+class CommandError extends Error {
+  constructor(
+    readonly code: FailureCode,
+    message: string,
+    readonly detail?: string,
+  ) {
+    super(message);
+  }
+}
 
 /**
  * A pop-up: with shared memory the worker sleeps until the page answers. Without, the page only gets
@@ -47,6 +61,10 @@ const host: Host = {
   alert: (request) => ask({ kind: 'alert', request }) as AlertReply | null,
   dialog: (view, first) => ask({ kind: 'dialog', view, first }) as DialogReply | null,
   popUpMenu: (items) => ask({ kind: 'menu', items }) as string | null,
+  // Without shared memory the page never showed the dialog, so there is nothing to close.
+  dialogClosed: () => {
+    if (channel) post({ type: 'dialogClosed' });
+  },
   launchURL: (url) => post({ type: 'launchURL', url }),
 };
 
@@ -59,14 +77,28 @@ function sendFields(): void {
   if (Object.keys(changed).length || removed.length) post({ type: 'fields', changed, removed });
 }
 
-function open(sheet: SheetSnapshot): void {
+const menuOf = (bookmarks: Bookmark[]): MenuNode[] =>
+  bookmarks.map((b) => ({ name: b.name, children: menuOf(b.children), action: Boolean(b.action) }));
+
+/** Sends MPMB's bookmarks when they changed. */
+function sendMenu(): void {
+  if (!engine) return;
+  const menu = menuOf(engine.doc.bookmarkRoot.children);
+  const text = JSON.stringify(menu);
+  if (text === shownMenu) return;
+  shownMenu = text;
+  post({ type: 'menu', menu });
+}
+
+function open(sheet: SheetSnapshot): Opened {
   if (engine) throw new Error('This worker already has a sheet open; open the next one in a new worker.');
-  engine = Engine.load({ sheet, scripts: mpmbScripts, host, realm: currentRealm() });
-  // Opening the sheet in Acrobat runs the timers MPMB set while loading.
+  engine = Engine.load({ sheet, scripts: mpmbScripts, host, realm: currentRealm(), allowTimer });
+  // Opening the sheet in Acrobat runs the timers MPMB set while loading (those the app allows).
   engine.runTimers();
   // Acrobat shows the text that Format scripts made when the PDF was saved; here each field's Format
   // runs once, so that the page gets "+3" for a modifier stored as 3, not only after it changes.
   engine.doc.formatAll();
+  return { addOns: addOnsOf(engine) };
 }
 
 const opened = (): Engine => {
@@ -79,18 +111,32 @@ function checkSheetType(sheet: SheetSnapshot): void {
   const blank = blankSheet().info;
   const { SheetType: type, SheetVersion: version } = sheet.info;
   if (type !== blank.SheetType || version !== blank.SheetVersion) {
-    throw new Error(
-      `This PDF is "${type ?? '?'} v${version ?? '?'}"; the app reads "${blank.SheetType} v${blank.SheetVersion}" sheets.`,
+    const what = type || version ? `${type ?? '?'} v${version ?? '?'}` : '';
+    throw new CommandError(
+      'wrong-sheet',
+      `This PDF is "${what || 'not an MPMB sheet'}"; the app reads "${blank.SheetType} v${blank.SheetVersion}" sheets.`,
+      what,
     );
+  }
+}
+
+async function readPdf(bytes: ArrayBuffer): Promise<SheetSnapshot> {
+  try {
+    return await readSheetPdf(bytes);
+  } catch (err) {
+    throw new CommandError('unreadable-pdf', `The PDF could not be read: ${String(err)}`);
   }
 }
 
 const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }>) => unknown } = {
   open: ({ character }) => open(character ? characterSheet(character) : blankSheet()),
+  // The PDF opens as it is, with its own field scripts: MPMB changes some at run time (setAction, e.g.
+  // the calculations of limited features), so they are part of the character. checkSheetType makes
+  // sure the rest equals the sheet the app ships. Its add-on scripts run while it opens, see add-ons.ts.
   importPdf: async ({ bytes }) => {
-    const sheet = await readSheetPdf(bytes);
+    const sheet = await readPdf(bytes);
     checkSheetType(sheet);
-    open(sheet);
+    return open(sheet);
   },
   edit: ({ field, text }) => opened().edit(field, text),
   click: ({ field, widget }) => opened().click(field, widget),
@@ -103,6 +149,7 @@ async function run(id: number, command: Command): Promise<void> {
     const handler = COMMANDS[command.type] as (c: Command) => unknown;
     const result = await handler(command);
     sendFields();
+    sendMenu();
     const stats = engine?.stats;
     post({
       type: 'done',
@@ -111,7 +158,9 @@ async function run(id: number, command: Command): Promise<void> {
       summary: { errors: stats?.errors.length ?? 0, missing: { ...stats?.missing } },
     });
   } catch (err) {
-    post({ type: 'failed', id, error: err instanceof Error ? err.message : String(err) });
+    const error = err instanceof Error ? err.message : String(err);
+    if (err instanceof CommandError) post({ type: 'failed', id, error, code: err.code, detail: err.detail });
+    else post({ type: 'failed', id, error });
   }
 }
 
