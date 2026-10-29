@@ -11,6 +11,7 @@ import { BackupError, backupFileName, makeBackup, planRestore, readBackup } from
 import { CharacterStore, describeCharacter, keepStorage } from './store/characters.ts';
 import type { CharacterMeta, StoredCharacter } from './store/characters.ts';
 import { EngineClient, EngineError } from './worker/client.ts';
+import { newEngineWorker } from './worker/start.ts';
 import type { FieldViews } from './worker/views.ts';
 import type { MenuNode } from './worker/protocol.ts';
 
@@ -33,7 +34,7 @@ const errorText = (err: unknown): string => (err instanceof Error ? err.message 
 
 export class Session {
   readonly popUps = new PopUpStack();
-  readonly client = new EngineClient(this.popUps);
+  readonly client = new EngineClient(this.popUps, newEngineWorker);
   characters: CharacterMeta[] = $state([]);
   notes: Note[] = $state([]);
   /** The character on screen, or null for the list. */

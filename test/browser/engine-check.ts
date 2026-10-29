@@ -7,6 +7,7 @@ import { characterSheet } from '../../src/engine/sheet.ts';
 import type { CharacterData } from '../../src/engine/sheet-data.ts';
 import { EngineClient } from '../../src/worker/client.ts';
 import type { Done, PopUps } from '../../src/worker/client.ts';
+import { newEngineWorker } from '../../src/worker/start.ts';
 import paladin from '../characters/paladin8-warlock2.json';
 import { compareSheets, show } from '../compare.ts';
 import { ScriptedHost } from '../hosts.ts';
@@ -49,7 +50,7 @@ function act(client: EngineClient, action: Action): Promise<Done> {
 async function check(): Promise<CheckResult> {
   const player = PLAYERS['paladin8-warlock2'];
   const host = new ScriptedHost(answersFor(player));
-  const client = new EngineClient(popUpsFrom(host));
+  const client = new EngineClient(popUpsFrom(host), newEngineWorker);
   const t0 = performance.now();
   await client.open();
   const t1 = performance.now();

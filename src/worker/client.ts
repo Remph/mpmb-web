@@ -49,12 +49,6 @@ export interface WorkerLike {
   terminate(): void;
 }
 
-export const newEngineWorker = (): WorkerLike =>
-  new Worker(new URL('./engine.worker.ts', import.meta.url), {
-    type: 'module',
-    name: 'mpmb-engine',
-  }) as unknown as WorkerLike;
-
 export class EngineClient {
   /** Every field as the page should draw it. */
   readonly fields: FieldViews = {};
@@ -72,7 +66,8 @@ export class EngineClient {
 
   constructor(
     private readonly popUps: PopUps,
-    private readonly makeWorker: () => WorkerLike = newEngineWorker,
+    /** newEngineWorker (start.ts) in the browser. */
+    private readonly makeWorker: () => WorkerLike,
   ) {}
 
   /** Opens the blank sheet or a saved character, in a fresh worker. */
