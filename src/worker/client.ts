@@ -28,6 +28,8 @@ export interface Done {
 export interface WorkerLike {
   postMessage(message: ToWorker): void;
   onmessage: ((event: MessageEvent<FromWorker>) => void) | null;
+  /** A worker that fails to load (or throws outside a command) ends up here. */
+  onerror: ((event: ErrorEvent) => void) | null;
   terminate(): void;
 }
 
@@ -43,20 +45,16 @@ export class EngineClient {
   /** Called after every change to `fields`. */
   onFields: ((changed: FieldViews, removed: string[]) => void) | null = null;
   /** Whether pop-ups can be answered (the page is cross-origin isolated). */
-  readonly answersPopUps: boolean;
+  readonly answersPopUps = canWait();
 
   private worker: WorkerLike | null = null;
-  private readonly channel: Channel | null;
   private readonly pending = new Map<number, { resolve: (done: Done) => void; reject: (err: Error) => void }>();
   private nextId = 1;
 
   constructor(
     private readonly popUps: PopUps,
     private readonly makeWorker: () => WorkerLike = newEngineWorker,
-  ) {
-    this.channel = canWait() ? createChannel() : null;
-    this.answersPopUps = this.channel !== null;
-  }
+  ) {}
 
   /** Opens the blank sheet or a saved character, in a fresh worker. */
   open(character: CharacterData | null = null): Promise<Done> {
@@ -84,10 +82,10 @@ export class EngineClient {
     return (await this.send({ type: 'save' })).result as CharacterData;
   }
 
-  close(): void {
+  close(reason = 'The sheet was closed'): void {
     this.worker?.terminate();
     this.worker = null;
-    this.pending.forEach(({ reject }) => reject(new Error('The sheet was closed')));
+    this.pending.forEach(({ reject }) => reject(new Error(reason)));
     this.pending.clear();
     Object.keys(this.fields).forEach((name) => delete this.fields[name]);
   }
@@ -95,8 +93,18 @@ export class EngineClient {
   private restart(command: Command): Promise<Done> {
     this.close();
     const worker = this.makeWorker();
-    worker.onmessage = ({ data }) => void this.receive(data);
-    worker.postMessage({ type: 'setup', buffer: this.channel?.buffer ?? null });
+    // Each worker gets its own channel: the answer to a pop-up of a sheet closed meanwhile must not
+    // wake the next sheet's worker with the wrong answer.
+    const channel = this.answersPopUps ? createChannel() : null;
+    // A closed worker's last messages are dropped; its pending commands were rejected on close.
+    worker.onmessage = ({ data }) => {
+      if (this.worker === worker) void this.receive(data, channel);
+    };
+    // Without this, a worker that fails to load would leave every command waiting forever.
+    worker.onerror = (event) => {
+      if (this.worker === worker) this.close(`The engine stopped: ${event.message || 'it could not start'}`);
+    };
+    worker.postMessage({ type: 'setup', buffer: channel?.buffer ?? null });
     this.worker = worker;
     return this.send(command);
   }
@@ -111,11 +119,11 @@ export class EngineClient {
     });
   }
 
-  private async receive(message: FromWorker): Promise<void> {
+  private async receive(message: FromWorker, channel: Channel | null): Promise<void> {
     const handlers: { [K in FromWorker['type']]: (m: Extract<FromWorker, { type: K }>) => void | Promise<void> } = {
       ask: async ({ ask }) => {
         const answer = await this.answer(ask);
-        if (this.channel) sendAnswer(this.channel, answer);
+        if (channel) sendAnswer(channel, answer);
       },
       notice: ({ ask }) => {
         if (ask.kind === 'alert') this.popUps.notice?.(ask.request);
