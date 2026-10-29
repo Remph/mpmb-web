@@ -94,7 +94,8 @@
     font-weight: 700;
   }
 
-  button.primary.danger {
+  button.primary.danger,
+  button.primary.danger:not(:disabled):hover {
     border-color: var(--hp);
     background: var(--hp);
     color: var(--on-hp);

@@ -325,7 +325,9 @@
     white-space: nowrap;
   }
 
-  .buttons .primary {
+  /* Red, also under the pointer: the shared hover rule would turn it purple. */
+  .buttons .primary,
+  .buttons .primary:not(:disabled):hover {
     border-color: var(--hp);
     background: var(--hp);
     color: var(--on-hp);
