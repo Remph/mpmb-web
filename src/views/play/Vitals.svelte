@@ -8,7 +8,7 @@
   import type { Step } from '../../session.svelte.ts';
   import { CONDITIONS, readConditions, readHitPoints, readNumbers, readToggles } from '../../play/read.ts';
   import type { Condition } from '../../play/read.ts';
-  import { applyDamage, applyHealing } from '../../play/rules.ts';
+  import { applyDamage, applyHealing, tickedDeathSaves } from '../../play/rules.ts';
   import type { FieldViews } from '../../worker/views.ts';
   import Modal from '../../popups/Modal.svelte';
   import NumberPad from './NumberPad.svelte';
@@ -48,6 +48,8 @@
     const steps: Step[] = [];
     if (next.current !== current) steps.push({ edit: 'HP Current', text: hpText(next.current) });
     if (next.temp !== temp) steps.push({ edit: 'HP Temp', text: tempText(next.temp) });
+    // Back above 0 hit points: the death saves start over.
+    if (current === 0 && next.current > 0) steps.push(...tickedDeathSaves(fields).map((click) => ({ click })));
     change(steps);
   }
 

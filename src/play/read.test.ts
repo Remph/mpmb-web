@@ -17,6 +17,7 @@ import {
   readFeatures,
   readInventory,
   readSpellSlotUse,
+  recoveryKind,
   slotBoxes,
   textRuns,
 } from './read.ts';
@@ -154,6 +155,19 @@ describe('play view values', () => {
 });
 
 describe('play view extras', () => {
+  it('knows the rest and dawn recovery texts, however MPMB writes them', () => {
+    expect(['long rest', 'Long Rest', 'LR', 'short rest', 'SR', 'dawn', 'Dawn', '7 days'].map(recoveryKind)).toEqual([
+      'long',
+      'long',
+      'long',
+      'short',
+      'short',
+      'dawn',
+      'dawn',
+      null,
+    ]);
+  });
+
   it('ticks the slot boxes the sheet shows first', () => {
     expect(slotBoxes(2, 3).slice(0, 3)).toEqual([
       'SpellSlots.Checkboxes.lvl2.top2.1',

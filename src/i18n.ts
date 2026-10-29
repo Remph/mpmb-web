@@ -149,6 +149,12 @@ export const ui = {
     limitedFeatures: 'Begrenzte Merkmale',
     tapToUse: 'Tippe auf einen Punkt, um ihn zu verbrauchen',
     poolLeft: '{left} von {total}',
+    poolUseTitle: '{name}: Punkte verbrauchen',
+    poolUseHint: 'Noch {left} von {total} übrig.',
+    poolUse: 'Verbrauchen',
+    recoveryLong: 'lange Rast',
+    recoveryShort: 'kurze Rast',
+    recoveryDawn: 'Morgengrauen',
     actions: 'Aktionen',
     action: 'Aktion',
     bonusAction: 'Bonusaktion',
@@ -177,6 +183,8 @@ export const ui = {
     longRest: 'Lange Rast',
     shortRestTitle: 'Kurze Rast machen?',
     longRestTitle: 'Lange Rast machen?',
+    shortRestPactMagic:
+      'Warlock-Zauberplätze (Paktmagie) zählt der Bogen mit den anderen zusammen: gib sie selbst zurück (tippe auf sie).',
     shortRestText:
       'Merkmale, die nach einer kurzen Rast zurückkommen, werden wieder voll. Trefferwürfel gibst du selbst aus (tippe auf sie).',
     longRestText:
@@ -361,6 +369,12 @@ export const ui = {
     limitedFeatures: 'Limited features',
     tapToUse: 'Tap a dot to use it',
     poolLeft: '{left} of {total}',
+    poolUseTitle: '{name}: use points',
+    poolUseHint: '{left} of {total} left.',
+    poolUse: 'Use',
+    recoveryLong: 'long rest',
+    recoveryShort: 'short rest',
+    recoveryDawn: 'dawn',
     actions: 'Actions',
     action: 'Action',
     bonusAction: 'Bonus action',
@@ -389,6 +403,8 @@ export const ui = {
     longRest: 'Long rest',
     shortRestTitle: 'Take a short rest?',
     longRestTitle: 'Take a long rest?',
+    shortRestPactMagic:
+      'The sheet counts Warlock (Pact Magic) slots together with the others: give them back yourself (tap them).',
     shortRestText: 'Features that come back on a short rest are full again. You spend hit dice yourself (tap them).',
     longRestText:
       'Hit points, all hit dice, spell slots and features that come back on a rest are full again; temporary hit points go; one level of exhaustion less. Charges that come back “at dawn” stay as they are.',

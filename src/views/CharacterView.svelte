@@ -59,11 +59,18 @@
     ...edits.untick.map((click) => ({ click })),
   ];
 
+  /**
+   * MPMB adds Pact Magic slots to the other slots of their level, so the boxes can't tell which ones a
+   * short rest gives back; a warlock is told to do it by hand.
+   */
+  const shortRestText = (): string =>
+    /warlock/i.test(open.meta.classes) ? `${t.shortRestText} ${t.shortRestPactMagic}` : t.shortRestText;
+
   async function rest(kind: 'short' | 'long') {
     const long = kind === 'long';
     const answer = await session.popUps.choose({
       title: long ? t.longRestTitle : t.shortRestTitle,
-      message: long ? t.longRestText : t.shortRestText,
+      message: long ? t.longRestText : shortRestText(),
       buttons: [
         { value: 'cancel', label: t.cancel },
         { value: 'rest', label: long ? t.longRest : t.shortRest, primary: true },

@@ -10,10 +10,12 @@
     readAttacks,
     readLimitedFeatures,
     readSpellSlotUse,
+    recoveryKind,
   } from '../../play/read.ts';
   import type { LimitedFeature } from '../../play/read.ts';
   import type { FieldViews } from '../../worker/views.ts';
   import Dots from './Dots.svelte';
+  import NumberPad from './NumberPad.svelte';
   import Stepper from './Stepper.svelte';
 
   interface Props {
@@ -35,6 +37,23 @@
   const usedText = (used: number): string => (used > 0 ? String(used) : '');
   const setUsed = (feature: LimitedFeature, used: number) =>
     change([{ edit: `Limited Feature Used ${feature.row}`, text: usedText(used) }]);
+
+  /** The pool whose number pad is open: Lay on Hands heals 5 or 10 points at a time, too many taps on −. */
+  let padFor: LimitedFeature | null = $state(null);
+  function usePool(amount: number) {
+    const feature = padFor;
+    padFor = null;
+    if (feature?.max != null) setUsed(feature, Math.min(feature.max, feature.used + amount));
+  }
+
+  /** MPMB's usual recovery texts in the page's language, any other as MPMB wrote it. */
+  function recoveryText(recovery: string): string {
+    const kind = recoveryKind(recovery);
+    if (kind === 'long') return t.recoveryLong;
+    if (kind === 'short') return t.recoveryShort;
+    if (kind === 'dawn') return t.recoveryDawn;
+    return recovery;
+  }
 
   /**
    * Leaves the first `used` slot boxes ticked and the rest unticked, clicking only those that differ:
@@ -100,7 +119,7 @@
     </div>
     {#each features as feature (feature.row)}
       <div class="uses">
-        <span class="name">{feature.name} <small>{feature.recovery}</small></span>
+        <span class="name">{feature.name} <small>{recoveryText(feature.recovery)}</small></span>
         {#if feature.max === null}
           <span class="muted">{feature.maxText}</span>
         {:else if feature.pool}
@@ -112,6 +131,8 @@
             {disabled}
             onless={() => setUsed(feature, feature.used + POOL_STEP)}
             onmore={() => setUsed(feature, feature.used - POOL_STEP)}
+            onpick={() => (padFor = feature)}
+            pickLabel={fill(t.poolUseTitle, { name: feature.name })}
             {t}
           />
         {:else}
@@ -127,6 +148,17 @@
       </div>
     {/each}
   </section>
+{/if}
+
+{#if padFor?.max != null}
+  <NumberPad
+    title={fill(t.poolUseTitle, { name: padFor.name })}
+    hint={fill(t.poolUseHint, { left: padFor.max - padFor.used, total: padFor.max })}
+    applyLabel={t.poolUse}
+    onapply={usePool}
+    onclose={() => (padFor = null)}
+    {t}
+  />
 {/if}
 
 {#if actions.action.length || actions.bonusAction.length || actions.reaction.length}

@@ -2,7 +2,7 @@
 // boxes for these but no buttons, so the PDF leaves them to the player; the app does the counting and
 // writes the results into the same fields.
 import type { FieldViews } from '../worker/views.ts';
-import { isOn, readConditions, readHitPoints, readLimitedFeatures, readSpellSlotUse } from './read.ts';
+import { isOn, readConditions, readHitPoints, readLimitedFeatures, readSpellSlotUse, recoveryKind } from './read.ts';
 import type { HitPoints } from './read.ts';
 
 export interface HpChange {
@@ -32,18 +32,14 @@ export interface RestEdits {
   untick: string[];
 }
 
-// Recovery texts MPMB uses for rests: "long rest", "Long Rest", "LR", "short rest", "Short Rest", "SR"
-// match; "Dawn", "7 days" and the like are not rests (a long rest leaves them to the player).
-// Try it: https://regex101.com/?regex=%5E%28long%20rest%7Cshort%20rest%7Clr%7Csr%29%24&flags=i&testString=Long%20Rest
-const LONG_OR_SHORT = /^(long rest|short rest|lr|sr)$/i;
-// The short rest ones of those: "short rest" and "SR" match, "long rest" does not.
-// Try it: https://regex101.com/?regex=%5E%28short%20rest%7Csr%29%24&flags=i&testString=Short%20Rest
-const SHORT = /^(short rest|sr)$/i;
 // MPMB notes a partial short rest recovery in the name: "Channel Divinity (regain 1/SR)" matches with 1,
 // "Channel Divinity" does not. Try it: https://regex101.com/?regex=regain%20%28%5Cd%2B%29%2FSR&flags=i&testString=Channel%20Divinity%20%28regain%201%2FSR%29
 const REGAIN_ON_SHORT = /regain (\d+)\/SR/i;
 
 const DEATH_SAVES = ['Success1', 'Success2', 'Success3', 'Fail1', 'Fail2', 'Fail3'].map((b) => `Death Save ${b}`);
+
+/** The ticked death save boxes, to untick: regaining any hit points resets them (SRD 5.2.1, Death Saving Throws). */
+export const tickedDeathSaves = (fields: FieldViews): string[] => DEATH_SAVES.filter((name) => isOn(fields, name));
 
 /**
  * A long rest (SRD 5.2.1): all hit points and spent hit dice back, temporary hit points gone, one level
@@ -54,12 +50,13 @@ export function longRest(fields: FieldViews): RestEdits {
   const values: Record<string, string> = { 'HP Current': '', 'HP Temp': '' };
   readHitPoints(fields).hitDice.forEach((hd) => (values[`HD${hd.row} Used`] = ''));
   readLimitedFeatures(fields)
-    .filter((f) => f.used > 0 && LONG_OR_SHORT.test(f.recovery))
+    // "Dawn", "7 days" and the like are not rests: a long rest leaves them to the player.
+    .filter((f) => f.used > 0 && ['long', 'short'].includes(recoveryKind(f.recovery) ?? ''))
     .forEach((f) => (values[`Limited Feature Used ${f.row}`] = ''));
   const { exhaustion } = readConditions(fields);
   if (exhaustion > 0) values['Condition.Exhaustion'] = exhaustion > 1 ? String(exhaustion - 1) : '';
   const slotBoxes = readSpellSlotUse(fields).flatMap((slots) => slots.boxes);
-  return { values, untick: [...DEATH_SAVES, ...slotBoxes].filter((name) => isOn(fields, name)) };
+  return { values, untick: [...tickedDeathSaves(fields), ...slotBoxes.filter((name) => isOn(fields, name))] };
 }
 
 /**
@@ -72,7 +69,7 @@ export function shortRest(fields: FieldViews): RestEdits {
     .filter((f) => f.used > 0)
     .forEach((f) => {
       const partial = REGAIN_ON_SHORT.exec(f.name);
-      if (SHORT.test(f.recovery)) values[`Limited Feature Used ${f.row}`] = '';
+      if (recoveryKind(f.recovery) === 'short') values[`Limited Feature Used ${f.row}`] = '';
       else if (partial) values[`Limited Feature Used ${f.row}`] = usedText(f.used - Number(partial[1]));
     });
   return { values, untick: [] };

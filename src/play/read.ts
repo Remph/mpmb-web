@@ -285,6 +285,17 @@ export function readLimitedFeatures(fields: FieldViews): LimitedFeature[] {
     .filter((feature) => feature.name !== '');
 }
 
+// MPMB's usual recovery texts, which the view translates; anything else ("7 days") shows as written.
+// Try it: https://regex101.com/?regex=%5E%28long%20rest%7Clr%29%24%7C%5E%28short%20rest%7Csr%29%24%7C%5E%28dawn%29%24&flags=i&testString=long%20rest
+const RECOVERY_KINDS = { long: /^(long rest|lr)$/i, short: /^(short rest|sr)$/i, dawn: /^dawn$/i } as const;
+export type RecoveryKind = keyof typeof RECOVERY_KINDS;
+
+/** "long rest", "LR" and "Long Rest" are all a long rest; null when the text is something else. */
+export function recoveryKind(recovery: string): RecoveryKind | null {
+  const kinds = Object.keys(RECOVERY_KINDS) as RecoveryKind[];
+  return kinds.find((kind) => RECOVERY_KINDS[kind].test(recovery.trim())) ?? null;
+}
+
 export interface SpellSlotLevel {
   level: number;
   total: number;

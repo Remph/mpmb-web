@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { openSheet, referenceSheet } from '../../test/characters.ts';
 import { viewsOf } from '../worker/views.ts';
 import type { FieldViews } from '../worker/views.ts';
-import { applyDamage, applyHealing, longRest, shortRest } from './rules.ts';
+import { applyDamage, applyHealing, longRest, shortRest, tickedDeathSaves } from './rules.ts';
 
 const paladin = viewsOf(openSheet(referenceSheet('paladin8-warlock2')).doc);
 const wizard = viewsOf(openSheet(referenceSheet('wizard10-evoker')).doc);
@@ -32,6 +32,12 @@ describe('hit points', () => {
   it('heals up to the maximum and keeps temporary hit points', () => {
     expect(applyHealing({ current: 85, max: 92, temp: 5 }, 20)).toEqual({ current: 92, temp: 5 });
     expect(applyHealing({ current: 0, max: 92, temp: null }, 7)).toEqual({ current: 7, temp: 0 });
+  });
+
+  it('finds the ticked death saves, which healing from 0 clears', () => {
+    expect(tickedDeathSaves(paladin)).toEqual([]);
+    const dying = withValues(paladin, { 'HP Current': '0', 'Death Save Success2': 'Yes', 'Death Save Fail1': 'Yes' });
+    expect(tickedDeathSaves(dying)).toEqual(['Death Save Success2', 'Death Save Fail1']);
   });
 });
 
