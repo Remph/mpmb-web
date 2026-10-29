@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { languages, pickLanguage, ui } from './i18n';
+import { counted, fill, languages, pickLanguage, ui } from './i18n';
 
 describe('pickLanguage', () => {
   it('keeps an earlier explicit choice', () => {
@@ -28,5 +28,16 @@ describe('ui texts', () => {
       expect(Object.keys(ui[lang]).sort()).toEqual(keys);
       for (const text of Object.values(ui[lang])) expect(text.trim()).not.toBe('');
     }
+  });
+});
+
+describe('fill and counted', () => {
+  it('puts values into placeholders and leaves unknown ones', () => {
+    expect(fill('{name} has {count} {what}', { name: 'Anna', count: 2 })).toBe('Anna has 2 {what}');
+  });
+
+  it('picks the text for one or for more', () => {
+    expect(counted(ui.en.addOnCountOne, ui.en.addOnCount, 1)).toBe('1 add-on script');
+    expect(counted(ui.de.addOnCountOne, ui.de.addOnCount, 3)).toBe('3 Zusatzskripte');
   });
 });
