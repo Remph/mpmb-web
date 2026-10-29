@@ -26,9 +26,19 @@
     event.preventDefault();
     onescape();
   }
+
+  /**
+   * A second Escape without a click in between closes a modal <dialog> anyway (Firefox and Chromium
+   * don't let a page hold it open). The pop-up stays until its script has an answer, so it opens
+   * again; otherwise it would be gone while the script still waits for it. The cancel event before
+   * this one already passed the Escape on to `onescape`.
+   */
+  function closed() {
+    if (dialog?.isConnected && !dialog.open) dialog.showModal();
+  }
 </script>
 
-<dialog bind:this={dialog} class:wide aria-labelledby={titleId} oncancel={cancel}>
+<dialog bind:this={dialog} class:wide aria-labelledby={titleId} oncancel={cancel} onclose={closed}>
   <h2 id={titleId}>{title}</h2>
   <div class="body">
     {@render children()}

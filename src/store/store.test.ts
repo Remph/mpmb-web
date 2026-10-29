@@ -116,6 +116,13 @@ describe('backups', () => {
     );
     expect(problem(JSON.stringify({ ...good, characters: [] }))).toBe('not-a-backup');
     expect(problem(JSON.stringify({ ...good, characters: [{ meta: { id: 'x' }, data: {} }] }))).toBe('not-a-backup');
+    // A list entry the start page can't draw (here without its add-ons) is refused, not stored.
+    const anna = character('Anna', '2026-10-01T00:00:00Z');
+    const { addOns: _dropped, ...withoutAddOns } = anna.meta;
+    expect(problem(JSON.stringify({ ...good, characters: [{ ...anna, meta: withoutAddOns }] }))).toBe('not-a-backup');
+    expect(problem(JSON.stringify({ ...good, characters: [{ ...anna, meta: { ...anna.meta, name: null } }] }))).toBe(
+      'not-a-backup',
+    );
   });
 
   test('file names: the character for one, "backup" for more, and the day', () => {

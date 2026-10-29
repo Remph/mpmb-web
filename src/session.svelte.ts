@@ -32,6 +32,18 @@ export interface OpenCharacter {
 
 const errorText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
+/**
+ * Resolves when the work is over, also when it failed: what waits for it (leaving a character) goes
+ * on. The work reports its own errors.
+ */
+async function settled(work: Promise<void>): Promise<void> {
+  try {
+    await work;
+  } catch {
+    // Reported by the work itself.
+  }
+}
+
 export class Session {
   readonly popUps = new PopUpStack();
   readonly client = new EngineClient(this.popUps, newEngineWorker);
@@ -45,8 +57,13 @@ export class Session {
   private nextNote = 1;
   /** Whether the open sheet changed since it was saved. */
   private dirty = false;
-  /** The last action on the open sheet, with its saving; leaving waits for it. */
+  /**
+   * The work on the one engine worker: an import batch, or the last action on the open sheet with its
+   * saving. Leaving and opening a character wait for it, and a new import batch starts after it.
+   */
   private running: Promise<void> = Promise.resolve();
+  /** Whether the browser was asked to keep the data during this visit. */
+  private askedToKeep = false;
 
   constructor(private readonly texts: () => Texts) {
     this.client.onFields = () => {
@@ -82,14 +99,26 @@ export class Session {
     return id;
   }
 
+  /** Clears the notes of finished work; an import still running keeps its line. */
   clearNotes(): void {
-    this.notes = [];
+    this.notes = this.notes.filter((n) => n.kind === 'busy');
   }
 
   // ---- Import ----
 
-  /** Imports each PDF in turn: the worker opens it (running its add-on scripts) and it is saved. */
+  /**
+   * Imports each PDF in turn: the worker opens it (running its add-on scripts) and it is saved.
+   * Opening a character meanwhile (its card is still there) waits until the batch is done; it used to
+   * end the import's worker, and the PDF was lost without a word.
+   */
   async importPdfs(files: File[]): Promise<void> {
+    const batch = this.importAfter(this.running, files);
+    this.running = settled(batch);
+    await batch;
+  }
+
+  private async importAfter(before: Promise<void>, files: File[]): Promise<void> {
+    await before;
     this.clearNotes();
     // One after the other: each import uses the one engine worker.
     await files.reduce<Promise<void>>(async (previous, file) => {
@@ -131,8 +160,9 @@ export class Session {
   }
 
   /**
-   * A character with the same name and classes is probably the same one, imported again from a newer
-   * PDF: the player decides whether the import replaces it (keeping its place in the list).
+   * A character with the same name is probably the same one, imported again from a newer PDF (its
+   * classes may have changed with a level): the player decides whether the import replaces it (keeping
+   * its id and creation date).
    */
   private async sameAs(data: CharacterData, addOns: AddOns): Promise<CharacterMeta | null | 'cancel'> {
     const fresh = describeCharacter(data, addOns, null);
@@ -165,8 +195,12 @@ export class Session {
   private async save(...characters: StoredCharacter[]): Promise<void> {
     if (!this.store) throw new Error(this.storageError || 'no storage');
     await this.store.put(...characters);
-    // After the first character, ask the browser to keep the data (Firefox asks the player once).
-    void keepStorage();
+    // Once per visit, after the first save, ask the browser to keep the data. Firefox asks the player;
+    // asking on every save would bring its question back after each action when it was dismissed.
+    if (!this.askedToKeep) {
+      this.askedToKeep = true;
+      void keepStorage();
+    }
   }
 
   // ---- One character ----

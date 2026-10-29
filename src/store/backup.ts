@@ -78,14 +78,26 @@ export function backupFileName(characters: StoredCharacter[], now = new Date()):
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/** Checks what a character entry must have; the engine checks the sheet data itself when it opens. */
+const isAddOns = (value: unknown): boolean =>
+  isObject(value) &&
+  Array.isArray(value.files) &&
+  value.files.every((f) => typeof f === 'string') &&
+  typeof value.manual === 'boolean';
+
+/**
+ * Checks what a character entry must have: all of the list entry (a restored entry the list can't
+ * draw would break the start page on every visit), and the sheet data's format; the engine checks
+ * the sheet data itself when it opens.
+ */
 function isCharacter(value: unknown): value is StoredCharacter {
   if (!isObject(value) || !isObject(value.meta) || !isObject(value.data)) return false;
   const { meta, data } = value;
+  const texts = ['name', 'classes', 'species', 'created', 'updated'] as const;
   return (
     typeof meta.id === 'string' &&
     meta.id !== '' &&
-    typeof meta.updated === 'string' &&
+    texts.every((key) => typeof meta[key] === 'string') &&
+    isAddOns(meta.addOns) &&
     data.format === CHARACTER_FORMAT &&
     data.version === FORMAT_VERSION &&
     isObject(data.fields)
