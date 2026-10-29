@@ -7,6 +7,7 @@ import type { Engine } from '../src/engine/engine.ts';
 import { REFERENCE_CHARACTERS, openSheet, referenceSheet } from './characters.ts';
 import { compareSheets, show } from './compare.ts';
 import { ScriptedHost } from './hosts.ts';
+import type { DialogAnswer } from './hosts.ts';
 import { METRIC_UNITS, PLAYERS, answersFor } from './players.ts';
 import type { Action, Player } from './players.ts';
 
@@ -43,5 +44,22 @@ describe('MPMB behaviour that depends on the order of input', () => {
     const paladin = PLAYERS['paladin8-warlock2'];
     const engine = play({ ...paladin, actions: [METRIC_UNITS, ...paladin.actions.filter((a) => a !== METRIC_UNITS)] });
     expect(engine.values()['BlueText.Attack.1.Weight']).toBe('0.75');
+  });
+});
+
+describe('the decimal comma', () => {
+  // MPMB's format1 (Functions0.js) formats a stored "1.2" first with a decimal point, then again in
+  // the player's style, so the comma style must still read the point as Acrobat's AFMakeNumber does.
+  test('weights show with a decimal comma after switching in the unit dialog', () => {
+    const comma: DialogAnswer = { steps: [{ set: { SyIm: false, SyMe: true, DeDo: false, DeCo: true } }] };
+    const host = new ScriptedHost({ dialogs: { 'SET UNIT SYSTEM AND DECIMAL SEPARATOR': comma } });
+    const engine = openSheet(referenceSheet('wizard10-evoker'), host);
+    act(engine, METRIC_UNITS);
+    // Switching the separator changes no values, so Format runs again only when asked to.
+    engine.doc.formatAll();
+    const shown = (field: string): string | undefined => engine.doc.states.get(field)?.formatted;
+    expect(engine.values()['Decimal Separator']).toBe('comma');
+    expect(shown('Weight Carried')).toBe('1,20 kg');
+    expect(shown('Adventuring Gear Weight 1')).toBe('0,25');
   });
 });

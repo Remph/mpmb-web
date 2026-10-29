@@ -199,7 +199,7 @@ export class Engine {
       color: tools.copy(COLOR),
       ...tools.copy(CONSTANTS),
       AFNumber_Format: this.afCall((ev, nDec: number, sepStyle: number) => af.AFNumber_Format(ev, nDec, sepStyle)),
-      AFNumber_Keystroke: this.afCall((ev, _nDec: number, sepStyle: number) => af.AFNumber_Keystroke(ev, sepStyle)),
+      AFNumber_Keystroke: this.afCall((ev) => af.AFNumber_Keystroke(ev)),
       AFRange_Validate: this.afCall((ev, bGt: boolean, nGt: number, bLt: boolean, nLt: number) =>
         af.AFRange_Validate(ev, bGt, nGt, bLt, nLt),
       ),

@@ -39,22 +39,21 @@ const DATE_FORMATS = [
   'm/d/yy HH:MM',
 ] as const;
 
-/** sepStyle 2 and 3 write the decimal separator as a comma. */
-const COMMA_DECIMAL_FROM = 2;
-
-/** A number from text written in sepStyle; null if it isn't one. */
-export function parseNumber(text: unknown, sepStyle: number): number | null {
+/**
+ * A number from a field's text, as Acrobat's AFMakeNumber reads it: a comma counts as the decimal
+ * point, whatever the separator style. Field values hold plain numbers ("2.5"), and MPMB formats the
+ * same value first with sepStyle 1 and then again with the player's style (format1 in Functions0.js),
+ * so "2.5" must stay 2.5 in the comma styles too; null if the text isn't a number.
+ */
+export function parseNumber(text: unknown): number | null {
   const s = String(text ?? '').trim();
   if (s === '') return null;
-  const commaDecimal = sepStyle >= COMMA_DECIMAL_FROM;
-  // In comma styles dots group thousands ("1.234,5"), otherwise commas do ("1,234.5").
-  const normal = commaDecimal ? s.replaceAll('.', '').replace(',', '.') : s.replaceAll(',', '');
-  const n = Number(normal);
+  const n = Number(s.replace(',', '.'));
   return Number.isFinite(n) ? n : null;
 }
 
 export function AFNumber_Format(ev: AfEvent, nDec: number, sepStyle: number): AfResult {
-  const n = parseNumber(ev.value, sepStyle);
+  const n = parseNumber(ev.value);
   if (n === null) return String(ev.value ?? '').trim() === '' ? { value: '' } : {};
   return { value: formatNumber(n, Number(nDec) || 0, Number(sepStyle) || 0) };
 }
@@ -66,10 +65,10 @@ export function AFNumber_Format(ev: AfEvent, nDec: number, sepStyle: number): Af
  */
 const PARTIAL_NUMBER = /^-?\d*([.,]\d*)?$/;
 
-export function AFNumber_Keystroke(ev: AfEvent, sepStyle: number): AfResult {
+export function AFNumber_Keystroke(ev: AfEvent): AfResult {
   if (ev.willCommit) {
     const text = String(ev.value ?? '').trim();
-    if (text === '' || parseNumber(text, sepStyle) !== null) return {};
+    if (text === '' || parseNumber(text) !== null) return {};
     return { rc: false, alert: 'The value entered does not match the format of the field' };
   }
   const value = String(ev.value ?? '');
