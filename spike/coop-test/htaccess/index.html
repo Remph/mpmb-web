@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Isolation test: .htaccess</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body data-variant="htaccess (headers from the server)">
+    <h1>Test 1: headers from .htaccess</h1>
+    <p>Does this server send the two headers that let a page wait for answers (pop-ups)? PASS or FAIL below.</p>
+    <p id="verdict">...</p>
+    <pre id="out">running</pre>
+    <script type="module">
+      import { main } from './page.js';
+      main();
+    </script>
+  </body>
+</html>

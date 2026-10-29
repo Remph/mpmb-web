@@ -1,0 +1,6 @@
+# M1 spike test: send the isolation headers for everything in this folder (and below).
+# Needs Apache's mod_headers; if the module is missing, the test page says FAIL.
+<IfModule mod_headers.c>
+  Header always set Cross-Origin-Opener-Policy "same-origin"
+  Header always set Cross-Origin-Embedder-Policy "require-corp"
+</IfModule>

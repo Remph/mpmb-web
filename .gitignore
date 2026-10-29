@@ -6,3 +6,6 @@ dist
 .vscode/*
 !.vscode/extensions.json
 .idea
+
+# M1 spike: data derived from MPMB PDFs and the reference characters stays out of this public repo
+spike/data/

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Isolation test: service worker</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body data-variant="service worker (headers added in the browser)">
+    <h1>Test 2: service worker</h1>
+    <p>
+      Fallback if test 1 fails: a small service worker adds the headers. The page reloads once by itself the first time.
+    </p>
+    <p id="verdict">...</p>
+    <pre id="out">running</pre>
+    <script type="module">
+      import { main } from './page.js';
+      // First visit: install the service worker, then reload once so the page is served through it.
+      const reloaded = sessionStorage.getItem('coi-reloaded');
+      if (!self.crossOriginIsolated && 'serviceWorker' in navigator && !reloaded) {
+        sessionStorage.setItem('coi-reloaded', '1');
+        const reg = await navigator.serviceWorker.register('sw.js');
+        const ready = await navigator.serviceWorker.ready;
+        if (ready.active && navigator.serviceWorker.controller) location.reload();
+        else navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+        // Safety net: if the controller never arrives, run the test anyway to show the failure
+        setTimeout(() => main(), 3000);
+      } else {
+        main();
+      }
+    </script>
+  </body>
+</html>
