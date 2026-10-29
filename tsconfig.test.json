@@ -1,0 +1,10 @@
+{
+  // Tests and tools: the app's settings plus Node's types (they read files and use node:vm).
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
+    "types": ["svelte", "vite/client", "node"]
+  },
+  "include": ["src/**/*.test.ts", "test/**/*.ts", "tools/**/*.ts"],
+  "exclude": []
+}
