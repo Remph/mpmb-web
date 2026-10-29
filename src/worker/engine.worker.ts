@@ -64,6 +64,9 @@ function open(sheet: SheetSnapshot): void {
   engine = Engine.load({ sheet, scripts: mpmbScripts, host, realm: currentRealm() });
   // Opening the sheet in Acrobat runs the timers MPMB set while loading.
   engine.runTimers();
+  // Acrobat shows the text that Format scripts made when the PDF was saved; here each field's Format
+  // runs once, so that the page gets "+3" for a modifier stored as 3, not only after it changes.
+  engine.doc.formatAll();
 }
 
 const opened = (): Engine => {

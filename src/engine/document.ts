@@ -1,6 +1,6 @@
 // The document side of the Acrobat stand-in: the field store, Acrobat's field events in Acrobat's
 // order, the calculation order, templates and pages, bookmarks and `resetForm`. The global API that
-// MPMB's scripts see (getField, app, util, event, ...) is put together in acrobat.ts.
+// MPMB's scripts see (getField, app, util, event, ...) is put together in engine.ts.
 //
 // Event order (Acrobat JavaScript API reference, "Event processing"), as modelled here:
 // - A user types into a field: OnFocus; Keystroke for the typing (willCommit false); on commit
@@ -93,6 +93,8 @@ export class SheetDocument implements FieldOwner {
   private parents: Set<string> | null = null;
   private compiled = new Map<string, () => void>();
   private inCalc = false;
+  /** Counts value changes, so that a caller can tell whether scripts changed anything. */
+  private changes = 0;
   readonly templates: Record<string, string[]>;
   numPages: number;
   info: Record<string, string>;
@@ -313,6 +315,7 @@ export class SheetDocument implements FieldOwner {
     // Rich text set as plain text loses its spans.
     if (state.spans && spansText(state.spans) !== value) delete state.spans;
     if (changed) {
+      this.changes++;
       this.dirty = true;
       this.onChange?.(state);
     }
@@ -332,6 +335,26 @@ export class SheetDocument implements FieldOwner {
     if (isRich && Array.isArray(ev.richValue))
       state.formattedSpans = JSON.parse(JSON.stringify(ev.richValue)) as Span[];
     this.onChange?.(state);
+  }
+
+  /**
+   * Runs every field's Format script once, so that each field has the text it shows (Acrobat shows
+   * the text saved in the PDF instead). Some of MPMB's Format scripts set other fields
+   * (SetCarriedLocations fills the gear location subtotals), so the calculations wait and run once at
+   * the end if anything changed, like MPMB's own calcStop and calcCont.
+   */
+  formatAll(): void {
+    const before = this.changes;
+    const calculate = this.calculate;
+    this.calculate = false;
+    try {
+      this.states.forEach((state) => {
+        if (state.def.actions.F) this.runFormat(state);
+      });
+    } finally {
+      this.calculate = calculate;
+    }
+    if (this.changes !== before && this.calcOn) this.runCalculations(null);
   }
 
   private textOf(state: FieldState): string {

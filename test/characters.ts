@@ -21,9 +21,13 @@ export function referenceSheet(name: ReferenceCharacter): SheetSnapshot {
   return characterSheet(data);
 }
 
-/** Opens a sheet the way Acrobat does: load the scripts, then let the opening timers run. */
+/**
+ * Opens a sheet the way the worker does: load the scripts, let the opening timers run, then run every
+ * Format script for the text each field shows.
+ */
 export function openSheet(sheet: SheetSnapshot = blankSheet(), host: Host = new ScriptedHost()): Engine {
   const engine = Engine.load({ sheet, scripts: mpmbScripts, host, realm: vmRealm() });
   engine.runTimers();
+  engine.doc.formatAll();
   return engine;
 }

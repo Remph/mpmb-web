@@ -352,15 +352,15 @@ Object.entries(STYLE_DEFAULTS).forEach(([prop, fallback]) => {
   });
 });
 
-/**
- * A name that is only the start of other names ("BlueText.Attack" for "BlueText.Attack.1.Weight")
- * is a parent in Acrobat's field tree. Setting display or readonly on it sets all its fields.
- */
 /** Sets a property on each field, as a script assigning to the parent would. */
 function setOnAll(fields: readonly Field[], prop: string, v: unknown): void {
   fields.forEach((f) => Reflect.set(f, prop, v));
 }
 
+/**
+ * A name that is only the start of other names ("BlueText.Attack" for "BlueText.Attack.1.Weight")
+ * is a parent in Acrobat's field tree. Setting display or readonly on it sets all its fields.
+ */
 export class ParentField {
   readonly name: string;
   private readonly kids: () => Field[];
