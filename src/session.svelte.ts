@@ -45,6 +45,8 @@ export class Session {
   private nextNote = 1;
   /** Whether the open sheet changed since it was saved. */
   private dirty = false;
+  /** The last action on the open sheet, with its saving; leaving waits for it. */
+  private running: Promise<void> = Promise.resolve();
 
   constructor(private readonly texts: () => Texts) {
     this.client.onFields = () => {
@@ -189,25 +191,28 @@ export class Session {
     return true;
   }
 
-  close(): void {
+  /** Leaves the open character, after the last action on it is saved. */
+  async close(): Promise<void> {
+    await this.running;
     this.client.close();
     this.current = null;
     this.clearNotes();
   }
 
   /** Clicks one of MPMB's bookmarks; what the scripts change is saved right after. */
-  async runMenu(path: string[]): Promise<void> {
+  runMenu(path: string[]): Promise<void> {
     const open = this.current;
-    if (!open || open.status === 'opening' || open.status === 'working') return;
+    if (!open || open.status === 'opening' || open.status === 'working') return this.running;
     this.clearNotes();
     open.status = 'working';
-    try {
-      await this.client.bookmark(path);
-      await this.saveOpen();
-    } catch (err) {
-      open.status = 'error';
-      this.note('error', this.explain(err));
-    }
+    this.running = this.client
+      .bookmark(path)
+      .then(() => this.saveOpen())
+      .catch((err: unknown) => {
+        open.status = 'error';
+        this.note('error', this.explain(err));
+      });
+    return this.running;
   }
 
   private async saveOpen(): Promise<void> {

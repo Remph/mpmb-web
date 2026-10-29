@@ -43,12 +43,12 @@
   async function route() {
     const id = CHARACTER_ROUTE.exec(location.hash)?.[1];
     if (!id) {
-      if (session.current) session.close();
+      if (session.current) await session.close();
       missing = false;
       return;
     }
     if (session.current?.meta.id === id) return;
-    session.close();
+    await session.close();
     missing = !(await session.open(decodeURIComponent(id)));
   }
 
