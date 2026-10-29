@@ -2,7 +2,7 @@
 // boxes for these but no buttons, so the PDF leaves them to the player; the app does the counting and
 // writes the results into the same fields.
 import type { FieldViews } from '../worker/views.ts';
-import { isOn, readConditions, readHitPoints, readLimitedFeatures } from './read.ts';
+import { isOn, readConditions, readHitPoints, readLimitedFeatures, readSpellSlotUse } from './read.ts';
 import type { HitPoints } from './read.ts';
 
 export interface HpChange {
@@ -47,7 +47,8 @@ const DEATH_SAVES = ['Success1', 'Success2', 'Success3', 'Fail1', 'Fail2', 'Fail
 
 /**
  * A long rest (SRD 5.2.1): all hit points and spent hit dice back, temporary hit points gone, one level
- * of exhaustion less, death saves cleared, and every feature that recovers on a short or long rest.
+ * of exhaustion less, death saves cleared, all spell slots, and every feature that recovers on a short or
+ * long rest.
  */
 export function longRest(fields: FieldViews): RestEdits {
   const values: Record<string, string> = { 'HP Current': '', 'HP Temp': '' };
@@ -57,7 +58,8 @@ export function longRest(fields: FieldViews): RestEdits {
     .forEach((f) => (values[`Limited Feature Used ${f.row}`] = ''));
   const { exhaustion } = readConditions(fields);
   if (exhaustion > 0) values['Condition.Exhaustion'] = exhaustion > 1 ? String(exhaustion - 1) : '';
-  return { values, untick: DEATH_SAVES.filter((name) => isOn(fields, name)) };
+  const slotBoxes = readSpellSlotUse(fields).flatMap((slots) => slots.boxes);
+  return { values, untick: [...DEATH_SAVES, ...slotBoxes].filter((name) => isOn(fields, name)) };
 }
 
 /**

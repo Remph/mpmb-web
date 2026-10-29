@@ -329,3 +329,150 @@ export function readConditions(fields: FieldViews): Conditions {
     exhaustion: numberOf(fields, 'Condition.Exhaustion') ?? 0,
   };
 }
+
+/**
+ * MPMB's seven slot boxes per spell level. It shows one to four of them on page 1, in this order of
+ * the list (BoxesFld in SetSpellSlotsCheckboxes): 1 slot uses box 0, 2 use 1 and 4, and so on. The play
+ * view ticks the shown ones first, so a character with up to four slots looks the same in Acrobat,
+ * then the hidden ones, so up to seven used slots can be kept.
+ */
+const SLOT_BOXES = ['mid', 'top1', 'top2.1', 'top2.2', 'bottom1', 'bottom2.1', 'bottom2.2'];
+const SHOWN_SLOT_BOXES: Record<number, number[]> = { 1: [0], 2: [1, 4], 3: [2, 3, 4], 4: [2, 3, 5, 6] };
+
+/** The slot boxes of a spell level, in the order the play view ticks them. */
+export function slotBoxes(level: number, total: number): string[] {
+  const shown = SHOWN_SLOT_BOXES[total] ?? SHOWN_SLOT_BOXES[4] ?? [];
+  const order = [...shown, ...SLOT_BOXES.map((_, i) => i).filter((i) => !shown.includes(i))];
+  return order.map((i) => `SpellSlots.Checkboxes.lvl${level}.${SLOT_BOXES[i]}`);
+}
+
+export interface SpellSlotUse extends SpellSlotLevel {
+  used: number;
+  /** How many the boxes can hold: slots beyond seven can't be marked used. */
+  boxes: string[];
+}
+
+export function readSpellSlotUse(fields: FieldViews): SpellSlotUse[] {
+  return readSpellSlots(fields).map((slots) => {
+    const boxes = slotBoxes(slots.level, slots.total);
+    return { ...slots, boxes, used: boxes.filter((box) => isOn(fields, box)).length };
+  });
+}
+
+/** MPMB ends some item names with an invisible mark (U+180C) to tell its own entries apart. */
+// Try it: https://regex101.com/?regex=%5B%5Cu180B-%5Cu180F%5Cs%5D%2B%24&testString=Adamantine%20Plate%20Armor%20%E1%A0%8C
+const INVISIBLE_END = /[᠋-᠏\s]+$/;
+const clean = (text: string): string => text.replace(INVISIBLE_END, '');
+
+export interface MagicItem {
+  row: number;
+  name: string;
+  attuned: boolean;
+  description: string;
+}
+
+export interface GearItem {
+  /** The field the amount lives in, for the steppers. */
+  amountField: string;
+  name: string;
+  amount: number | null;
+}
+
+export interface Inventory {
+  magicItems: MagicItem[];
+  gear: GearItem[];
+  /** Platinum, gold, electrum, silver, copper. */
+  coins: { field: string; key: 'pp' | 'gp' | 'ep' | 'sp' | 'cp'; amount: string }[];
+  carried: string;
+  capacity: string;
+}
+
+const COINS = [
+  ['Platinum Pieces', 'pp'],
+  ['Gold Pieces', 'gp'],
+  ['Electrum Pieces', 'ep'],
+  ['Silver Pieces', 'sp'],
+  ['Copper Pieces', 'cp'],
+] as const;
+
+export function readInventory(fields: FieldViews): Inventory {
+  const gear = (prefix: string): GearItem[] =>
+    rows(fields, `${prefix} Row `)
+      .map((row) => ({
+        amountField: `${prefix} Amount ${row}`,
+        name: clean(valueOf(fields, `${prefix} Row ${row}`)),
+        amount: numberOf(fields, `${prefix} Amount ${row}`),
+      }))
+      .filter((item) => item.name !== '');
+  return {
+    magicItems: rows(fields, 'Extra.Magic Item ')
+      .map((row) => ({
+        row,
+        name: clean(valueOf(fields, `Extra.Magic Item ${row}`)),
+        attuned: isOn(fields, `Extra.Magic Item Attuned ${row}`),
+        description: valueOf(fields, `Extra.Magic Item Description ${row}`),
+      }))
+      .filter((item) => item.name !== ''),
+    gear: [...gear('Adventuring Gear'), ...gear('Extra.Gear')],
+    coins: COINS.map(([field, key]) => ({ field, key, amount: valueOf(fields, field) })),
+    carried: shown(fields, 'Weight Carried'),
+    capacity: shown(fields, 'Weight Carrying Capacity.Field'),
+  };
+}
+
+/** A block of MPMB's feature text: the class features, species traits, a feat, the background. */
+export interface FeatureText {
+  title: string;
+  text: string;
+}
+
+export function readFeatures(fields: FieldViews): FeatureText[] {
+  const feats = rows(fields, 'Feat Name ').map((row) => ({
+    title: valueOf(fields, `Feat Name ${row}`),
+    text: valueOf(fields, `Feat Description ${row}`),
+  }));
+  const background = valueOf(fields, 'Background Feature');
+  return [
+    { title: '', text: valueOf(fields, 'Class Features') },
+    { title: '', text: valueOf(fields, 'Racial Traits') },
+    ...feats,
+    { title: background, text: valueOf(fields, 'Background Feature Description') },
+  ].filter((block) => block.text !== '');
+}
+
+/** A run of text with MPMB's emphasis: **bold**, #bold#, ##bold## and *italic*. */
+export interface TextRun {
+  text: string;
+  bold: boolean;
+  italic: boolean;
+}
+
+// MPMB's marks: "**Silver Dragonborn**", "#◆ Lay on Hands#", "##◆ Breath Weapon##" and "*Divine Smite*"
+// are runs; "40 HP" in between is plain. Try it:
+// https://regex101.com/?regex=%5C*%5C*(.%2B%3F)%5C*%5C*%7C%23%23(.%2B%3F)%23%23%7C%23(.%2B%3F)%23%7C%5C*(.%2B%3F)%5C*&testString=%23%E2%97%86%20Lay%20on%20Hands%23%20(Paladin%201)%20*Divine%20Smite*
+const MARKS = /\*\*(.+?)\*\*|##(.+?)##|#(.+?)#|\*(.+?)\*/g;
+
+/** One line of MPMB's feature text as runs. Lines are separated by "\r" in the field. */
+export function textRuns(line: string): TextRun[] {
+  const runs: TextRun[] = [];
+  const plain = (text: string): void => {
+    if (text) runs.push({ text, bold: false, italic: false });
+  };
+  let at = 0;
+  [...line.matchAll(MARKS)].forEach((m) => {
+    plain(line.slice(at, m.index));
+    const [, b1, b2, b3, italic] = m;
+    runs.push({ text: b1 ?? b2 ?? b3 ?? italic ?? '', bold: italic === undefined, italic: italic !== undefined });
+    at = m.index + m[0].length;
+  });
+  plain(line.slice(at));
+  return runs;
+}
+
+/** Lines of a multi-line field ("\r" in Acrobat, "\n" when typed in the browser). */
+export const linesOf = (text: string): string[] => text.split(/\r\n?|\n/);
+
+/** The check boxes next to the hit points. */
+export function readToggles(fields: FieldViews): { inspiration: boolean; reactionUsed: boolean } {
+  return { inspiration: isOn(fields, 'Inspiration'), reactionUsed: isOn(fields, 'Reaction Used This Round') };
+}

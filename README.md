@@ -6,8 +6,12 @@ logic in the browser, so it behaves like the PDF without needing Adobe Acrobat.
 
 **Status:** in development. Built for a single play group first. You can import characters from filled
 MPMB PDFs (Colorful A4 v24.2.0, with the add-on scripts in them), keep them in the browser, and move
-them between devices with backup files. The play view comes next. The engine (MPMB's scripts on a
-stand-in for Acrobat) matches Acrobat on the reference characters.
+them between devices with backup files, and play them at the table: hit points, conditions, attacks,
+spell slots, limited features, rests, checks, inventory, features and notes, on laptops and the iPad.
+The engine (MPMB's scripts on a stand-in for Acrobat) matches Acrobat on the reference characters.
+
+The font is [Atkinson Hyperlegible Next](https://www.brailleinstitute.org/freefont/) by the Braille
+Institute (SIL Open Font License 1.1), bundled with the app.
 
 ## Develop
 

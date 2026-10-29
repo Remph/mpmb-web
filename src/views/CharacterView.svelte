@@ -1,115 +1,185 @@
 <!--
-  An opened character, until the play view (M4) exists: who it is, a few numbers from the sheet,
-  its add-on scripts, and MPMB's own menu, whose dialogs and menus show how the pop-ups work.
+  The play view (M4): the screen a player keeps open at the table. Three columns on a laptop: hit
+  points and conditions left, abilities and skills right, and the middle switches between combat,
+  inventory, features and notes. Narrower (the iPad in portrait), the right column becomes a tab.
+  Every tap goes through MPMB's own fields (session.change), so rules and saving stay MPMB's.
 -->
 <script lang="ts">
   import type { Texts } from '../i18n.ts';
-  import type { OpenCharacter, Session } from '../session.svelte.ts';
-  import MenuTree from './MenuTree.svelte';
+  import { longRest, shortRest } from '../play/rules.ts';
+  import type { RestEdits } from '../play/rules.ts';
+  import type { OpenCharacter, Session, Step } from '../session.svelte.ts';
   import Notes from './Notes.svelte';
+  import Checks from './play/Checks.svelte';
+  import CombatTab from './play/CombatTab.svelte';
+  import FeaturesTab from './play/FeaturesTab.svelte';
+  import InventoryTab from './play/InventoryTab.svelte';
+  import NotesTab from './play/NotesTab.svelte';
+  import SheetMenu from './play/SheetMenu.svelte';
+  import Vitals from './play/Vitals.svelte';
 
   interface Props {
     session: Session;
     open: OpenCharacter;
+    toggleLanguage: () => void;
     t: Texts;
   }
 
-  let { session, open, t }: Props = $props();
+  let { session, open, toggleLanguage, t }: Props = $props();
 
-  /** The text a field shows: its Format text ("+4", "9 m") or its value. */
-  const shown = (name: string): string => {
-    const view = open.fields[name];
-    if (!view) return '';
-    const text = view.text ?? view.value;
-    return Array.isArray(text) ? text.join(', ') : text;
-  };
-
-  const facts = $derived([
-    { label: t.level, value: shown('Character Level') },
-    { label: t.hitPoints, value: shown('HP Max') },
-    { label: t.armorClass, value: shown('AC') },
-    { label: t.proficiency, value: shown('Proficiency Bonus') },
-    { label: t.speed, value: shown('Speed') },
-  ]);
-
-  // MPMB's bookmarks: "Functions" is its menu; the page jumps under "Navigation" mean nothing here.
-  const MENU_ROOT = 'Functions';
-  const menu = $derived(open.menu.filter((node) => node.name === MENU_ROOT)[0]?.children ?? []);
-  const busy = $derived(open.status === 'opening' || open.status === 'working');
-  const statusText = $derived(
-    { opening: t.opening, working: t.working, saving: t.saving, saved: t.saved, error: '' }[open.status],
+  type Tab = 'combat' | 'checks' | 'inventory' | 'features' | 'notes';
+  let tab = $state<Tab>('combat');
+  let menuOpen = $state(false);
+  let width = $state(0);
+  /** From this width the checks have their own column; below it they are a tab. Matches the CSS. */
+  const THREE_COLUMNS = 1100;
+  const wide = $derived(width >= THREE_COLUMNS);
+  const tabs = $derived(
+    (
+      [
+        ['combat', t.tabCombat],
+        ['checks', t.tabChecks],
+        ['inventory', t.tabInventory],
+        ['features', t.tabFeatures],
+        ['notes', t.tabNotes],
+      ] as const
+    ).filter(([key]) => !(wide && key === 'checks')),
   );
-  const addOnNames = $derived([
-    // MPMB names imported files "2026/10/29 - name.js"; the date says when it was imported.
-    ...open.meta.addOns.files,
-    ...(open.meta.addOns.manual ? [t.pastedScript] : []),
-  ]);
+  const shownTab = $derived(wide && tab === 'checks' ? 'combat' : tab);
+
+  const fields = $derived(open.fields);
+  const disabled = $derived(open.status === 'opening' || open.status === 'error');
+  const statusText = $derived(
+    { opening: t.opening, working: t.saving, saving: t.saving, saved: t.saved, error: '' }[open.status],
+  );
+  const change = (steps: Step[]) => void session.change(steps);
+
+  const restSteps = (edits: RestEdits): Step[] => [
+    ...Object.entries(edits.values).map(([edit, text]) => ({ edit, text })),
+    ...edits.untick.map((click) => ({ click })),
+  ];
+
+  async function rest(kind: 'short' | 'long') {
+    const long = kind === 'long';
+    const answer = await session.popUps.choose({
+      title: long ? t.longRestTitle : t.shortRestTitle,
+      message: long ? t.longRestText : t.shortRestText,
+      buttons: [
+        { value: 'cancel', label: t.cancel },
+        { value: 'rest', label: long ? t.longRest : t.shortRest, primary: true },
+      ],
+      cancel: 'cancel',
+    });
+    if (answer === 'rest') change(restSteps(long ? longRest(open.fields) : shortRest(open.fields)));
+  }
 </script>
 
-<nav>
-  <a href="#/">← {t.backToList}</a>
-  {#if statusText}<span class="status" class:busy aria-live="polite">{statusText}</span>{/if}
-</nav>
+<svelte:window bind:innerWidth={width} />
 
-<h1>{open.meta.name || t.unnamed}</h1>
-<p class="sub">{[open.meta.classes, open.meta.species].filter(Boolean).join(' · ')}</p>
+<header class="top">
+  <a class="back" href="#/">← {t.backToList}</a>
+  <div class="who">
+    <h1>{open.meta.name || t.unnamed}</h1>
+    <p>{[open.meta.classes, open.meta.species].filter(Boolean).join(' · ')}</p>
+  </div>
+  {#if statusText}<span class="status" class:busy={open.status !== 'saved'} aria-live="polite">{statusText}</span>{/if}
+  <div class="actions">
+    <button type="button" {disabled} onclick={() => rest('short')}>{t.shortRest}</button>
+    <button type="button" {disabled} onclick={() => rest('long')}>{t.longRest}</button>
+    <button type="button" onclick={() => (menuOpen = true)}>☰ {t.sheetMenu}</button>
+  </div>
+</header>
 
-<Notes notes={session.notes} />
+<div class="notes"><Notes notes={session.notes} /></div>
 
-{#if !session.client.answersPopUps}
-  <p class="warning">{t.notIsolated}</p>
+<div class="play">
+  <div class="side left">
+    <Vitals {fields} {disabled} {change} {t} />
+  </div>
+
+  <div class="middle">
+    <div class="tabs" role="tablist">
+      {#each tabs as [key, label] (key)}
+        <button
+          type="button"
+          role="tab"
+          id={`tab-${key}`}
+          aria-selected={shownTab === key}
+          aria-controls="tab-panel"
+          onclick={() => (tab = key)}>{label}</button
+        >
+      {/each}
+    </div>
+    <div id="tab-panel" role="tabpanel" aria-labelledby={`tab-${shownTab}`}>
+      {#if shownTab === 'combat'}
+        <CombatTab {fields} {disabled} {change} {t} />
+      {:else if shownTab === 'checks'}
+        <Checks {fields} {t} />
+      {:else if shownTab === 'inventory'}
+        <InventoryTab {fields} {disabled} {change} {t} />
+      {:else if shownTab === 'features'}
+        <FeaturesTab {fields} {t} />
+      {:else}
+        <NotesTab {fields} {disabled} {change} {t} />
+      {/if}
+    </div>
+  </div>
+
+  {#if wide}
+    <div class="side right">
+      <Checks {fields} {t} />
+    </div>
+  {/if}
+</div>
+
+{#if menuOpen}
+  <SheetMenu {session} {open} onclose={() => (menuOpen = false)} {toggleLanguage} {t} />
 {/if}
 
-<dl class="facts">
-  {#each facts as fact (fact.label)}
-    <div>
-      <dt>{fact.label}</dt>
-      <dd>{fact.value || '–'}</dd>
-    </div>
-  {/each}
-</dl>
-
-<section>
-  <h2>{t.addOnsTitle}</h2>
-  {#if addOnNames.length}
-    <ul class="add-ons">
-      {#each addOnNames as name (name)}<li>{name}</li>{/each}
-    </ul>
-  {:else}
-    <p>{t.noAddOns}</p>
-  {/if}
-</section>
-
-<section>
-  <h2>{t.mpmbMenu}</h2>
-  <p class="hint">{t.playViewSoon}</p>
-  <div class="menu" lang="en">
-    <MenuTree nodes={menu} path={[MENU_ROOT]} disabled={busy} run={(path) => session.runMenu(path)} />
-  </div>
-  <div class="row">
-    <button type="button" onclick={() => session.backUp([open.meta.id])}>{t.backUp}</button>
-  </div>
-</section>
-
 <style>
-  nav {
+  .top {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 0.5rem;
+    gap: 0.25rem 0.75rem;
+    padding: 0.375rem max(1rem, env(safe-area-inset-right)) 0.375rem max(1rem, env(safe-area-inset-left));
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
   }
 
-  nav a {
+  .back {
     display: inline-flex;
     align-items: center;
     min-height: 44px;
     color: var(--accent);
+    font-weight: 500;
+    text-decoration: none;
+  }
+
+  .who {
+    flex: 1;
+    min-width: 12rem;
+    line-height: 1.2;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 800;
+  }
+
+  .who p {
+    margin: 0;
+    overflow: hidden;
+    color: var(--ink-muted);
+    font-size: 0.875rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .status {
     color: var(--ink-muted);
-    font-size: 0.9375rem;
+    font-size: 0.875rem;
   }
 
   .status.busy::before {
@@ -137,81 +207,81 @@
     }
   }
 
-  h1 {
-    margin: 0;
-    font-size: clamp(1.75rem, 4vw, 2.25rem);
-    line-height: 1.15;
-  }
-
-  .sub {
-    margin: 0.25rem 0 1.25rem;
-    color: var(--ink-muted);
-  }
-
-  .warning {
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--danger);
-    border-radius: 0.5rem;
-  }
-
-  .facts {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
-    gap: 0.5rem;
-    margin: 0 0 1.5rem;
-  }
-
-  .facts div {
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--line);
-    border-radius: 0.5rem;
-    background: var(--surface);
-  }
-
-  dt {
-    font-size: 0.875rem;
-    color: var(--ink-muted);
-  }
-
-  dd {
-    margin: 0;
-    font-size: 1.375rem;
-    font-weight: 600;
-  }
-
-  h2 {
-    font-size: 1rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--ink-muted);
-    margin: 0 0 0.5rem;
-  }
-
-  section {
-    margin-bottom: 1.5rem;
-  }
-
-  .add-ons {
-    margin: 0;
-    padding-left: 1.25rem;
-    overflow-wrap: anywhere;
-  }
-
-  .hint {
-    color: var(--ink-muted);
-    margin: 0 0 0.5rem;
-  }
-
-  .menu {
-    border: 1px solid var(--line);
-    border-radius: 0.75rem;
-    background: var(--surface);
-    padding: 0.25rem 0.5rem 0.25rem 0;
-    margin-bottom: 1rem;
-  }
-
-  .row {
+  .actions {
     display: flex;
     gap: 0.5rem;
+  }
+
+  .notes {
+    padding: 0 1rem;
+  }
+
+  .play {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr) 380px;
+    gap: 0.75rem;
+    align-items: start;
+    padding: 0.75rem 1rem 2rem;
+  }
+
+  /* The side columns stay in view while the middle scrolls. */
+  .side {
+    position: sticky;
+    top: 0.75rem;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .tabs button {
+    position: relative;
+    flex: none;
+    border: 0;
+    border-radius: 0.5rem 0.5rem 0 0;
+    background: none;
+    color: var(--ink-muted);
+    font-weight: 700;
+  }
+
+  .tabs button[aria-selected='true'] {
+    color: var(--accent);
+  }
+
+  .tabs button[aria-selected='true']::after {
+    content: '';
+    position: absolute;
+    right: 0.5rem;
+    bottom: 0;
+    left: 0.5rem;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+
+  @media (max-width: 1099px) {
+    .play {
+      grid-template-columns: 280px minmax(0, 1fr);
+    }
+  }
+
+  /* Phones come later (roadmap); until then everything stacks. */
+  @media (max-width: 699px) {
+    .play {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .side {
+      position: static;
+    }
+
+    .actions {
+      flex-wrap: wrap;
+    }
   }
 </style>

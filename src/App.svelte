@@ -57,17 +57,23 @@
 
 <svelte:window onhashchange={route} />
 
-<header>
-  <a class="brand" href="#/">{t.title}</a>
-  <button type="button" onclick={toggleLanguage} aria-label={t.switchLanguageLabel} lang={lang === 'de' ? 'en' : 'de'}>
-    {t.switchLanguage}
-  </button>
-</header>
+{#if session.current}
+  <!-- The play view brings its own top bar and uses the whole width; the language sits in its menu. -->
+  <CharacterView {session} open={session.current} {toggleLanguage} {t} />
+{:else}
+  <header>
+    <a class="brand" href="#/">{t.title}</a>
+    <button
+      type="button"
+      onclick={toggleLanguage}
+      aria-label={t.switchLanguageLabel}
+      lang={lang === 'de' ? 'en' : 'de'}
+    >
+      {t.switchLanguage}
+    </button>
+  </header>
 
-<main>
-  {#if session.current}
-    <CharacterView {session} open={session.current} {t} />
-  {:else}
+  <main>
     {#if missing}
       <p class="missing">{t.notFound}</p>
     {/if}
@@ -83,8 +89,8 @@
         <a href="https://www.patreon.com/morepurplemorebetter">{t.supportMpmb}</a>
       </p>
     </section>
-  {/if}
-</main>
+  </main>
+{/if}
 
 <PopUpLayer popUps={session.popUps} {t} />
 

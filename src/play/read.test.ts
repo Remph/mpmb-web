@@ -14,6 +14,11 @@ import {
   readSkills,
   readSpellSlots,
   readTool,
+  readFeatures,
+  readInventory,
+  readSpellSlotUse,
+  slotBoxes,
+  textRuns,
 } from './read.ts';
 
 // The values below are what Acrobat shows on page 1 of the reference characters.
@@ -145,5 +150,46 @@ describe('play view values', () => {
     expect(readConditions(paladin)).toEqual({ active: [], exhaustion: 0 });
     const poisoned = withValues(paladin, { 'Condition.Poisoned': 'Yes', 'Condition.Exhaustion': '2' });
     expect(readConditions(poisoned)).toEqual({ active: ['Poisoned'], exhaustion: 2 });
+  });
+});
+
+describe('play view extras', () => {
+  it('ticks the slot boxes the sheet shows first', () => {
+    expect(slotBoxes(2, 3).slice(0, 3)).toEqual([
+      'SpellSlots.Checkboxes.lvl2.top2.1',
+      'SpellSlots.Checkboxes.lvl2.top2.2',
+      'SpellSlots.Checkboxes.lvl2.bottom1',
+    ]);
+    const used = withValues(paladin, { 'SpellSlots.Checkboxes.lvl1.top2.1': 'Yes' });
+    expect(readSpellSlotUse(used).map((s) => [s.level, s.total, s.used])).toEqual([
+      [1, 6, 1],
+      [2, 3, 0],
+    ]);
+  });
+
+  it('reads magic items, gear and coins', () => {
+    const inventory = readInventory(paladin);
+    expect(inventory.magicItems.map((i) => [i.name, i.attuned])).toEqual([
+      ['Adamantine Plate Armor', false],
+      ['+2 Halberd', false],
+      ['Headband of Intellect', true],
+      ['Stone of Good Luck', true],
+    ]);
+    expect(inventory.gear.map((g) => [g.name, g.amount])).toEqual([
+      ['Potion of Healing', 5],
+      ['Greater Potion of Healing', 4],
+      ['Sending Stones', 1],
+    ]);
+    expect(inventory.coins.map((c) => c.amount)).toEqual(['1', '25', '66', '11', '123']);
+    expect(inventory.carried).toBe('5.45 kg');
+  });
+
+  it("splits MPMB's feature text into runs", () => {
+    expect(textRuns('#◆ Lay on Hands# (Paladin 1) *Divine Smite*')).toEqual([
+      { text: '◆ Lay on Hands', bold: true, italic: false },
+      { text: ' (Paladin 1) ', bold: false, italic: false },
+      { text: 'Divine Smite', bold: false, italic: true },
+    ]);
+    expect(readFeatures(paladin).map((f) => f.title)).toEqual(['', '', 'Magic Initiate [Cleric]', 'Acolyte']);
   });
 });
