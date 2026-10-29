@@ -128,7 +128,12 @@ export function runDialog(spec: DialogSpec, host: Host, tools: RealmTools): stri
     if (round >= MAX_ROUNDS) return 'cancel';
     return handle(host.dialog(plain(view), first)) ?? show(false, round + 1);
   };
+  const shown = (): string => {
+    const result = show(true, 0);
+    host.dialogClosed?.();
+    return result;
+  };
 
   call('initialize');
-  return finish(ended ?? show(true, 0));
+  return finish(ended ?? shown());
 }

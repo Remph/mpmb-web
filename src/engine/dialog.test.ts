@@ -6,17 +6,22 @@ import type { DialogReply, DialogView, Host } from './host.ts';
 import { realmTools } from './realm.ts';
 
 /** A host that answers with the given replies in turn and keeps every view it was shown. */
-const hostOf = (replies: (DialogReply | null)[]): Host & { views: DialogView[] } => {
+const hostOf = (replies: (DialogReply | null)[]): Host & { views: DialogView[]; closed: number } => {
   const views: DialogView[] = [];
-  return {
+  const host = {
     views,
+    closed: 0,
     alert: () => null,
     popUpMenu: () => null,
-    dialog: (view) => {
+    dialog: (view: DialogView) => {
       views.push(view);
       return replies[views.length - 1] ?? null;
     },
+    dialogClosed: () => {
+      host.closed += 1;
+    },
   };
+  return host;
 };
 
 const description = {
@@ -81,6 +86,19 @@ describe('runDialog', () => {
   test('a handler can end the dialog with its own result (MPMB uses that to reopen it)', () => {
     const spec: DialogSpec = { description, tick: (d: DialogApi) => d.end('cadd') };
     expect(runDialog(spec, hostOf([{ type: 'event', id: 'tick', state: {} }]), tools)).toBe('cadd');
+  });
+
+  test('the page hears when a shown dialog closes, also when a handler ended it', () => {
+    const ending: DialogSpec = { description, tick: (d: DialogApi) => d.end('cadd') };
+    const host = hostOf([{ type: 'event', id: 'tick', state: {} }]);
+    runDialog(ending, host, tools);
+    expect(host.closed).toBe(1);
+    // A dialog that initialize ends was never shown, so there is nothing to close.
+    const never: DialogSpec = { description, initialize: (d: DialogApi) => d.end('cancel') };
+    const quiet = hostOf([]);
+    expect(runDialog(never, quiet, tools)).toBe('cancel');
+    expect(quiet.views).toEqual([]);
+    expect(quiet.closed).toBe(0);
   });
 
   test('a host that cannot wait for the user gets "cancel"', () => {

@@ -42,6 +42,8 @@ export interface EngineOptions {
   realm: Realm;
   /** Milliseconds since some start, for timings and timers; defaults to performance.now. */
   now?: () => number;
+  /** Timers (their code) that may run; the others wait forever. Defaults to all. */
+  allowTimer?: (expr: string) => boolean;
 }
 
 interface Timer {
@@ -115,12 +117,14 @@ export class Engine {
   private readonly timers: Timer[] = [];
   private timerId = 0;
   private readonly now: () => number;
+  private readonly allowTimer: (expr: string) => boolean;
   private readonly root: BookmarkNode;
 
-  private constructor({ sheet, host, realm, now }: EngineOptions) {
+  private constructor({ sheet, host, realm, now, allowTimer }: EngineOptions) {
     this.tools = realmTools(realm);
     this.host = host;
     this.now = now ?? (() => performance.now());
+    this.allowTimer = allowTimer ?? (() => true);
     this.doc = new SheetDocument({ sheet, tools: this.tools });
     this.root = new BookmarkNode(
       { tools: this.tools, runAction: (node, script) => this.runBookmarkScript(node, script) },
@@ -396,20 +400,21 @@ export class Engine {
 
   /**
    * Runs the waiting timers in the order they are due, including timers they add. Intervals run once
-   * per call. `filter` can hold some back (the app decides which start-up dialogs to show).
+   * per call. `filter` holds some back for this run, on top of the engine's `allowTimer`.
    */
   runTimers(filter: (expr: string) => boolean = () => true): number {
     const step = (ran: number, skipped: Set<number>): number => {
       const ready = this.timers.filter((t) => !skipped.has(t.id)).sort((a, b) => a.due - b.due)[0];
       if (!ready || ran >= MAX_TIMERS_PER_RUN) return ran;
-      if (!filter(String(ready.expr))) return step(ran, new Set([...skipped, ready.id]));
+      const code = String(ready.expr);
+      if (!this.allowTimer(code) || !filter(code)) return step(ran, new Set([...skipped, ready.id]));
       if (!ready.interval) this.timers.splice(this.timers.indexOf(ready), 1);
       try {
         const { expr } = ready;
         if (typeof expr === 'function') (expr as () => void).call(this.tools.realm.global);
         else this.tools.realm.evaluate(String(expr), 'timer');
       } catch (err) {
-        this.doc.logError('timer ' + String(ready.expr).slice(0, MAX_TIMER_LABEL), err);
+        this.doc.logError('timer ' + code.slice(0, MAX_TIMER_LABEL), err);
       }
       // An interval runs once per call, so the loop ends.
       return step(ran + 1, ready.interval ? new Set([...skipped, ready.id]) : skipped);

@@ -1,4 +1,5 @@
 // Messages between the page and the engine worker.
+import type { AddOns } from '../engine/add-ons.ts';
 import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem } from '../engine/host.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
 import type { FieldViews } from './views.ts';
@@ -37,6 +38,29 @@ export type Ask =
 
 export type Answer = AlertReply | DialogReply | string | null;
 
+/** What `open` and `importPdf` return. */
+export interface Opened {
+  addOns: AddOns;
+}
+
+/**
+ * Why a command failed, for the page to explain in the player's language; anything else is a bug and
+ * shows the worker's message.
+ */
+export type FailureCode =
+  /** Not a PDF, or a PDF the reader can't take apart. */
+  | 'unreadable-pdf'
+  /** A PDF, but not the sheet type and version the app ships (`detail`: what it is). */
+  | 'wrong-sheet';
+
+/** One entry of MPMB's bookmarks (its menu), as the page needs it. */
+export interface MenuNode {
+  name: string;
+  children: MenuNode[];
+  /** Whether clicking it runs a script. */
+  action: boolean;
+}
+
 export interface Summary {
   /** Script errors so far (MPMB's scripts throwing), for the page to report. */
   errors: number;
@@ -49,6 +73,10 @@ export type FromWorker =
   /** A pop-up the page can only show, because the worker could not wait for an answer. */
   | { type: 'notice'; ask: Ask }
   | { type: 'launchURL'; url: string }
+  /** The dialog shown last has closed (see Host.dialogClosed). */
+  | { type: 'dialogClosed' }
   | { type: 'fields'; changed: FieldViews; removed: string[] }
+  /** MPMB's bookmarks, when they changed (MPMB adds the pages it spawns). */
+  | { type: 'menu'; menu: MenuNode[] }
   | { type: 'done'; id: number; result: unknown; summary: Summary }
-  | { type: 'failed'; id: number; error: string };
+  | { type: 'failed'; id: number; error: string; code?: FailureCode; detail?: string };

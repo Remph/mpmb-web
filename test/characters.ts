@@ -6,6 +6,7 @@ import type { Host } from '../src/engine/host.ts';
 import { mpmbScripts } from '../src/engine/scripts.ts';
 import type { CharacterData } from '../src/engine/sheet-data.ts';
 import { blankSheet, characterSheet } from '../src/engine/sheet.ts';
+import { allowTimer } from '../src/engine/startup.ts';
 import type { SheetSnapshot } from '../src/engine/types.ts';
 import { ScriptedHost } from './hosts.ts';
 import { vmRealm } from './vm-realm.ts';
@@ -22,11 +23,11 @@ export function referenceSheet(name: ReferenceCharacter): SheetSnapshot {
 }
 
 /**
- * Opens a sheet the way the worker does: load the scripts, let the opening timers run, then run every
- * Format script for the text each field shows.
+ * Opens a sheet the way the worker does: load the scripts, let the opening timers the app allows run,
+ * then run every Format script for the text each field shows.
  */
 export function openSheet(sheet: SheetSnapshot = blankSheet(), host: Host = new ScriptedHost()): Engine {
-  const engine = Engine.load({ sheet, scripts: mpmbScripts, host, realm: vmRealm() });
+  const engine = Engine.load({ sheet, scripts: mpmbScripts, host, realm: vmRealm(), allowTimer });
   engine.runTimers();
   engine.doc.formatAll();
   return engine;
