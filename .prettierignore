@@ -2,3 +2,7 @@ dist
 node_modules
 pnpm-lock.yaml
 LICENSE
+# MPMB's scripts stay exactly as upstream ships them; generated sheet and character data.
+vendor/mpmb/
+src/engine/data/
+test/characters/*.json

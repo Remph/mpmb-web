@@ -1,0 +1,6 @@
+# Cross-origin isolation for the engine worker: it waits for the answers to the sheet's pop-ups
+# with shared memory, which browsers only allow on isolated pages. Apache with mod_headers.
+<IfModule mod_headers.c>
+  Header set Cross-Origin-Opener-Policy "same-origin"
+  Header set Cross-Origin-Embedder-Policy "require-corp"
+</IfModule>

@@ -2,3 +2,7 @@
 * text=auto eol=lf
 *.png binary
 *.pdf binary
+# Upstream code and generated data: GitHub folds them in diffs and leaves them out of the language stats.
+vendor/mpmb/** linguist-vendored
+src/engine/data/*.json linguist-generated
+test/characters/*.json linguist-generated
