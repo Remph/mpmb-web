@@ -4,7 +4,9 @@ A web version of [MorePurpleMoreBetter's D&D 5.5e (2024) Character Record Sheet]
 for playing and building characters in the browser on laptops and tablets. It runs MPMB's own sheet
 logic in the browser, so it behaves like the PDF without needing Adobe Acrobat.
 
-**Status:** in development, nothing to use yet. Built for a single play group first.
+**Status:** in development, nothing to use yet. Built for a single play group first. The engine (MPMB's
+scripts on a stand-in for Acrobat) works and matches Acrobat on the reference characters; there is no
+sheet to fill in yet.
 
 ## Develop
 
@@ -17,6 +19,26 @@ pnpm test           # unit tests (Vitest)
 pnpm check          # type checks
 pnpm build          # static build in dist/
 pnpm format:check   # Prettier
+```
+
+### Where things are
+
+- `vendor/mpmb/`: MPMB's scripts, unchanged (see `vendor/README.md`).
+- `src/engine/`: the stand-in for Acrobat's JavaScript API that runs them: fields, events, calculations,
+  dialogs, templates. `src/engine/data/colorful-a4.json` is the blank Colorful A4 sheet.
+- `src/pdf/`: reads MPMB sheet PDFs (the blank sheet and filled characters).
+- `src/worker/`: the engine in a Web Worker, with pop-ups that wait for the user. That needs a
+  cross-origin isolated page: `pnpm dev` and `pnpm preview` send the headers, the live site gets them
+  from `public/.htaccess`.
+- `test/`: the reference characters (made in Acrobat, SRD only) and the tests that compare the engine
+  with them. `test/browser/engine-check.html` runs one of them through the worker in a browser: open it
+  under `pnpm dev`.
+
+Sheet data from a PDF (Node 22 runs the TypeScript directly):
+
+```sh
+node tools/extract-sheet.ts <blank Colorful A4.pdf>            # src/engine/data/colorful-a4.json
+node tools/extract-character.ts <filled sheet.pdf> <out.json>  # a character as differences from it
 ```
 
 ## Credits and licence
