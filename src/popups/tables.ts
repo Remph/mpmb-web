@@ -1,4 +1,4 @@
-// MPMB builds its dialog tables (ability scores, class selection) as a row of columns, each column a
+// MPMB builds some dialog tables (ability scores) as a row of columns, each column a
 // stack of cells. Acrobat lines the cells up because every one has a fixed height in points. Here
 // texts wrap and inputs are 44 px tall, so a two-line header in one column pushes its cells below
 // those of the next. This action gives the n-th cell of every column the height of the tallest one.
