@@ -1,29 +1,51 @@
 <!-- Senses and defenses, then MPMB's feature texts: class, species, feats, background. -->
 <script lang="ts">
   import type { Texts } from '../../i18n.ts';
-  import { linesOf, readFeatures, valueOf } from '../../play/read.ts';
+  import { readDefenses, readFeatures, textRuns } from '../../play/read.ts';
   import type { FieldViews } from '../../worker/views.ts';
   import RichText from './RichText.svelte';
 
   let { fields, t }: { fields: FieldViews; t: Texts } = $props();
   const features = $derived(readFeatures(fields));
-  const RESISTANCE_ROWS = [1, 2, 3, 4, 5, 6];
-  /** "**Resistances**. Cold, Fire", in MPMB's own marks like the line about immunities below it. */
-  const resistances = (types: string[]): string => (types.length ? `**${t.resistances}**. ${types.join(', ')}` : '');
-  const defenses = $derived(
+  const defenses = $derived(readDefenses(fields));
+  /** Senses, resistances, MPMB's labelled lines (immunities …), then the rest: one card each. */
+  const cards = $derived(
     [
-      valueOf(fields, 'Vision'),
-      resistances(RESISTANCE_ROWS.map((n) => valueOf(fields, `Resistance Damage Type ${n}`)).filter(Boolean)),
-      ...linesOf(valueOf(fields, 'Saving Throw advantages / disadvantages')),
-    ].filter((line) => line.trim() !== ''),
+      { title: t.senses, items: defenses.senses, resistance: false, sentences: false },
+      { title: t.resistances, items: defenses.resistances, resistance: true, sentences: false },
+      ...defenses.labelled.map((card) => ({
+        title: card.title === 'Immunities' ? t.immunities : t.advantageAgainst,
+        items: card.items,
+        resistance: false,
+        sentences: false,
+      })),
+      // MPMB's other entries are sentences with its marks ("**Dex Save for Half**. *Failure:* …").
+      { title: t.savesOther, items: defenses.other, resistance: false, sentences: true },
+    ].filter((card) => card.items.length),
   );
 </script>
 
-{#if defenses.length}
-  <section class="panel" aria-labelledby="defenses-title">
-    <h2 id="defenses-title">{t.sensesDefenses}</h2>
-    {#each defenses as line, i (i)}<RichText text={line} />{/each}
-  </section>
+{#if cards.length}
+  <div class="cards" role="group" aria-label={t.sensesDefenses}>
+    {#each cards as card, i (i)}
+      <section class="panel card" aria-labelledby="defense-{i}">
+        <h2 id="defense-{i}">{card.title}</h2>
+        <ul>
+          {#each card.items as item, j (j)}
+            {#if card.sentences}
+              <li class="sentence">
+                {#each textRuns(item) as run, k (k)}
+                  {#if run.bold}<b>{run.text}</b>{:else if run.italic}<i>{run.text}</i>{:else}{run.text}{/if}
+                {/each}
+              </li>
+            {:else}
+              <li class:resistance={card.resistance}>{item}</li>
+            {/if}
+          {/each}
+        </ul>
+      </section>
+    {/each}
+  </div>
 {/if}
 
 {#each features as block, i (i)}
@@ -47,5 +69,46 @@
     margin: 0 0 0.5rem;
     font-size: 1rem;
     font-weight: 800;
+  }
+
+  /* Senses, resistances and immunities side by side, as many per row as fit. */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: 0 0.625rem;
+  }
+
+  .card h2 {
+    font-size: 0.8125rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+
+  .card ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .card li {
+    padding: 0.125rem 0.625rem;
+    border-radius: 1rem;
+    background: var(--accent-soft);
+    font-weight: 700;
+  }
+
+  .card li.resistance {
+    background: var(--hp-soft);
+  }
+
+  .card li.sentence {
+    padding: 0;
+    border-radius: 0;
+    background: none;
+    font-weight: 400;
   }
 </style>

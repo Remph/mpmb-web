@@ -4,6 +4,7 @@
 import type { AddOns } from './engine/add-ons.ts';
 import type { CharacterData } from './engine/sheet-data.ts';
 import { SHEET_ID } from './engine/sheet-id.ts';
+import { FF } from './engine/types.ts';
 import type { Texts } from './i18n.ts';
 import { counted, fill } from './i18n.ts';
 import { PopUpStack } from './popups/popups.svelte.ts';
@@ -43,7 +44,8 @@ export function expected(fields: FieldViews, steps: Step[]): FieldViews {
   steps.forEach((step) => {
     const name = 'edit' in step ? step.edit : step.click;
     const view = next[name];
-    if (!view) return;
+    // A push button (MPMB's row menus) only runs its script; the worker reports what that changed.
+    if (!view || ('click' in step && view.flags & FF.pushButton)) return;
     // A click toggles a check box between "Off" and the value its widget has when on.
     const on = view.widgets[0]?.on ?? 'Yes';
     const value = 'edit' in step ? step.text : view.value === 'Off' || view.value === '' ? on : 'Off';
