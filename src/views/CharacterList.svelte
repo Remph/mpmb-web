@@ -3,6 +3,7 @@
   import { SHEET_ID } from '../engine/sheet-id.ts';
   import type { Texts } from '../i18n.ts';
   import { counted, fill } from '../i18n.ts';
+  import { MPMB_DOWNLOAD, MPMB_PATREON } from '../mpmb-links.ts';
   import type { Session } from '../session.svelte.ts';
   import Notes from './Notes.svelte';
 
@@ -36,9 +37,15 @@
 
 <section class="head">
   <h1>{t.charactersTitle}</h1>
-  <button type="button" class="primary" disabled={importing} onclick={() => pdfInput?.click()}>
-    {t.importPdf}
-  </button>
+  <div class="row">
+    <!-- MPMB's condition for this site: point people to the official sheet (see mpmb-links.ts). -->
+    <a class="button" href={MPMB_DOWNLOAD} target="_blank" rel="noopener" aria-label={t.getPdfLabel}>
+      {t.getPdf}
+    </a>
+    <button type="button" class="primary" disabled={importing} onclick={() => pdfInput?.click()}>
+      {t.importPdf}
+    </button>
+  </div>
   <input
     bind:this={pdfInput}
     type="file"
@@ -48,7 +55,10 @@
     onchange={(e) => pickedPdfs(e.currentTarget)}
   />
 </section>
-<p class="hint">{fill(t.importHint, { version: SHEET_ID.version })}</p>
+<p class="hint">
+  {fill(t.importHint, { version: SHEET_ID.version })}
+  {t.getPdfFrom} <a href={MPMB_PATREON} target="_blank" rel="noopener">{t.mpmbPatreon}</a>.
+</p>
 
 <Notes notes={session.notes} />
 
@@ -116,6 +126,29 @@
   .hint {
     color: var(--ink-muted);
     margin: 0.5rem 0 1.25rem;
+  }
+
+  .hint a {
+    color: var(--accent);
+    /* Inline padding leaves the lines where they are but makes the link a 44 px touch target. */
+    padding-block: 0.75rem;
+  }
+
+  /* A link that looks like the other buttons: it leaves the app, so it's no <button>. */
+  .button {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 1rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .button:hover {
+    background: var(--hover);
   }
 
   .characters {

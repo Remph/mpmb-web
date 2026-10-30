@@ -71,6 +71,9 @@ that could not run, with the reason). A review runs them again on the branch.
   scripts into their browser.
 - Credit MPMB clearly without suggesting MPMB made or endorses this. Don't copy the PDF's artwork or
   layout (designed by Javier Aumente); build our own look.
+- MPMB's conditions for this project (2026-10-30): the start page says plainly that MPMB Web is not
+  affiliated with or endorsed by MPMB, and links to where to get the PDF (MPMB's website and Patreon,
+  `src/mpmb-links.ts`). Never remove or hide either.
 - "Dungeons & Dragons" is a trademark: say "for D&D 5.5e (2024)", don't brand with it.
 - Sign as "Remph". Never put the group's characters, their custom scripts, player names or other private
   details in this repo, an issue or a PR; they stay in `mpmb-web-dev`.

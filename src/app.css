@@ -1,30 +1,49 @@
-/* Design tokens. Placeholder look for M0; the real design comes with the M4 mock-ups. */
+/*
+ * Design tokens: the "Purple" look Nick picked for M4 (2026-10-29). Purple nods to MorePurpleMoreBetter;
+ * red marks hit points, the one bold place of the play view. Atkinson Hyperlegible Next is made for
+ * reading at a glance: every digit looks different from its neighbours, across a table too.
+ */
 :root {
-  --ink: #1d1b22;
-  --ink-muted: #5d5868;
-  --paper: #fbfaf8;
+  --ink: #1d1a26;
+  --ink-muted: #615b6e;
+  --paper: #f3f2f7;
   --surface: #ffffff;
-  --line: #dedae3;
-  --accent: #4f46a5;
+  --line: #dcd8e4;
+  --accent: #4b3fa0;
+  --accent-soft: #e9e6f7;
   --on-accent: #ffffff;
   --hover: #efedf5;
   --danger: #b3261e;
   --ok: #1e7b3a;
+  --hp: #a3243b;
+  --hp-soft: #f8e5e8;
+  --on-hp: #ffffff;
+  --temp: #22639e;
+  --temp-soft: #e2edf8;
+  --used: #c9c4d4;
+  --font: 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color-scheme: light dark;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --ink: #ece9f1;
-    --ink-muted: #a7a1b2;
-    --paper: #16151a;
-    --surface: #211f27;
-    --line: #36333e;
-    --accent: #a9a2f0;
-    --on-accent: #16151a;
-    --hover: #2c2934;
+    --ink: #ebe8f2;
+    --ink-muted: #a59fb3;
+    --paper: #15141a;
+    --surface: #1f1d26;
+    --line: #34313d;
+    --accent: #a99ff2;
+    --accent-soft: #2c2843;
+    --on-accent: #15141a;
+    --hover: #2a2733;
     --danger: #ff8a80;
     --ok: #7bd88f;
+    --hp: #ff8fa0;
+    --hp-soft: #3a1f26;
+    --on-hp: #15141a;
+    --temp: #8cc0f2;
+    --temp-soft: #1d2b3a;
+    --used: #4a4655;
   }
 }
 
@@ -43,14 +62,11 @@ body {
   min-height: 100dvh;
   background: var(--paper);
   color: var(--ink);
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
+  font-family: var(--font);
   font-size: 1rem;
   line-height: 1.5;
+  /* Numbers line up in columns (modifiers, hit points). */
+  font-variant-numeric: tabular-nums;
 }
 
 /* Buttons everywhere: 44 px touch targets; one primary (filled) button per place. */

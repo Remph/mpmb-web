@@ -30,6 +30,28 @@ export interface OpenCharacter {
   status: 'opening' | 'working' | 'saving' | 'saved' | 'error';
 }
 
+/** One change the play view makes on the sheet: type into a field, or click a check box. */
+export type Step = { edit: string; text: string } | { click: string };
+
+/**
+ * The fields as they will be once the worker made these steps. The page shows them at once, so the
+ * next tap reads the new state: five quick taps on "−" count five, not one. The worker's own update
+ * replaces them a moment later (with whatever MPMB's scripts changed besides).
+ */
+export function expected(fields: FieldViews, steps: Step[]): FieldViews {
+  const next = { ...fields };
+  steps.forEach((step) => {
+    const name = 'edit' in step ? step.edit : step.click;
+    const view = next[name];
+    if (!view) return;
+    // A click toggles a check box between "Off" and the value its widget has when on.
+    const on = view.widgets[0]?.on ?? 'Yes';
+    const value = 'edit' in step ? step.text : view.value === 'Off' || view.value === '' ? on : 'Off';
+    next[name] = { ...view, value, text: undefined };
+  });
+  return next;
+}
+
 const errorText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 /**
@@ -62,13 +84,16 @@ export class Session {
    * saving. Leaving and opening a character wait for it, and a new import batch starts after it.
    */
   private running: Promise<void> = Promise.resolve();
+  /** Field values the play view set that the worker hasn't made yet, by field, with their change. */
+  private readonly waiting = new Map<string, { value: string | string[]; change: number }>();
+  private nextChange = 1;
   /** Whether the browser was asked to keep the data during this visit. */
   private askedToKeep = false;
 
   constructor(private readonly texts: () => Texts) {
     this.client.onFields = () => {
       this.dirty = true;
-      if (this.current) this.current.fields = { ...this.client.fields };
+      if (this.current) this.current.fields = this.shownFields();
     };
     this.client.onMenu = (menu) => {
       if (this.current) this.current.menu = menu;
@@ -209,6 +234,7 @@ export class Session {
     this.clearNotes();
     const stored = await this.store?.get(id);
     if (!stored) return false;
+    this.waiting.clear();
     this.current = { meta: stored.meta, fields: {}, menu: [], status: 'opening' };
     try {
       await this.client.open(stored.data);
@@ -247,6 +273,61 @@ export class Session {
         this.note('error', this.explain(err));
       });
     return this.running;
+  }
+
+  /**
+   * Makes the play view's changes, in order, through MPMB's own field events, and saves after. Taps
+   * that come quickly queue up behind each other instead of being dropped like a second menu click.
+   */
+  change(steps: Step[]): Promise<void> {
+    const open = this.current;
+    if (!open || open.status === 'opening' || open.status === 'error' || steps.length === 0) return this.running;
+    const id = this.nextChange++;
+    const next = expected(open.fields, steps);
+    steps.forEach((step) => {
+      const name = 'edit' in step ? step.edit : step.click;
+      const view = next[name];
+      if (view) this.waiting.set(name, { value: view.value, change: id });
+    });
+    open.fields = next;
+    this.running = this.running
+      .then(async () => {
+        if (this.current !== open) return;
+        open.status = 'working';
+        await steps.reduce<Promise<unknown>>(
+          (previous, step) =>
+            previous.then(() =>
+              'edit' in step ? this.client.edit(step.edit, step.text) : this.client.click(step.click),
+            ),
+          Promise.resolve(),
+        );
+        this.waiting.forEach((wait, name) => {
+          if (wait.change === id) this.waiting.delete(name);
+        });
+        open.fields = this.shownFields();
+        await this.saveOpen();
+      })
+      .catch((err: unknown) => {
+        this.waiting.clear();
+        open.status = 'error';
+        this.note('error', this.explain(err));
+      });
+    return this.running;
+  }
+
+  /**
+   * The worker's fields with the values of changes still waiting in line on top. Without them the
+   * worker's update after the first of several quick taps would show the old count again, and the
+   * next tap would count from there. Waiting values are absolute (a click is stored as the value it
+   * leads to), so laying them over a field the worker already changed does no harm.
+   */
+  private shownFields(): FieldViews {
+    const fields = { ...this.client.fields };
+    this.waiting.forEach(({ value }, name) => {
+      const view = fields[name];
+      if (view) fields[name] = { ...view, value, text: undefined };
+    });
+    return fields;
   }
 
   private async saveOpen(): Promise<void> {

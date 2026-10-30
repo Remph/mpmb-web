@@ -1,5 +1,6 @@
 <script lang="ts">
   import { pickLanguage, ui, type Lang } from './i18n';
+  import { MPMB_PATREON } from './mpmb-links.ts';
   import PopUpLayer from './popups/PopUpLayer.svelte';
   import { Session } from './session.svelte.ts';
   import CharacterList from './views/CharacterList.svelte';
@@ -57,20 +58,28 @@
 
 <svelte:window onhashchange={route} />
 
-<header>
-  <a class="brand" href="#/">{t.title}</a>
-  <button type="button" onclick={toggleLanguage} aria-label={t.switchLanguageLabel} lang={lang === 'de' ? 'en' : 'de'}>
-    {t.switchLanguage}
-  </button>
-</header>
+{#if session.current}
+  <!-- The play view brings its own top bar and uses the whole width; the language sits in its menu. -->
+  <CharacterView {session} open={session.current} {toggleLanguage} {t} />
+{:else}
+  <header>
+    <a class="brand" href="#/">{t.title}</a>
+    <button
+      type="button"
+      onclick={toggleLanguage}
+      aria-label={t.switchLanguageLabel}
+      lang={lang === 'de' ? 'en' : 'de'}
+    >
+      {t.switchLanguage}
+    </button>
+  </header>
 
-<main>
-  {#if session.current}
-    <CharacterView {session} open={session.current} {t} />
-  {:else}
+  <main>
     {#if missing}
       <p class="missing">{t.notFound}</p>
     {/if}
+    <!-- MPMB's condition for this site: say plainly, at the top, that it is not MPMB's. -->
+    <p class="notice">{t.notAffiliated}</p>
     <CharacterList {session} {t} {lang} />
 
     <section class="about" aria-labelledby="credits-title">
@@ -80,11 +89,11 @@
       <p>{t.creditsSrd}</p>
       <p class="links">
         <a href="https://github.com/Remph/mpmb-web">{t.source}</a>
-        <a href="https://www.patreon.com/morepurplemorebetter">{t.supportMpmb}</a>
+        <a href={MPMB_PATREON}>{t.supportMpmb}</a>
       </p>
     </section>
-  {/if}
-</main>
+  </main>
+{/if}
 
 <PopUpLayer popUps={session.popUps} {t} />
 
@@ -111,6 +120,15 @@
     max-width: 64rem;
     margin: 0 auto;
     padding: clamp(1.25rem, 4vw, 2.5rem) clamp(1rem, 4vw, 2rem) 3rem;
+  }
+
+  .notice {
+    margin: 0 0 1.5rem;
+    padding: 0.625rem 0.875rem;
+    border-left: 3px solid var(--accent);
+    border-radius: 0 0.5rem 0.5rem 0;
+    background: var(--accent-soft);
+    font-size: 0.9375rem;
   }
 
   .missing {

@@ -18,7 +18,8 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@cantoo/pdf-lib": "2.11.1"
+    "@cantoo/pdf-lib": "2.11.1",
+    "@fontsource/atkinson-hyperlegible-next": "5.3.0"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
