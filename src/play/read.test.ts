@@ -4,7 +4,10 @@ import { openSheet, referenceSheet } from '../../test/characters.ts';
 import { viewsOf } from '../worker/views.ts';
 import type { FieldViews } from '../worker/views.ts';
 import {
+  featureLine,
+  goldTotal,
   readAbilities,
+  readDefenses,
   readActions,
   readAttacks,
   readConditions,
@@ -196,6 +199,41 @@ describe('play view extras', () => {
     ]);
     expect(inventory.coins.map((c) => c.amount)).toEqual(['1', '25', '66', '11', '123']);
     expect(inventory.carried).toBe('5.45 kg');
+    expect(inventory.lifestyle).toBe('comfortable');
+    expect(inventory.lifestyleCost).toBe('2 gp');
+  });
+
+  it('knows the fields of each gear row and where a new item goes', () => {
+    const inventory = readInventory(paladin);
+    const stones = inventory.gear.filter((g) => g.name === 'Sending Stones')[0];
+    expect(stones).toMatchObject({
+      list: 'gear',
+      row: 24,
+      nameField: 'Adventuring Gear Row 24',
+      amountField: 'Adventuring Gear Amount 24',
+      button: 'Adventuring Gear Button 24',
+      weight: '1 kg',
+      location: '',
+    });
+    // Row 3 is the first empty one on page 2; page 3's list is empty.
+    expect(inventory.freeRow).toEqual({ gear: 3, extra: 1 });
+  });
+
+  it('adds up the coins in gold pieces', () => {
+    const coins = readInventory(paladin).coins;
+    // 1 pp + 25 gp + 66 ep + 11 sp + 123 cp = 10 + 25 + 33 + 1.1 + 1.23
+    expect(goldTotal(coins)).toBe(70.33);
+    expect(goldTotal(coins.map((c) => ({ ...c, amount: '' })))).toBeNull();
+    expect(goldTotal(coins.map((c) => ({ ...c, amount: c.key === 'sp' ? '2,5' : 'lots' })))).toBe(0.25);
+  });
+
+  it('reads senses, resistances and immunities as lists', () => {
+    expect(readDefenses(paladin)).toEqual({
+      senses: ['Darkvision 18 m'],
+      resistances: ['Cold'],
+      labelled: [{ title: 'Immunities', items: ['Charmed'] }],
+      other: [],
+    });
   });
 
   it("splits MPMB's feature text into runs", () => {
@@ -205,5 +243,26 @@ describe('play view extras', () => {
       { text: 'Divine Smite', bold: false, italic: true },
     ]);
     expect(readFeatures(paladin).map((f) => f.title)).toEqual(['', '', 'Magic Initiate [Cleric]', 'Acolyte']);
+  });
+
+  it('marks the parts of a feature line: name, source, uses, headings', () => {
+    expect(featureLine('**Paladin (Oath of Devotion), level 8:**')).toEqual({
+      heading: 'Paladin (Oath of Devotion), level 8',
+    });
+    const line = featureLine("#◆ Lay on Hands# (Paladin 1, SRD'24 53) #[40 HP pool]#");
+    expect('runs' in line && line.runs.map((r) => [r.role, r.text])).toEqual([
+      ['name', '◆ Lay on Hands'],
+      ['source', "(Paladin 1, SRD'24 53)"],
+      ['usage', '40 HP pool'],
+    ]);
+    // A species trait: the name runs straight into its text.
+    const trait = featureLine('##◆ Breath Weapon##. Instead of one attack');
+    expect('runs' in trait && trait.runs.map((r) => r.role)).toEqual(['name', null]);
+    const flight = featureLine('##◆ Draconic Flight## (level 5). As a Bonus Action');
+    expect('runs' in flight && flight.runs.map((r) => r.text)).toEqual([
+      '◆ Draconic Flight',
+      '(level 5)',
+      '. As a Bonus Action',
+    ]);
   });
 });

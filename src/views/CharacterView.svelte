@@ -15,6 +15,7 @@
   import FeaturesTab from './play/FeaturesTab.svelte';
   import InventoryTab from './play/InventoryTab.svelte';
   import NotesTab from './play/NotesTab.svelte';
+  import ProfileTab from './play/ProfileTab.svelte';
   import SheetMenu from './play/SheetMenu.svelte';
   import Vitals from './play/Vitals.svelte';
 
@@ -27,7 +28,7 @@
 
   let { session, open, toggleLanguage, t }: Props = $props();
 
-  type Tab = 'combat' | 'checks' | 'inventory' | 'features' | 'notes';
+  type Tab = 'combat' | 'checks' | 'inventory' | 'features' | 'profile' | 'notes';
   let tab = $state<Tab>('combat');
   let menuOpen = $state(false);
   let width = $state(0);
@@ -41,6 +42,7 @@
         ['checks', t.tabChecks],
         ['inventory', t.tabInventory],
         ['features', t.tabFeatures],
+        ['profile', t.tabProfile],
         ['notes', t.tabNotes],
       ] as const
     ).filter(([key]) => !(wide && key === 'checks')),
@@ -126,6 +128,8 @@
         <InventoryTab {fields} {disabled} {change} {t} />
       {:else if shownTab === 'features'}
         <FeaturesTab {fields} {t} />
+      {:else if shownTab === 'profile'}
+        <ProfileTab {fields} {disabled} {change} {t} />
       {:else}
         <NotesTab {fields} {disabled} {change} {t} />
       {/if}
@@ -260,10 +264,10 @@
     color: var(--accent);
   }
 
-  /* Five tabs in the middle column of a 768 px iPad: a little less padding keeps the last one whole. */
+  /* Six tabs in the middle column of a 768 px iPad: less padding keeps the last one whole, also in German. */
   @media (max-width: 860px) {
     .tabs button {
-      padding: 0 0.625rem;
+      padding: 0 0.375rem;
     }
   }
 

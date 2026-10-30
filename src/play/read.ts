@@ -382,20 +382,38 @@ export interface MagicItem {
   description: string;
 }
 
+/** The PDF's two equipment lists: page 2 ("Adventuring Gear …") and page 3 ("Extra.Gear …"). */
+export type GearList = 'gear' | 'extra';
+const GEAR_PREFIX: Record<GearList, string> = { gear: 'Adventuring Gear', extra: 'Extra.Gear' };
+
 export interface GearItem {
-  /** The field the amount lives in, for the steppers. */
+  list: GearList;
+  row: number;
+  /** The fields of the row: name, amount (the steppers), weight, where it is carried, MPMB's row menu. */
+  nameField: string;
   amountField: string;
+  locationField: string;
+  button: string;
   name: string;
   amount: number | null;
+  /** The weight of one, with the sheet's unit ("0.25 kg"), '' when none. */
+  weight: string;
+  location: string;
 }
 
 export interface Inventory {
   magicItems: MagicItem[];
+  /** The filled rows of both lists, in the sheet's order. */
   gear: GearItem[];
+  /** Each list's first empty row, where a new item goes (null when the list is full or not there). */
+  freeRow: Record<GearList, number | null>;
   /** Platinum, gold, electrum, silver, copper. */
   coins: { field: string; key: 'pp' | 'gp' | 'ep' | 'sp' | 'cp'; amount: string }[];
   carried: string;
   capacity: string;
+  /** MPMB's lifestyle ("comfortable") and its daily cost ("2 gp"), both as typed on the sheet. */
+  lifestyle: string;
+  lifestyleCost: string;
 }
 
 const COINS = [
@@ -406,15 +424,45 @@ const COINS = [
   ['Copper Pieces', 'cp'],
 ] as const;
 
+/** What a coin is worth in gold pieces (the 2024 rules: 1 pp = 10 gp, 1 ep = 5 sp). */
+const GOLD_VALUE: Record<Inventory['coins'][number]['key'], number> = { pp: 10, gp: 1, ep: 0.5, sp: 0.1, cp: 0.01 };
+
+/** The coins' worth in gold pieces, or null when nothing is a number. Fields that aren't count as 0. */
+export function goldTotal(coins: Inventory['coins']): number | null {
+  const counted = coins
+    .map((coin) => ({ key: coin.key, n: Number(coin.amount.replace(',', '.')) }))
+    .filter((coin) => coin.n !== 0 && Number.isFinite(coin.n));
+  if (!counted.length) return null;
+  // Rounded to copper, so 0.1 + 0.2 doesn't show as 0.30000000000000004.
+  const COPPER = 100;
+  return Math.round(counted.reduce((sum, coin) => sum + coin.n * GOLD_VALUE[coin.key], 0) * COPPER) / COPPER;
+}
+
 export function readInventory(fields: FieldViews): Inventory {
-  const gear = (prefix: string): GearItem[] =>
-    rows(fields, `${prefix} Row `)
-      .map((row) => ({
-        amountField: `${prefix} Amount ${row}`,
-        name: clean(valueOf(fields, `${prefix} Row ${row}`)),
-        amount: numberOf(fields, `${prefix} Amount ${row}`),
-      }))
-      .filter((item) => item.name !== '');
+  const carried = shown(fields, 'Weight Carried');
+  // The unit the sheet weighs in ("kg" or "lb"), from the carried weight: "5.45 kg". Try it:
+  // https://regex101.com/?regex=%5B%5E%5Cd.%2C%5Cs%5D.*%24&testString=5.45%20kg
+  const unit = /[^\d.,\s].*$/.exec(carried)?.[0] ?? '';
+  const all = (list: GearList): GearItem[] => {
+    const prefix = GEAR_PREFIX[list];
+    return rows(fields, `${prefix} Row `).map((row) => ({
+      list,
+      row,
+      nameField: `${prefix} Row ${row}`,
+      amountField: `${prefix} Amount ${row}`,
+      locationField: `${prefix} Location.Row ${row}`,
+      button: `${prefix} Button ${row}`,
+      name: clean(valueOf(fields, `${prefix} Row ${row}`)),
+      amount: numberOf(fields, `${prefix} Amount ${row}`),
+      weight:
+        valueOf(fields, `${prefix} Weight ${row}`) && `${valueOf(fields, `${prefix} Weight ${row}`)} ${unit}`.trim(),
+      location: valueOf(fields, `${prefix} Location.Row ${row}`),
+    }));
+  };
+  const gearRows = all('gear');
+  const extraRows = all('extra');
+  const free = (list: GearItem[]): number | null => list.filter((item) => item.name === '')[0]?.row ?? null;
+  const gear = (list: GearItem[]): GearItem[] => list.filter((item) => item.name !== '');
   return {
     magicItems: rows(fields, 'Extra.Magic Item ')
       .map((row) => ({
@@ -424,10 +472,13 @@ export function readInventory(fields: FieldViews): Inventory {
         description: valueOf(fields, `Extra.Magic Item Description ${row}`),
       }))
       .filter((item) => item.name !== ''),
-    gear: [...gear('Adventuring Gear'), ...gear('Extra.Gear')],
+    gear: [...gear(gearRows), ...gear(extraRows)],
+    freeRow: { gear: free(gearRows), extra: free(extraRows) },
     coins: COINS.map(([field, key]) => ({ field, key, amount: valueOf(fields, field) })),
-    carried: shown(fields, 'Weight Carried'),
+    carried,
     capacity: shown(fields, 'Weight Carrying Capacity.Field'),
+    lifestyle: clean(valueOf(fields, 'Lifestyle')),
+    lifestyleCost: valueOf(fields, 'Lifestyle daily cost'),
   };
 }
 
@@ -478,6 +529,91 @@ export function textRuns(line: string): TextRun[] {
   });
   plain(line.slice(at));
   return runs;
+}
+
+/**
+ * A run of feature text with the part it plays, so the play view can colour it like the 2024 sheet:
+ * the feature's name ("◆ Lay on Hands"), its uses ("40 HP pool …", MPMB's brackets taken off) and its
+ * source ("(Paladin 1, SRD'24 53)") right after the name.
+ */
+export interface FeatureRun extends TextRun {
+  role: 'name' | 'usage' | 'source' | null;
+}
+
+/** A line of feature text: a heading ("Paladin (Oath of Devotion), level 8") or runs. */
+export type FeatureLine = { heading: string } | { runs: FeatureRun[] };
+
+const FEATURE_MARK = '◆';
+// A usage in MPMB's brackets: "[40 HP pool, replenishes after a Long Rest]". Try it:
+// https://regex101.com/?regex=%5E%5C%5B(.%2B)%5C%5D%24&testString=%5B40%20HP%20pool%5D
+const USAGE = /^\[(.+)\]$/;
+// The source after a feature's name: " (Paladin 1, SRD'24 53) " and the rest. Try it:
+// https://regex101.com/?regex=%5E(%5Cs*%5C(%5B%5E)%5D*%5C)%5Cs*)(.*)%24&testString=%20(Paladin%201%2C%20SRD%2724%2053)%20
+const SOURCE = /^(\s*\([^)]*\)\s*)(.*)$/s;
+
+export function featureLine(line: string): FeatureLine {
+  const runs = textRuns(line);
+  // A line that is one bold run is a heading: a class ("…, level 8:"), a species, a background.
+  const only = runs.length === 1 ? runs[0] : undefined;
+  if (only?.bold && !only.text.startsWith(FEATURE_MARK)) return { heading: only.text.replace(/:$/, '') };
+  return {
+    runs: runs.flatMap((run, i): FeatureRun[] => {
+      const usage = run.bold ? USAGE.exec(run.text.trim()) : null;
+      if (usage) return [{ ...run, text: usage[1] ?? '', role: 'usage' }];
+      if (run.bold && run.text.startsWith(FEATURE_MARK)) return [{ ...run, role: 'name' }];
+      const source =
+        !run.bold && !run.italic && runs[i - 1]?.text.startsWith(FEATURE_MARK) ? SOURCE.exec(run.text) : null;
+      if (!source) return [{ ...run, role: null }];
+      const rest = source[2] ?? '';
+      // "(level 5). As a Bonus Action": the full stop stays at the source; other text gets its space back.
+      const space = /^[.,;:]/.test(rest) ? '' : ' ';
+      return [
+        { ...run, text: (source[1] ?? '').trim(), role: 'source' },
+        ...(rest ? [{ ...run, text: `${space}${rest}`, role: null }] : []),
+      ];
+    }),
+  };
+}
+
+/** One card of the senses and defenses: "Senses: Darkvision 18 m", "Immunities: Charmed". */
+export interface DefenseCard {
+  /** MPMB's label ("Immunities"), or '' for the play view's own (senses, resistances, other). */
+  title: string;
+  items: string[];
+}
+
+// MPMB's lines about saves: "**Immunities**. Charmed, Poisoned" or "Adv. on saves vs. poison". Try it:
+// https://regex101.com/?regex=%5E%5C*%5C*(.%2B%3F)%5C*%5C*%5C.%3F%5Cs*(.*)%24&testString=**Immunities**.%20Charmed%2C%20Poisoned
+const LABELLED = /^\*\*(.+?)\*\*\.?\s*(.*)$/;
+const RESISTANCE_ROWS = 6;
+
+/**
+ * The senses (the Vision field), the resistances (six damage type fields) and MPMB's lines about saving
+ * throws (immunities and the like), each as a list. A line without MPMB's label goes to `other`.
+ */
+export function readDefenses(fields: FieldViews): {
+  senses: string[];
+  resistances: string[];
+  labelled: DefenseCard[];
+  other: string[];
+} {
+  const list = (text: string): string[] =>
+    text
+      .split(/[;,]\s*/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  const lines = linesOf(valueOf(fields, 'Saving Throw advantages / disadvantages')).filter((line) => line.trim());
+  const parsed = lines.map((line) => LABELLED.exec(line.trim()));
+  return {
+    senses: list(valueOf(fields, 'Vision')),
+    resistances: Array.from({ length: RESISTANCE_ROWS }, (_, i) =>
+      valueOf(fields, `Resistance Damage Type ${i + 1}`),
+    ).filter(Boolean),
+    labelled: parsed
+      .filter((m): m is RegExpExecArray => m !== null)
+      .map((m) => ({ title: m[1] ?? '', items: list(m[2] ?? '') })),
+    other: lines.filter((_, i) => parsed[i] === null),
+  };
 }
 
 /** Lines of a multi-line field ("\r" in Acrobat, "\n" when typed in the browser). */
