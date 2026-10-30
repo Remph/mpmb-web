@@ -69,8 +69,9 @@
     display: none;
   }
 
+  /* MPMB's dialogs are laid out for Acrobat's wide windows; take what the screen offers. */
   dialog.wide {
-    width: min(56rem, calc(100vw - 2rem));
+    width: min(72rem, calc(100vw - 2rem));
   }
 
   dialog::backdrop {

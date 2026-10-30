@@ -83,6 +83,28 @@ describe('runDialog', () => {
     expect(calls).toEqual(['validate', 'validate', 'commit', 'destroy']);
   });
 
+  test('a combo box (edit_text with PopupEdit) loads a list but stores the text', () => {
+    // MPMB's spell lookup: `load({ AlLo: { "Bless": -1, "Cure Wounds": -2 } })`, then reads a spell name.
+    const combo = {
+      name: 'SPELLS',
+      elements: [{ type: 'edit_text', item_id: 'AlLo', PopupEdit: true }, { type: 'ok' }],
+    };
+    const stored: unknown[] = [];
+    const spec: DialogSpec = {
+      description: combo,
+      initialize: (d: DialogApi) => d.load({ AlLo: { Bless: -1, 'Cure Wounds': 2 } }),
+      AlLo: (d: DialogApi) => stored.push(d.store().AlLo),
+    };
+    const host = hostOf([
+      { type: 'event', id: 'AlLo', state: { AlLo: 'Bless' } },
+      { type: 'close', result: 'ok', state: {} },
+    ]);
+    runDialog(spec, host, tools);
+    expect(host.views[0]?.choices).toEqual({ AlLo: ['Bless', 'Cure Wounds'] });
+    expect(host.views[0]?.state.AlLo).toBe('Cure Wounds');
+    expect(stored).toEqual(['Bless']);
+  });
+
   test('a handler can end the dialog with its own result (MPMB uses that to reopen it)', () => {
     const spec: DialogSpec = { description, tick: (d: DialogApi) => d.end('cadd') };
     expect(runDialog(spec, hostOf([{ type: 'event', id: 'tick', state: {} }]), tools)).toBe('cadd');

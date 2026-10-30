@@ -6,6 +6,7 @@
   import type { DialogElement, DialogReply, DialogState, DialogView } from '../engine/host.ts';
   import type { Texts } from '../i18n.ts';
   import DialogItem from './DialogItem.svelte';
+  import { alignTables } from './tables.ts';
   import Modal from './Modal.svelte';
 
   interface Props {
@@ -76,7 +77,7 @@
 </script>
 
 <Modal title={String(view.description.name ?? 'MPMB')} wide onescape={() => onclose('cancel')}>
-  <div class="dialog" lang="en" aria-busy={!waiting}>
+  <div class="dialog" lang="en" aria-busy={!waiting} use:alignTables>
     {#each view.description.elements ?? [] as element, i (i)}
       <DialogItem {element} state={input} {view} {radioGroups} {t} {set} {onevent} {onclose} skip={closer} />
     {/each}

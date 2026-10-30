@@ -33,6 +33,8 @@
   const type = $derived(element.type ?? 'view');
   const hidden = $derived(id !== '' && view.visible[id] === false);
   const disabled = $derived(id !== '' && view.enabled[id] === false);
+  const choices = $derived(view.choices?.[id] ?? []);
+  const listId = `choices-${Math.random().toString(36).slice(2)}`;
   const label = $derived(typeof element.name === 'string' ? element.name : '');
   const num = (key: string): number => Number(element[key]) || 0;
 
@@ -146,10 +148,17 @@
         {disabled}
         readonly={element.readonly === true}
         aria-label={label || id}
+        list={choices.length ? listId : undefined}
         value={String(state[id] ?? '')}
         oninput={(e) => set(id, e.currentTarget.value)}
         onchange={() => onevent(id)}
       />
+      {#if choices.length}
+        <!-- A combo box (PopupEdit): type a name or pick one; the browser filters the list as you type. -->
+        <datalist id={listId}>
+          {#each choices as choice, i (i)}<option value={choice}></option>{/each}
+        </datalist>
+      {/if}
     {/if}
   {:else if type === 'check_box' || type === 'radio'}
     <label class="check" class:red class:fill>
@@ -226,10 +235,30 @@
     max-width: 100%;
   }
 
-  /* Rows keep their columns side by side, as in Acrobat; a dialog wider than the screen scrolls. */
+  /*
+   * Rows keep their columns side by side, as in Acrobat. MPMB sizes them for Acrobat's wide dialog
+   * windows; here columns may shrink below that size (texts wrap, inputs get narrower), so a dialog fits
+   * a 13-inch laptop or an iPad without scrolling sideways.
+   */
   .group.row {
     flex-direction: row;
     align-items: center;
+  }
+
+  /* A table (see tables.ts): columns start at the top, so their cells line up. */
+  .group.row:global(.table) {
+    align-items: flex-start;
+  }
+
+  /*
+   * A table's columns never get narrower than their longest word ("Current", "Constitution"): that
+   * would run them into the next column. A table wider than the window (13 columns of ability scores
+   * on an iPad in portrait) scrolls instead.
+   */
+  .group.row:global(.table),
+  .group.row:global(.table) :global(.group),
+  .group.row:global(.table) :global(.text) {
+    min-width: min-content;
   }
 
   .group.row.top {
@@ -248,8 +277,14 @@
     align-self: flex-end;
   }
 
+  /* Shrinks down to the longest word (flex's default minimum), so "Constitution" stays whole. */
   .group.row > :global(*) {
-    flex-shrink: 0;
+    flex-shrink: 1;
+  }
+
+  /* Buttons have a 44 px minimum width that would undo that minimum; keep their words whole too. */
+  .group.row > :global(button) {
+    min-width: min-content;
   }
 
   fieldset.group {

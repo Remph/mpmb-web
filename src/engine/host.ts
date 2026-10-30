@@ -52,6 +52,8 @@ export interface DialogView {
   visible: Record<string, boolean>;
   /** Elements whose text is red (`setForeColorRed`). */
   red: Record<string, boolean>;
+  /** The drop-down entries of combo boxes (edit_text with PopupEdit), by item_id. */
+  choices: Record<string, string[]>;
 }
 
 /**
@@ -67,6 +69,17 @@ export interface MenuItem {
   bMarked?: boolean;
   bEnabled?: boolean;
   oSubMenu?: MenuItem | MenuItem[];
+}
+
+/**
+ * A menu as Acrobat shows it. MPMB deletes empty groups from its menu arrays (`delete menu[i]`), which
+ * leaves holes; after the JSON copy they are nulls, and Acrobat simply skips them.
+ */
+export function menuItems(raw: unknown): MenuItem[] {
+  const list = Array.isArray(raw) ? raw : [raw];
+  return list
+    .filter((item): item is MenuItem => typeof item === 'object' && item !== null)
+    .map((item) => (item.oSubMenu === undefined ? item : { ...item, oSubMenu: menuItems(item.oSubMenu) }));
 }
 
 export interface Host {

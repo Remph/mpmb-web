@@ -316,15 +316,20 @@
     background: var(--hp);
   }
 
+  /* Each button as wide as its word plus padding, the rest shared out ("Temp HP" is the longest). */
   .buttons {
-    display: grid;
-    grid-template-columns: 1.3fr 1fr 1fr;
+    display: flex;
     gap: 0.375rem;
   }
 
   .buttons button {
-    padding: 0 0.5rem;
+    flex: 1 1 auto;
+    padding: 0 0.625rem;
     white-space: nowrap;
+  }
+
+  .buttons .primary {
+    flex-grow: 1.5;
   }
 
   /* Red, also under the pointer: the shared hover rule would turn it purple. */
