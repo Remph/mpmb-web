@@ -39,6 +39,12 @@ export const ui = {
       'Regelinhalte aus dem System Reference Document 5.2.1 von Wizards of the Coast LLC, lizenziert unter CC\u2011BY\u20114.0.',
     source: 'Quellcode (GPL\u20113.0)',
     supportMpmb: 'MPMB auf Patreon unterstützen',
+    notAffiliated:
+      'MPMB Web ist ein inoffizielles Fanprojekt: weder mit MorePurpleMoreBetter (Joost Wijnen) verbunden noch von MPMB befürwortet.',
+    getPdf: 'PDF holen',
+    getPdfLabel: 'PDF-Bogen bei MPMB holen (öffnet MPMBs Website in einem neuen Tab)',
+    getPdfFrom: '„PDF holen“ öffnet MPMBs Website. Die Bögen gibt es auch auf',
+    mpmbPatreon: 'MPMBs Patreon',
 
     charactersTitle: 'Charaktere',
     importPdf: 'PDF importieren',
@@ -262,6 +268,12 @@ export const ui = {
       'Rules content from the System Reference Document 5.2.1 by Wizards of the Coast LLC, licensed under CC\u2011BY\u20114.0.',
     source: 'Source code (GPL\u20113.0)',
     supportMpmb: 'Support MPMB on Patreon',
+    notAffiliated:
+      'MPMB Web is an unofficial fan project, not affiliated with or endorsed by MorePurpleMoreBetter (Joost Wijnen).',
+    getPdf: 'Get the PDF',
+    getPdfLabel: "Get the PDF sheet from MPMB (opens MPMB's website in a new tab)",
+    getPdfFrom: "“Get the PDF” opens MPMB's website. The sheets are also on",
+    mpmbPatreon: "MPMB's Patreon",
 
     charactersTitle: 'Characters',
     importPdf: 'Import PDF',
