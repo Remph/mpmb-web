@@ -42,7 +42,8 @@ export const ui = {
     notAffiliated:
       'MPMB Web ist ein inoffizielles Fanprojekt: weder mit MorePurpleMoreBetter (Joost Wijnen) verbunden noch von MPMB befürwortet.',
     getPdf: 'PDF holen',
-    getPdfLabel: 'PDF-Bogen bei MPMB holen (öffnet MPMBs Website in einem neuen Tab)',
+    // Starts with the visible text, so voice control ("PDF holen") finds the button.
+    getPdfLabel: 'PDF holen: den Bogen bei MPMB (öffnet MPMBs Website in einem neuen Tab)',
     getPdfFrom: '„PDF holen“ öffnet MPMBs Website. Die Bögen gibt es auch auf',
     mpmbPatreon: 'MPMBs Patreon',
 
