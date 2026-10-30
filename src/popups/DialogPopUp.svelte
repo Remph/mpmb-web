@@ -76,7 +76,7 @@
   };
 </script>
 
-<Modal title={String(view.description.name ?? 'MPMB')} wide onescape={() => onclose('cancel')}>
+<Modal title={String(view.description.name ?? 'MPMB')} widest onescape={() => onclose('cancel')}>
   <div class="dialog" lang="en" aria-busy={!waiting} use:alignTables>
     {#each view.description.elements ?? [] as element, i (i)}
       <DialogItem {element} state={input} {view} {radioGroups} {t} {set} {onevent} {onclose} skip={closer} />

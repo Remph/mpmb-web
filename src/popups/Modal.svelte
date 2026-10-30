@@ -8,13 +8,15 @@
   interface Props {
     title: string;
     onescape: () => void;
-    /** Wide windows for MPMB's dialogs, narrow ones for questions. */
+    /** Wide windows for lists (the sheet menu), narrow ones for questions. */
     wide?: boolean;
+    /** MPMB's own dialogs: as wide as the screen allows, up to 72 rem. */
+    widest?: boolean;
     children: Snippet;
     actions?: Snippet;
   }
 
-  let { title, onescape, wide = false, children, actions }: Props = $props();
+  let { title, onescape, wide = false, widest = false, children, actions }: Props = $props();
   let dialog: HTMLDialogElement | undefined = $state();
   const titleId = `modal-${Math.random().toString(36).slice(2)}`;
 
@@ -38,7 +40,7 @@
   }
 </script>
 
-<dialog bind:this={dialog} class:wide aria-labelledby={titleId} oncancel={cancel} onclose={closed}>
+<dialog bind:this={dialog} class:wide class:widest aria-labelledby={titleId} oncancel={cancel} onclose={closed}>
   <h2 id={titleId}>{title}</h2>
   <div class="body">
     {@render children()}
@@ -69,8 +71,12 @@
     display: none;
   }
 
-  /* MPMB's dialogs are laid out for Acrobat's wide windows; take what the screen offers. */
   dialog.wide {
+    width: min(56rem, calc(100vw - 2rem));
+  }
+
+  /* MPMB's dialogs are laid out for Acrobat's wide windows; take what the screen offers. */
+  dialog.widest {
     width: min(72rem, calc(100vw - 2rem));
   }
 

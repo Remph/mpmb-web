@@ -36,6 +36,8 @@
   const choices = $derived(view.choices?.[id] ?? []);
   const listId = `choices-${Math.random().toString(36).slice(2)}`;
   const label = $derived(typeof element.name === 'string' ? element.name : '');
+  /** A combo box: a text field with a drop-down list of names (see dialog.ts). */
+  const combo = $derived(type === 'edit_text' && Boolean(element.PopupEdit));
   const num = (key: string): number => Number(element[key]) || 0;
 
   /**
@@ -44,13 +46,24 @@
    */
   const CHAR_EM = 0.62;
   const INPUTS = ['edit_text', 'popup', 'list_box', 'hier_list_box'];
+  /** The narrowest a combo box with an MPMB width gets ("Divine Smite", "Find Steed" stay whole). */
+  const INPUT_MIN = '8rem';
+  /** An input's own minimum width (see the styles), which the inline style would otherwise undo. */
+  const TOUCH_MIN = '3rem';
   /** Acrobat's height of a one-line input, in points. */
   const ONE_LINE = 30;
   const size = $derived.by(() => {
     const parts: string[] = [];
     const extra = INPUTS.includes(type) ? ' + 1.5rem' : '';
-    if (num('width')) parts.push(`width: min(${num('width')}px${extra ? ` ${extra}` : ''}, 100%)`);
-    else if (num('char_width')) parts.push(`width: min(calc(${num('char_width') * CHAR_EM}em${extra}), 100%)`);
+    const width = num('width')
+      ? `${num('width')}px${extra ? ` ${extra}` : ''}`
+      : num('char_width')
+        ? `calc(${num('char_width') * CHAR_EM}em${extra})`
+        : '';
+    if (width) parts.push(`width: min(${width}, 100%)`);
+    // Rows may shrink (see the styles), but a combo box stays wide enough to read a spell name, and
+    // never gets narrower than a touch target. Plain fields (ability scores) may shrink further.
+    if (width && combo) parts.push(`min-width: clamp(${TOUCH_MIN}, ${width}, ${INPUT_MIN})`);
     if (num('height') && (type === 'edit_text' || type.endsWith('list_box'))) parts.push(`height: ${num('height')}px`);
     // A one-line text with a height stands next to inputs in MPMB's tables (a row label, a column's
     // value): it gets an input's height here too, so the rows line up.
@@ -265,6 +278,15 @@
     align-items: flex-start;
   }
 
+  /*
+   * Columns next to each other start at the top. Centred, a short column next to a tall one (Spell
+   * Selection's texts next to its 20 bonus spells) leaves an empty band above it; Acrobat's fixed
+   * heights hide that, our wrapped texts don't.
+   */
+  .group.row:has(> :global(.group)) {
+    align-items: flex-start;
+  }
+
   .group.centered {
     align-items: center;
   }
@@ -280,6 +302,14 @@
   /* Shrinks down to the longest word (flex's default minimum), so "Constitution" stays whole. */
   .group.row > :global(*) {
     flex-shrink: 1;
+  }
+
+  /*
+   * A column with inputs (Spell Selection's bonus spells and their remarks) keeps its content's width,
+   * so the column of texts next to it wraps instead of the remarks running into the next column.
+   */
+  .group.row > :global(.group:has(input)) {
+    min-width: min-content;
   }
 
   /* Buttons have a 44 px minimum width that would undo that minimum; keep their words whole too. */
