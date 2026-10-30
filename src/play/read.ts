@@ -575,21 +575,27 @@ export function featureLine(line: string): FeatureLine {
   };
 }
 
-/** One card of the senses and defenses: "Senses: Darkvision 18 m", "Immunities: Charmed". */
+/** One of MPMB's two lists in the saves field: "**Immunities**. Charmed and Poisoned". */
 export interface DefenseCard {
-  /** MPMB's label ("Immunities"), or '' for the play view's own (senses, resistances, other). */
-  title: string;
+  /** MPMB's caption of the list: its immunities or what it gives advantage against. */
+  title: 'Immunities' | 'Adv vs';
   items: string[];
 }
 
-// MPMB's lines about saves: "**Immunities**. Charmed, Poisoned" or "Adv. on saves vs. poison". Try it:
-// https://regex101.com/?regex=%5E%5C*%5C*(.%2B%3F)%5C*%5C*%5C.%3F%5Cs*(.*)%24&testString=**Immunities**.%20Charmed%2C%20Poisoned
-const LABELLED = /^\*\*(.+?)\*\*\.?\s*(.*)$/;
+// MPMB writes the saves field as entries joined by "; " (its AddString), so one line can hold several:
+// "**Immunities**. Charmed and Poisoned; **Adv vs** Poison; **Dex Save for Half**. *Failure:* half dmg".
+const SAVE_ENTRIES = /;\s*/;
+// Only MPMB's two lists, immunities and advantage against, are lists; any other entry is a sentence. Try it:
+// https://regex101.com/?regex=%5E%5C*%5C*(Immunities%7CAdv%20vs)%5C*%5C*%5C.%3F%5Cs*(.*)%24&testString=**Immunities**.%20Charmed%2C%20Frightened%2C%20and%20Poisoned
+const SAVE_LIST = /^\*\*(Immunities|Adv vs)\*\*\.?\s*(.*)$/;
+// The items of such a list, as MPMB's formatLineList writes them: "A and B", "A, B, and C". Try it:
+// https://regex101.com/?regex=%2C%5Cs*(%3F%3Aand%5Cs%2B)%3F%7C%5Cs%2Band%5Cs%2B&testString=Charmed%2C%20Frightened%2C%20and%20Poisoned
+const LIST_ITEMS = /,\s*(?:and\s+)?|\s+and\s+/;
 const RESISTANCE_ROWS = 6;
 
 /**
- * The senses (the Vision field), the resistances (six damage type fields) and MPMB's lines about saving
- * throws (immunities and the like), each as a list. A line without MPMB's label goes to `other`.
+ * The senses (the Vision field), the resistances (six damage type fields) and MPMB's entries about saving
+ * throws: its immunities and advantages as lists, every other entry (with MPMB's marks) in `other`.
  */
 export function readDefenses(fields: FieldViews): {
   senses: string[];
@@ -597,22 +603,24 @@ export function readDefenses(fields: FieldViews): {
   labelled: DefenseCard[];
   other: string[];
 } {
-  const list = (text: string): string[] =>
+  const items = (text: string, separator: RegExp): string[] =>
     text
-      .split(/[;,]\s*/)
+      .split(separator)
       .map((item) => item.trim())
       .filter(Boolean);
-  const lines = linesOf(valueOf(fields, 'Saving Throw advantages / disadvantages')).filter((line) => line.trim());
-  const parsed = lines.map((line) => LABELLED.exec(line.trim()));
+  const entries = linesOf(valueOf(fields, 'Saving Throw advantages / disadvantages')).flatMap((line) =>
+    items(line, SAVE_ENTRIES),
+  );
+  const parsed = entries.map((entry) => SAVE_LIST.exec(entry));
   return {
-    senses: list(valueOf(fields, 'Vision')),
+    senses: items(valueOf(fields, 'Vision'), /[;,]\s*/),
     resistances: Array.from({ length: RESISTANCE_ROWS }, (_, i) =>
       valueOf(fields, `Resistance Damage Type ${i + 1}`),
     ).filter(Boolean),
     labelled: parsed
       .filter((m): m is RegExpExecArray => m !== null)
-      .map((m) => ({ title: m[1] ?? '', items: list(m[2] ?? '') })),
-    other: lines.filter((_, i) => parsed[i] === null),
+      .map((m) => ({ title: m[1] === 'Adv vs' ? 'Adv vs' : 'Immunities', items: items(m[2] ?? '', LIST_ITEMS) })),
+    other: entries.filter((_, i) => parsed[i] === null),
   };
 }
 

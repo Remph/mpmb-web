@@ -45,7 +45,9 @@
         if (group) group.items.push(item);
         else all.push({ location: item.location, items: [item] });
         return all;
-      }, []),
+      }, [])
+      // Things carried nowhere in particular first: under no heading after "Backpack" they'd seem in it.
+      .sort((a, b) => Number(a.location !== '') - Number(b.location !== '')),
   );
   const free = $derived(inventory.freeRow[list]);
 

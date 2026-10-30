@@ -236,6 +236,21 @@ describe('play view extras', () => {
     });
   });
 
+  it("splits MPMB's saves field into its entries, and only its two lists into items", () => {
+    const saves = withValues(paladin, {
+      'Saving Throw advantages / disadvantages':
+        '**Immunities**. Charmed, Frightened, and Poisoned; **Adv vs** Exhaustion and Poison; ' +
+        '**Dex Save for Half**. *Failure:* half dmg, *Success:* no dmg',
+    });
+    expect(readDefenses(saves)).toMatchObject({
+      labelled: [
+        { title: 'Immunities', items: ['Charmed', 'Frightened', 'Poisoned'] },
+        { title: 'Adv vs', items: ['Exhaustion', 'Poison'] },
+      ],
+      other: ['**Dex Save for Half**. *Failure:* half dmg, *Success:* no dmg'],
+    });
+  });
+
   it("splits MPMB's feature text into runs", () => {
     expect(textRuns('#◆ Lay on Hands# (Paladin 1) *Divine Smite*')).toEqual([
       { text: '◆ Lay on Hands', bold: true, italic: false },
