@@ -63,6 +63,13 @@ const emptyState = (elements: DialogElement[] = []): DialogState =>
     }),
   );
 
+/** The ids of combo boxes: an edit_text with `PopupEdit` is a text field with a drop-down list. */
+const comboIds = (elements: DialogElement[] = []): string[] =>
+  elements.flatMap((e) => [
+    ...(e.type === 'edit_text' && e.PopupEdit && e.item_id ? [e.item_id] : []),
+    ...comboIds(e.elements),
+  ]);
+
 export function runDialog(spec: DialogSpec, host: Host, tools: RealmTools): string {
   const description = plain(spec.description ?? {});
   const view: DialogView = {
@@ -71,13 +78,29 @@ export function runDialog(spec: DialogSpec, host: Host, tools: RealmTools): stri
     enabled: {},
     visible: {},
     red: {},
+    choices: {},
   };
+  const combos = new Set(comboIds(description.elements));
   let ended: string | undefined;
   const merge = (target: Record<string, unknown>, values: Record<string, unknown>): void => {
     Object.assign(target, plain(values));
   };
+  /**
+   * A combo box loads like a list (an object of entry -> number, positive = selected) but stores like a
+   * text field: MPMB's spell dialogs load every spell this way and read back the typed or picked name.
+   */
+  const load = (values: DialogState): void => {
+    const copy = plain(values);
+    Object.entries(copy).forEach(([id, value]) => {
+      if (!combos.has(id) || typeof value !== 'object' || value === null) return;
+      const entries = Object.entries(value as Record<string, unknown>);
+      view.choices[id] = entries.map(([label]) => label);
+      copy[id] = entries.filter(([, n]) => Number(n) > 0)[0]?.[0] ?? '';
+    });
+    Object.assign(view.state, copy);
+  };
   const api: DialogApi = {
-    load: (values) => merge(view.state, values),
+    load,
     store: () => tools.copy(view.state),
     end: (result = 'ok') => {
       ended = result;

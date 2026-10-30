@@ -20,7 +20,25 @@
 
   // MPMB's bookmarks: "Functions" is its menu; the page jumps under "Navigation" mean nothing here.
   const MENU_ROOT = 'Functions';
-  const menu = $derived(open.menu.filter((node) => node.name === MENU_ROOT)[0]?.children ?? []);
+  /**
+   * Entries that only change the PDF itself (pages, colours, fonts, printing, flattening), duplicate
+   * what the app does its own way (importing), or belong to pages the app doesn't show yet (the
+   * Adventurers League logsheet, M8). Hidden here; MPMB's scripts keep them.
+   */
+  const PDF_ONLY = [
+    'Set Pages Layout',
+    'Import/Export',
+    'Text Options',
+    'Adventurers League',
+    'Print',
+    'Flatten',
+    'Set Color Theme',
+  ];
+  const menu = $derived(
+    (open.menu.filter((node) => node.name === MENU_ROOT)[0]?.children ?? []).filter(
+      (node) => !PDF_ONLY.includes(node.name.trim()),
+    ),
+  );
   const busy = $derived(open.status === 'opening' || open.status === 'working');
   const addOnNames = $derived([
     // MPMB names imported files "2026/10/29 - name.js"; the date says when it was imported.

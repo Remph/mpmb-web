@@ -260,6 +260,13 @@
     color: var(--accent);
   }
 
+  /* Five tabs in the middle column of a 768 px iPad: a little less padding keeps the last one whole. */
+  @media (max-width: 860px) {
+    .tabs button {
+      padding: 0 0.625rem;
+    }
+  }
+
   .tabs button[aria-selected='true']::after {
     content: '';
     position: absolute;
