@@ -110,6 +110,9 @@ describe('the choices from MPMB menus', () => {
     const species = infoOf(engine).choices.filter((c) => c.kind === 'species')[0];
     pick(engine, host, species, 'Gold Dragonborn');
     expect(engine.doc.getField('Race')?.value).toBe('Gold Dragonborn');
+    // Still the same choice to the page, which keeps it in view after the pick.
+    const after = infoOf(engine).choices.filter((c) => c.kind === 'species')[0];
+    expect(after).toMatchObject({ id: species?.id, owner: 'Gold Dragonborn', chosen: ['Gold Dragonborn'] });
 
     const feat = infoOf(engine).choices.filter((c) => c.kind === 'feat')[0];
     pick(engine, host, feat, 'Druid');

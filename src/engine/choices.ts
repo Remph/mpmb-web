@@ -157,7 +157,9 @@ function choiceOf({ kind, field, owner, title, items }: ChoiceStart): Choice {
   const name = count ? (count[1] ?? title) : title;
   return {
     // Without the count, which changes with every pick: the page keeps the choice open across picks.
-    id: `${field}|${owner}|${name}`,
+    // Without the species' name too, which changes with the variant picked ("Silver Dragonborn" to "Gold
+    // Dragonborn"); a sheet has one species menu.
+    id: kind === 'species' ? field : `${field}|${owner}|${name}`,
     kind,
     field,
     owner,
