@@ -130,4 +130,21 @@ describe('ability scores', () => {
     // Only MPMB's own follow-up pop-ups (if any) reached the player, never the Ability Scores dialog.
     expect(scripted.asked.map((a) => a.what)).not.toContain('ABILITY SCORES DIALOG');
   });
+
+  test('a new background resets its column; the dialog with the columns as they are puts the totals on the sheet', () => {
+    let info: BuilderInfo | null = null;
+    const { engine, write } = withAnswer(() => {
+      const columns = info?.scores.columns ?? [];
+      const base = columns.findIndex((c) => c.type === 'base');
+      return [{ column: base, scores: columns[base]?.scores ?? [] }];
+    });
+    engine.edit('Background', 'Sage');
+    info = infoOf(engine);
+    expect(info.scores.columns.filter((c) => c.type === 'background')[0]?.scores).toEqual([0, 0, 0, 0, 0, 0]);
+    // MPMB leaves the old totals on the sheet until its dialog runs.
+    expect(info.scores.totals).toEqual([14, 9, 16, 19, 10, 18]);
+    write();
+    expect(engine.stats.errors).toEqual([]);
+    expect(infoOf(engine).scores.totals).toEqual([14, 9, 16, 19, 9, 16]);
+  });
 });

@@ -58,10 +58,10 @@
   const base = $derived(columnScores('base') ?? Array.from({ length: 6 }, () => POINT_MIN));
   const backgroundCol = $derived(columnScores('background'));
   const bonus = $derived(bonusOf(columns));
-  // MPMB's fields are empty on a blank sheet; then the totals are what the columns add up to.
-  const totals = $derived(
-    pending || info.scores.totals.some((n) => !n) ? totalsOf(columns, info.scores.ongoing) : info.scores.totals,
-  );
+  // What the columns add up to. After some changes (a new background resets its column) MPMB waits for
+  // its dialog before it writes the totals, so the sheet can still show older ones: then the page says so.
+  const totals = $derived(totalsOf(columns, info.scores.ongoing));
+  const stale = $derived(!pending && totals.some((n, i) => n !== info.scores.totals[i]));
 
   /** The way the player picked in this visit; otherwise how the scores look made. */
   let picked = $state<Method | null>(null);
@@ -84,6 +84,12 @@
   }
 
   const writeBase = (scores: number[]) => write(withColumn(columns, 'base', scores));
+
+  /** Runs MPMB's dialog with the columns as they are, so that it writes their totals onto the sheet. */
+  function apply() {
+    const column = info.scores.columns.findIndex((c) => c.type === 'base');
+    if (column !== -1) setScores([{ column, scores: base }]);
+  }
 
   function setMethod(next: Method) {
     picked = next;
@@ -136,6 +142,13 @@
       </div>
     {/each}
   </div>
+
+  {#if stale}
+    <div class="stale">
+      <span>{t.buildScoresStale}</span>
+      <button type="button" class="primary" {disabled} onclick={apply}>{t.buildScoresApply}</button>
+    </div>
+  {/if}
 
   <div class="table" role="table" aria-label={t.buildAbilities}>
     <div class="row header" role="row">
@@ -448,6 +461,18 @@
   .dash,
   .fixed {
     color: var(--ink-muted);
+  }
+
+  .stale {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem 0.5rem 0.5rem 1rem;
+    border: 1px solid var(--accent);
+    border-radius: 0.75rem;
   }
 
   .notes {
