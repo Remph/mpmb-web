@@ -73,7 +73,7 @@ export interface MenuItem {
 
 /**
  * A menu as Acrobat shows it. MPMB deletes empty groups from its menu arrays (`delete menu[i]`), which
- * leaves holes; after the JSON copy they are nulls, and Acrobat simply skips them.
+ * leaves holes; after the copy (`copyMenu`) they are nulls, and Acrobat simply skips them.
  */
 export function menuItems(raw: unknown): MenuItem[] {
   const list = Array.isArray(raw) ? raw : [raw];
@@ -117,4 +117,28 @@ export interface Host {
   launchURL?(url: string): void;
   /** Acrobat's console (console.println). */
   log?(message: string): void;
+}
+
+const MENU_ITEM_KEYS = ['cName', 'cReturn', 'bMarked', 'bEnabled'] as const;
+
+/**
+ * A copy of the menu that the scripts passed to app.popUpMenuEx, out of the script realm. MPMB
+ * sometimes builds an item as an array with `cName` and `oSubMenu` set on it (`menuLVL2` in the spell
+ * menu); Acrobat reads those properties, but a JSON copy keeps only the array's entries, so the item
+ * came out as an empty row. Holes in a list become null, as in a JSON copy. A name that isn't text
+ * becomes text, as Acrobat reads it: the starting-equipment menu's separator is `cName: ["-"]`.
+ */
+export function copyMenu(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null) return raw;
+  const fields = raw as Record<string, unknown>;
+  if (Array.isArray(raw) && fields.cName === undefined) {
+    return Array.from(raw, (entry: unknown) => (entry === undefined ? null : copyMenu(entry)));
+  }
+  const item: Record<string, unknown> = {};
+  MENU_ITEM_KEYS.forEach((key) => {
+    if (fields[key] !== undefined) item[key] = fields[key];
+  });
+  if (fields.cName !== undefined && typeof fields.cName !== 'string') item.cName = String(fields.cName);
+  if (fields.oSubMenu !== undefined) item.oSubMenu = copyMenu(fields.oSubMenu);
+  return item;
 }

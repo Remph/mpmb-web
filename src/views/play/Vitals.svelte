@@ -152,16 +152,17 @@
   </div>
 </section>
 
+<!--
+  The browser ticks the box and the click toggles the sheet's field, so both agree. (Cancelling the
+  click instead left the box unticked: the browser undid its tick after the sheet's answer had arrived.)
+-->
 <section class="panel toggles">
   <label class="toggle">
     <input
       type="checkbox"
       checked={toggles.inspiration}
       {disabled}
-      onclick={(e) => {
-        e.preventDefault();
-        change([{ click: 'Inspiration' }]);
-      }}
+      onchange={() => change([{ click: 'Inspiration' }])}
     />
     {t.heroicInspiration}
   </label>
@@ -170,10 +171,7 @@
       type="checkbox"
       checked={toggles.reactionUsed}
       {disabled}
-      onclick={(e) => {
-        e.preventDefault();
-        change([{ click: 'Reaction Used This Round' }]);
-      }}
+      onchange={() => change([{ click: 'Reaction Used This Round' }])}
     />
     {t.reactionUsed}
   </label>

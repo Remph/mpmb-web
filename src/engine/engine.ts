@@ -19,7 +19,7 @@ import type { DialogSpec } from './dialog.ts';
 import { SheetDocument } from './document.ts';
 import type { AcroEvent, EngineStats } from './document.ts';
 import type { FieldState } from './field.ts';
-import { menuItems } from './host.ts';
+import { copyMenu, menuItems } from './host.ts';
 import type { Host, MenuItem } from './host.ts';
 import { ALERT_ANSWER, ALERT_BUTTONS } from './host.ts';
 import { realmTools } from './realm.ts';
@@ -325,7 +325,7 @@ export class Engine {
       }),
       alert: (a: unknown, nIcon?: unknown, nType?: unknown, cTitle?: unknown) => this.alert(a, nIcon, nType, cTitle),
       execDialog: (spec: DialogSpec) => runDialog(spec, this.host, tools),
-      popUpMenuEx: (...items: MenuItem[]) => this.host.popUpMenu(menuItems(JSON.parse(JSON.stringify(items)))),
+      popUpMenuEx: (...items: MenuItem[]) => this.host.popUpMenu(menuItems(copyMenu(items))),
       popUpMenu: missing(doc, 'app.popUpMenu', null),
       setTimeOut: (expr: unknown, ms: unknown) => this.addTimer(expr, Number(ms) || 0, false),
       setInterval: (expr: unknown, ms: unknown) => this.addTimer(expr, Number(ms) || 0, true),

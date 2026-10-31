@@ -23,7 +23,9 @@
   /**
    * Entries that only change the PDF itself (pages, colours, fonts, printing, flattening), duplicate
    * what the app does its own way (importing), or belong to pages the app doesn't show yet (the
-   * Adventurers League logsheet, M8). Hidden here; MPMB's scripts keep them.
+   * Adventurers League logsheet, M8). "Modifiers" shows or hides the PDF's blue modifier fields, which
+   * the play view doesn't show (yet), so it seemed to do nothing (the owner asked, 2026-10-31).
+   * Hidden here; MPMB's scripts keep them.
    */
   const PDF_ONLY = [
     'Set Pages Layout',
@@ -33,6 +35,7 @@
     'Print',
     'Flatten',
     'Set Color Theme',
+    'Modifiers',
   ];
   const menu = $derived(
     (open.menu.filter((node) => node.name === MENU_ROOT)[0]?.children ?? []).filter(
