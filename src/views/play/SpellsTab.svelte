@@ -89,9 +89,6 @@
   const meta = (spell: Spell): string =>
     [time(spell), range(spell), save(spell), spell.duration].filter(Boolean).join(' · ');
 
-  /** The mark can be tapped where the PDF's box can be clicked: a prepared choice or a free cast. */
-  const tappable = (spell: Spell): boolean =>
-    (spell.mark.prepared !== null && !spell.mark.always) || spell.mark.free !== null;
   const markLabel = (spell: Spell): string => {
     const name = spell.fullName;
     if (spell.mark.free !== null) return fill(spell.mark.freeUsed ? t.spellFreeUsedTap : t.spellFreeTap, { name });
