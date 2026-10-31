@@ -10,7 +10,7 @@
     onescape: () => void;
     /** Wide windows for lists (the sheet menu), narrow ones for questions. */
     wide?: boolean;
-    /** MPMB's own dialogs: as wide as the screen allows, up to 72 rem. */
+    /** MPMB's own dialogs: as wide as the screen allows, up to 96 rem. */
     widest?: boolean;
     children: Snippet;
     actions?: Snippet;
@@ -75,9 +75,12 @@
     width: min(56rem, calc(100vw - 2rem));
   }
 
-  /* MPMB's dialogs are laid out for Acrobat's wide windows; take what the screen offers. */
+  /*
+   * MPMB's dialogs are laid out for Acrobat's wide windows; take what the screen offers. Source
+   * Selection with its list of excluded elements needs about 1400 px to keep its lists readable.
+   */
   dialog.widest {
-    width: min(72rem, calc(100vw - 2rem));
+    width: min(96rem, calc(100vw - 2rem));
   }
 
   dialog::backdrop {

@@ -7,6 +7,7 @@
   import type { DialogElement, DialogState, DialogView } from '../engine/host.ts';
   import type { Texts } from '../i18n.ts';
   import DialogItem from './DialogItem.svelte';
+  import { acrobatLabel } from './labels.ts';
   import type { ListEntry } from './lists.ts';
   import { listEntries, selectEntry } from './lists.ts';
 
@@ -35,7 +36,7 @@
   const disabled = $derived(id !== '' && view.enabled[id] === false);
   const choices = $derived(view.choices?.[id] ?? []);
   const listId = `choices-${Math.random().toString(36).slice(2)}`;
-  const label = $derived(typeof element.name === 'string' ? element.name : '');
+  const label = $derived(typeof element.name === 'string' ? acrobatLabel(element.name) : '');
   /** A combo box: a text field with a drop-down list of names (see dialog.ts). */
   const combo = $derived(type === 'edit_text' && Boolean(element.PopupEdit));
   const num = (key: string): number => Number(element[key]) || 0;
@@ -60,7 +61,10 @@
       : num('char_width')
         ? `calc(${num('char_width') * CHAR_EM}em${extra})`
         : '';
-    if (width) parts.push(`width: min(${width}, 100%)`);
+    // The max-width keeps MPMB's width when the browser measures a row's columns: there the
+    // percentage counts as "auto", and a column of short texts asked for as much room as its longest
+    // paragraph in one line, squeezing the columns next to it (Source Selection).
+    if (width) parts.push(`width: min(${width}, 100%); max-width: calc(${width})`);
     // Rows may shrink (see the styles), but a combo box stays wide enough to read a spell name, and
     // never gets narrower than a touch target. Plain fields (ability scores) may shrink further.
     if (width && combo) parts.push(`min-width: clamp(${TOUCH_MIN}, ${width}, ${INPUT_MIN})`);
@@ -110,7 +114,7 @@
   /** The closing buttons an ok / ok_cancel / ok_cancel_other element stands for, last = main. */
   const closers = $derived.by(() => {
     const name = (key: string, fallback: string) =>
-      typeof element[key] === 'string' ? String(element[key]) : fallback;
+      typeof element[key] === 'string' ? acrobatLabel(String(element[key])) : fallback;
     const ok = { result: 'ok', label: name('ok_name', t.ok) };
     const cancel = { result: 'cancel', label: name('cancel_name', t.cancel) };
     const other = { result: 'other', label: name('other_name', t.other) };
@@ -305,16 +309,40 @@
   }
 
   /*
-   * A column with inputs (Spell Selection's bonus spells and their remarks) keeps its content's width,
-   * so the column of texts next to it wraps instead of the remarks running into the next column.
+   * A column with inputs (Spell Selection's bonus spells and their remarks) or buttons (Source
+   * Selection's "Get more" and arrows) keeps its content's width, so the column of texts next to it
+   * wraps instead of the inputs or buttons running into the next column.
    */
-  .group.row > :global(.group:has(input)) {
+  .group.row > :global(.group:has(input, button)) {
     min-width: min-content;
+  }
+
+  /*
+   * A row of nothing but buttons (Source Selection's twelve categories) wraps onto more lines when the
+   * column is narrower than Acrobat's, instead of running into the column next to it.
+   */
+  .group.row:not(:has(> :not(button))) {
+    flex-wrap: wrap;
   }
 
   /* Buttons have a 44 px minimum width that would undo that minimum; keep their words whole too. */
   .group.row > :global(button) {
     min-width: min-content;
+  }
+
+  /* Class Selection's rows as one grid (see tables.ts); each header sits right above its column. */
+  .group:global(.grid-table) {
+    display: grid;
+    gap: 0.5rem;
+    align-items: end;
+  }
+
+  .group:global(.cells) {
+    display: contents;
+  }
+
+  .group:global(.cells) > :global(.group) {
+    justify-content: flex-end;
   }
 
   fieldset.group {

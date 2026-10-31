@@ -37,7 +37,35 @@ function alignRow(row: HTMLElement): void {
   });
 }
 
+/**
+ * Class Selection builds its table differently: a row of columns, each a header over the first class's
+ * cell, then one row of cells for every further class. Acrobat lines them up by their fixed widths;
+ * here each row would size its cells on its own, so the second class's boxes stood under nothing in
+ * particular. A grid puts every cell of column n under the same header: the rows' boxes (`.cells`) let
+ * their cells take part in the grid, and the rest (the note and its button) spans the whole width.
+ */
+function gridRows(group: HTMLElement): void {
+  const children = [...group.children].filter(
+    (child): child is HTMLElement => child instanceof HTMLElement && !child.matches('legend'),
+  );
+  const head = children[0];
+  if (!head?.matches('.group.row') || head.matches('.table')) return;
+  const columns = head.children.length;
+  if (columns < MIN_TABLE || ![...head.children].every((column) => column.matches('.group:not(.row)'))) return;
+  const rows = children.slice(1).filter((child) => child.matches('.group.row') && child.children.length === columns);
+  if (!rows.length) return;
+  group.classList.add('grid-table');
+  group.style.setProperty('grid-template-columns', `repeat(${columns}, auto)`);
+  // As wide as the boxes want (MPMB's 80 characters would squeeze them), never wider than the dialog.
+  group.style.setProperty('width', 'fit-content');
+  children.forEach((child) => {
+    if (child === head || rows.includes(child)) child.classList.add('cells');
+    else child.style.setProperty('grid-column', '1 / -1');
+  });
+}
+
 function alignAll(node: HTMLElement): void {
+  node.querySelectorAll<HTMLElement>('.group').forEach(gridRows);
   const rows = [...node.querySelectorAll<HTMLElement>('.group.row')];
   // The outermost table wins: an inner row is part of it (the ability names and base scores).
   // Document order puts outer rows first, so the check sees the tables found so far.
