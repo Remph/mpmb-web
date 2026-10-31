@@ -40,6 +40,7 @@ export const ui = {
     creditsSrd:
       'Regelinhalte aus dem System Reference Document 5.2.1 von Wizards of the Coast LLC, lizenziert unter CC\u2011BY\u20114.0.',
     source: 'Quellcode (GPL\u20113.0)',
+    version: 'Version {commit} vom {date}',
     supportMpmb: 'MPMB auf Patreon unterstützen',
     notAffiliated:
       'MPMB Web ist ein inoffizielles Fanprojekt: weder mit MorePurpleMoreBetter (Joost Wijnen) verbunden noch von MPMB befürwortet.',
@@ -369,6 +370,7 @@ export const ui = {
     creditsSrd:
       'Rules content from the System Reference Document 5.2.1 by Wizards of the Coast LLC, licensed under CC\u2011BY\u20114.0.',
     source: 'Source code (GPL\u20113.0)',
+    version: 'Version {commit} of {date}',
     supportMpmb: 'Support MPMB on Patreon',
     notAffiliated:
       'MPMB Web is an unofficial fan project, not affiliated with or endorsed by MorePurpleMoreBetter (Joost Wijnen).',

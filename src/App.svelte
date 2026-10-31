@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { pickLanguage, ui, type Lang } from './i18n';
+  import { fill, pickLanguage, ui, type Lang } from './i18n';
   import { MPMB_PATREON } from './mpmb-links.ts';
   import PopUpLayer from './popups/PopUpLayer.svelte';
   import { Session } from './session.svelte.ts';
   import CharacterList from './views/CharacterList.svelte';
   import CharacterView from './views/CharacterView.svelte';
+  import { BUILD, SOURCE_URL, sourceUrl } from './version.ts';
 
   const storageKey = 'mpmb-web.lang';
 
@@ -20,6 +21,10 @@
   let lang: Lang = $state(pickLanguage(navigator.languages, readStored()));
   const t = $derived(ui[lang]);
   const session = new Session(() => t);
+  const builtOn = $derived(
+    BUILD.date &&
+      new Date(`${BUILD.date}T12:00:00`).toLocaleDateString(lang, { day: 'numeric', month: 'short', year: 'numeric' }),
+  );
 
   $effect(() => {
     document.documentElement.lang = lang;
@@ -88,8 +93,12 @@
       <p>{t.creditsMpmb}</p>
       <p>{t.creditsSrd}</p>
       <p class="links">
-        <a href="https://github.com/Remph/mpmb-web">{t.source}</a>
+        <a href={SOURCE_URL}>{t.source}</a>
         <a href={MPMB_PATREON}>{t.supportMpmb}</a>
+        {#if BUILD.commit}
+          <!-- Which version is online, linked to its exact source (GPL); also handy in bug reports. -->
+          <a href={sourceUrl(BUILD.commit)}>{fill(t.version, { commit: BUILD.commit.slice(0, 7), date: builtOn })}</a>
+        {/if}
       </p>
     </section>
   </main>
