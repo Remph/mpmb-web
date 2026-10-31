@@ -7,7 +7,7 @@
   import type { DialogElement, DialogState, DialogView } from '../engine/host.ts';
   import type { Texts } from '../i18n.ts';
   import DialogItem from './DialogItem.svelte';
-  import { isOffscreen } from './closer.ts';
+  import { isUnseen } from './closer.ts';
   import { acrobatLabel } from './labels.ts';
   import type { ListEntry } from './lists.ts';
   import { listEntries, selectEntry } from './lists.ts';
@@ -33,13 +33,23 @@
 
   const id = $derived(element.item_id ?? '');
   const type = $derived(element.type ?? 'view');
-  const hidden = $derived((id !== '' && view.visible[id] === false) || isOffscreen(element));
+  const hidden = $derived((id !== '' && view.visible[id] === false) || isUnseen(element));
   const disabled = $derived(id !== '' && view.enabled[id] === false);
   const choices = $derived(view.choices?.[id] ?? []);
   const listId = `choices-${Math.random().toString(36).slice(2)}`;
   const label = $derived(typeof element.name === 'string' ? acrobatLabel(element.name) : '');
   /** A combo box: a text field with a drop-down list of names (see dialog.ts). */
   const combo = $derived(type === 'edit_text' && Boolean(element.PopupEdit));
+  /** A read-only text of several lines: shown as text, not as an empty-looking box to type in. */
+  const longText = $derived(type === 'edit_text' && element.multiline === true && element.readonly === true);
+  /** Acrobat's line breaks (\r, or \r\n) as the browser's. */
+  const longValue = $derived(
+    String(state[id] ?? '')
+      .split('\r\n')
+      .join('\n')
+      .split('\r')
+      .join('\n'),
+  );
   const num = (key: string): number => Number(element[key]) || 0;
 
   /**
@@ -69,7 +79,10 @@
     // Rows may shrink (see the styles), but a combo box stays wide enough to read a spell name, and
     // never gets narrower than a touch target. Plain fields (ability scores) may shrink further.
     if (width && combo) parts.push(`min-width: clamp(${TOUCH_MIN}, ${width}, ${INPUT_MIN})`);
-    if (num('height') && (type === 'edit_text' || type.endsWith('list_box'))) parts.push(`height: ${num('height')}px`);
+    // A read-only long text (MPMB's "SIMPLE TEXT DIALOG") is as tall as its text, up to MPMB's height.
+    if (num('height') && longText) parts.push(`max-height: ${num('height')}px`);
+    else if (num('height') && (type === 'edit_text' || type.endsWith('list_box')))
+      parts.push(`height: ${num('height')}px`);
     // A one-line text with a height stands next to inputs in MPMB's tables (a row label, a column's
     // value): it gets an input's height here too, so the rows line up.
     if (num('height') && num('height') <= ONE_LINE && type === 'static_text') parts.push('min-height: 44px');
@@ -148,7 +161,10 @@
   {:else if type === 'static_text' || type === 'link_text'}
     <p class="text {self}" class:bold class:small class:red class:fill style={size}>{shownText}</p>
   {:else if type === 'edit_text'}
-    {#if element.multiline === true}
+    {#if longText}
+      <!-- A <pre>, whose text keeps its spaces; browsers let the keyboard into it when it scrolls. -->
+      <pre class="longtext" class:fill style={size} role="region" aria-label={label || id}>{longValue}</pre>
+    {:else if element.multiline === true}
       <textarea
         class:fill
         style={size}
@@ -399,6 +415,20 @@
   textarea {
     min-height: 6rem;
     resize: vertical;
+  }
+
+  /* MPMB's line breaks and its tab between a source's abbreviation and name are kept. */
+  .longtext {
+    margin: 0;
+    overflow-y: auto;
+    font: inherit;
+    padding: 0.375rem 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: 0.375rem;
+    background: var(--paper);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    tab-size: 4;
   }
 
   .check {

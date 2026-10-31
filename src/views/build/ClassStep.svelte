@@ -8,6 +8,7 @@
     classFieldText,
     meetsPrereqs,
     nextLevelXp,
+    parseLevel,
     removeClass,
     rowsOf,
     setClass,
@@ -59,6 +60,22 @@
   function write(next: ClassRow[]) {
     pending = next;
     change([{ edit: 'Class and Levels', text: classFieldText(next, info.classes) }]);
+  }
+
+  /**
+   * A level typed into a row's box. MPMB's own limits apply (setLevel: 1 up to what the total of 20
+   * leaves); the box shows the level that was written, or the old one for text that is no level.
+   */
+  function typed(index: number, box: HTMLInputElement) {
+    const wanted = parseLevel(box.value);
+    const row = rows[index];
+    if (!row || wanted === null || wanted === row.level) {
+      box.value = String(row?.level ?? '');
+      return;
+    }
+    const next = setLevel(rows, index, wanted);
+    box.value = String(next[index]?.level ?? row.level);
+    write(next);
   }
 
   async function remove(index: number) {
@@ -180,7 +197,17 @@
             disabled={disabled || row.level <= 1}
             onclick={() => write(setLevel(rows, i, row.level - 1))}>−</button
           >
-          <span>{row.level}</span>
+          <!-- Typed too, to go from 1 to 8 in one go; − and + stay for one level at a time. -->
+          <input
+            type="text"
+            inputmode="numeric"
+            aria-labelledby={`level-${i}`}
+            value={row.level}
+            {disabled}
+            onfocus={(e) => e.currentTarget.select()}
+            onkeydown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+            onchange={(e) => typed(i, e.currentTarget)}
+          />
           <button
             type="button"
             aria-label={t.buildLevelUp}
@@ -362,11 +389,23 @@
     font-size: 1.25rem;
   }
 
-  .stepper span {
-    min-width: 2.25rem;
+  .stepper input {
+    width: 3.25rem;
+    min-height: 44px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 0.375rem;
+    background: var(--paper);
+    color: var(--ink);
+    font: inherit;
     font-size: 1.125rem;
     font-weight: 800;
     text-align: center;
+  }
+
+  .stepper input:focus {
+    border-color: var(--accent);
+    outline: none;
   }
 
   .remove {

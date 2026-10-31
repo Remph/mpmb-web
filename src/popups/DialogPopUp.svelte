@@ -6,6 +6,7 @@
   import type { DialogElement, DialogReply, DialogState, DialogView } from '../engine/host.ts';
   import type { Texts } from '../i18n.ts';
   import { findCloser } from './closer.ts';
+  import { dialogTitle } from './labels.ts';
   import DialogItem from './DialogItem.svelte';
   import { alignTables } from './tables.ts';
   import Modal from './Modal.svelte';
@@ -65,7 +66,12 @@
   };
 </script>
 
-<Modal title={String(view.description.name ?? 'MPMB')} widest onescape={() => onclose('cancel')} closeLabel={t.close}>
+<Modal
+  title={dialogTitle(String(view.description.name ?? ''))}
+  widest
+  onescape={() => onclose('cancel')}
+  closeLabel={t.close}
+>
   <div class="dialog" lang="en" aria-busy={!waiting} use:alignTables>
     {#each view.description.elements ?? [] as element, i (i)}
       <DialogItem {element} state={input} {view} {radioGroups} {t} {set} {onevent} {onclose} skip={closer} />

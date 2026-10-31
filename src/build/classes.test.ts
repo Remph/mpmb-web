@@ -7,6 +7,7 @@ import {
   nextLevelXp,
   removeClass,
   setClass,
+  parseLevel,
   setLevel,
   setSubclass,
   totalLevel,
@@ -53,6 +54,15 @@ describe('changing the rows', () => {
   test('levels stay between 1 and what a total of 20 leaves', () => {
     expect(setLevel(PALADIN_WARLOCK, 0, 9)[0]?.level).toBe(9);
     expect(setLevel(PALADIN_WARLOCK, 0, 25)[0]?.level).toBe(18);
+  });
+
+  test('reads a typed level, and nothing that is not a whole number from 1', () => {
+    expect(parseLevel(' 8 ')).toBe(8);
+    expect(parseLevel('20')).toBe(20);
+    expect(parseLevel('')).toBeNull();
+    expect(parseLevel('0')).toBeNull();
+    expect(parseLevel('8.5')).toBeNull();
+    expect(parseLevel('acht')).toBeNull();
     expect(setLevel(PALADIN_WARLOCK, 1, 0)[1]?.level).toBe(1);
   });
 
