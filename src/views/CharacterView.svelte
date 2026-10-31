@@ -17,6 +17,8 @@
   import NotesTab from './play/NotesTab.svelte';
   import ProfileTab from './play/ProfileTab.svelte';
   import SheetMenu from './play/SheetMenu.svelte';
+  import SpellsTab from './play/SpellsTab.svelte';
+  import { readSpells } from '../play/spells.ts';
   import Vitals from './play/Vitals.svelte';
 
   interface Props {
@@ -28,7 +30,7 @@
 
   let { session, open, toggleLanguage, t }: Props = $props();
 
-  type Tab = 'combat' | 'checks' | 'inventory' | 'features' | 'profile' | 'notes';
+  type Tab = 'combat' | 'spells' | 'checks' | 'inventory' | 'features' | 'profile' | 'notes';
   let tab = $state<Tab>('combat');
   let menuOpen = $state(false);
   let width = $state(0);
@@ -39,15 +41,18 @@
     (
       [
         ['combat', t.tabCombat],
+        ['spells', t.tabSpells],
         ['checks', t.tabChecks],
         ['inventory', t.tabInventory],
         ['features', t.tabFeatures],
         ['profile', t.tabProfile],
         ['notes', t.tabNotes],
       ] as const
-    ).filter(([key]) => !(wide && key === 'checks')),
+    ).filter(([key]) => !(wide && key === 'checks') && !(key === 'spells' && !hasSpells)),
   );
-  const shownTab = $derived(wide && tab === 'checks' ? 'combat' : tab);
+  /** The Spells tab only for a character with spell sheet pages. */
+  const hasSpells = $derived(readSpells(open.fields).length > 0);
+  const shownTab = $derived((wide && tab === 'checks') || (tab === 'spells' && !hasSpells) ? 'combat' : tab);
 
   const fields = $derived(open.fields);
   const disabled = $derived(open.status === 'opening' || open.status === 'error');
@@ -122,6 +127,8 @@
     <div id="tab-panel" role="tabpanel" aria-labelledby={`tab-${shownTab}`}>
       {#if shownTab === 'combat'}
         <CombatTab {fields} {disabled} {change} {t} />
+      {:else if shownTab === 'spells'}
+        <SpellsTab {fields} {disabled} {change} {t} />
       {:else if shownTab === 'checks'}
         <Checks {fields} {disabled} {change} {t} />
       {:else if shownTab === 'inventory'}
@@ -253,7 +260,8 @@
   .tabs button {
     position: relative;
     flex: none;
-    border: 0;
+    /* No visible edge: the tab's text may come close to the button's side. */
+    border: 0 solid transparent;
     border-radius: 0.5rem 0.5rem 0 0;
     background: none;
     color: var(--ink-muted);
@@ -264,10 +272,23 @@
     color: var(--accent);
   }
 
-  /* Six tabs in the middle column of a 768 px iPad: less padding keeps the last one whole, also in German. */
-  @media (max-width: 860px) {
+  /*
+   * Seven tabs (with Spells) in the middle column of a 768 px iPad (444 px), six in the three-column
+   * layout of a 1180 px iPad (464 px): less padding and a slightly smaller size keep the last one whole,
+   * also in German (measured: about 425 px). The column's width decides, so a container query.
+   */
+  .middle {
+    container-type: inline-size;
+  }
+
+  @container (max-width: 560px) {
+    .tabs {
+      gap: 0;
+    }
+
     .tabs button {
-      padding: 0 0.375rem;
+      padding: 0 0.25rem;
+      font-size: 0.9375rem;
     }
   }
 

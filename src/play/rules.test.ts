@@ -76,4 +76,16 @@ describe('rests', () => {
     expect(longRest(used).values).toMatchObject({ 'Limited Feature Used 1': '' });
     expect(longRest(used).values).not.toHaveProperty('Limited Feature Used 2');
   });
+
+  it('a rest gives back the free casts of spells (MPMB clicks the box back)', () => {
+    // Divine Smite (row 8) and Guiding Bolt (row 55) cast once each, both back after a long rest.
+    const cast = withValues(paladin, {
+      'P6.SSfront.spells.check.8': 'oncelr+markedbox_used',
+      'P6.SSfront.spells.check.55': 'oncelr+markedbox_used',
+    });
+    expect(longRest(cast).untick).toEqual(['P6.SSfront.spells.checkbox.8', 'P6.SSfront.spells.checkbox.55']);
+    expect(shortRest(cast).untick).toEqual([]);
+    const shortCast = withValues(paladin, { 'P6.SSfront.spells.check.8': 'oncesr_used' });
+    expect(shortRest(shortCast).untick).toEqual(['P6.SSfront.spells.checkbox.8']);
+  });
 });
