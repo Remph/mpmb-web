@@ -1,12 +1,20 @@
 <!--
   MPMB's feature text with its marks (**bold**, #bold#, *italic*), one paragraph per line. Like the 2024
   sheet, a feature's name stands out in the accent colour, its source is quieter and its uses sit in an
-  outlined pill; a line that is all bold (a class, a species) is a heading.
+  outlined pill; a line that is all bold (a class, a species) is a heading. MPMB's note to use the PDF's
+  "Choose Feature" button becomes a link to the Build screen's Choices step, where the app has it.
 -->
 <script lang="ts">
+  import { pointsToChooseFeature } from '../../build/choose-link.ts';
   import { featureLine, linesOf } from '../../play/read.ts';
 
-  let { text }: { text: string } = $props();
+  interface Props {
+    text: string;
+    /** Where a feature's choice is made (by the feature's name), and the link's text; null: no links. */
+    choose?: { href: (feature: string) => string; label: string } | null;
+  }
+
+  let { text, choose = null }: Props = $props();
   const lines = $derived(
     linesOf(text)
       .filter((line) => line.trim() !== '')
@@ -18,10 +26,14 @@
   {#if 'heading' in line}
     <h3>{line.heading}</h3>
   {:else}
+    {@const feature = line.runs.filter((run) => run.role === 'name')[0]?.text ?? ''}
     <p>
       {#each line.runs as run, j (j)}
-        {#if run.role === 'name'}<b class="name">{run.text}</b>{:else if run.role === 'usage'}<span class="usage"
-            >{run.text}</span
+        {#if run.role === 'usage' && choose && pointsToChooseFeature(run.text)}<a
+            class="usage choose"
+            href={choose.href(feature)}>{choose.label}</a
+          >{:else if run.role === 'name'}<b class="name">{run.text}</b>{:else if run.role === 'usage'}<span
+            class="usage">{run.text}</span
           >{:else if run.role === 'source'}<span class="source">{run.text}</span>{:else if run.bold}<b>{run.text}</b
           >{:else if run.italic}<i>{run.text}</i>{:else}{run.text}{/if}
       {/each}
@@ -67,5 +79,24 @@
     color: var(--accent);
     font-size: 0.8125rem;
     font-weight: 700;
+  }
+
+  /* A link that looks like the pills next to it; the tap area reaches above and below the line to 44 px. */
+  .choose {
+    position: relative;
+    background: var(--accent-soft);
+    text-decoration: none;
+  }
+
+  .choose::after {
+    content: '';
+    position: absolute;
+    inset: -0.75rem -0.25rem;
+  }
+
+  .choose:hover,
+  .choose:focus-visible {
+    background: var(--accent);
+    color: var(--on-accent);
   }
 </style>

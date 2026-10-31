@@ -17,6 +17,7 @@ import { allowTimer } from '../engine/startup.ts';
 import type { Bookmark, SheetSnapshot } from '../engine/types.ts';
 import { offers } from '../engine/choices.ts';
 import { answerScores } from '../engine/scores.ts';
+import { answerWelcome } from '../engine/welcome.ts';
 import { readSheetPdf } from '../pdf/read-sheet.ts';
 import { waitForAnswer } from './channel.ts';
 import type { Channel } from './channel.ts';
@@ -83,7 +84,7 @@ function popUpMenu(items: MenuItem[]): string | null {
 }
 
 const host: Host = {
-  alert: (request) => ask({ kind: 'alert', request }) as AlertReply | null,
+  alert: (request) => answerWelcome(request) ?? (ask({ kind: 'alert', request }) as AlertReply | null),
   dialog: (view, first) => answerItself?.(view) ?? (ask({ kind: 'dialog', view, first }) as DialogReply | null),
   popUpMenu,
   // Without shared memory the page never showed the dialog, so there is nothing to close.

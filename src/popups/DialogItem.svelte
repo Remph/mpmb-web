@@ -7,6 +7,7 @@
   import type { DialogElement, DialogState, DialogView } from '../engine/host.ts';
   import type { Texts } from '../i18n.ts';
   import DialogItem from './DialogItem.svelte';
+  import { isOffscreen } from './closer.ts';
   import { acrobatLabel } from './labels.ts';
   import type { ListEntry } from './lists.ts';
   import { listEntries, selectEntry } from './lists.ts';
@@ -32,7 +33,7 @@
 
   const id = $derived(element.item_id ?? '');
   const type = $derived(element.type ?? 'view');
-  const hidden = $derived(id !== '' && view.visible[id] === false);
+  const hidden = $derived((id !== '' && view.visible[id] === false) || isOffscreen(element));
   const disabled = $derived(id !== '' && view.enabled[id] === false);
   const choices = $derived(view.choices?.[id] ?? []);
   const listId = `choices-${Math.random().toString(36).slice(2)}`;

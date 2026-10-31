@@ -5,6 +5,7 @@
 <script lang="ts">
   import type { DialogElement, DialogReply, DialogState, DialogView } from '../engine/host.ts';
   import type { Texts } from '../i18n.ts';
+  import { findCloser } from './closer.ts';
   import DialogItem from './DialogItem.svelte';
   import { alignTables } from './tables.ts';
   import Modal from './Modal.svelte';
@@ -50,19 +51,7 @@
     input = oneRadioPerGroup(view.state);
   });
 
-  /**
-   * The dialog's OK/Cancel buttons go to the bottom bar, which stays visible when a long dialog
-   * scrolls. MPMB has one such element per dialog, usually last.
-   */
-  const CLOSERS = ['ok', 'ok_cancel', 'ok_cancel_other'];
-  const closer = $derived.by(() => {
-    const find = (elements: DialogElement[] = []): DialogElement | undefined =>
-      elements.reduce<DialogElement | undefined>(
-        (found, e) => found ?? (CLOSERS.includes(e.type ?? '') ? e : find(e.elements)),
-        undefined,
-      );
-    return find(view.description.elements);
-  });
+  const closer = $derived(findCloser(view.description.elements));
 
   const set = (id: string, value: unknown) => {
     input[id] = value;

@@ -72,6 +72,20 @@ describe('the sheet menu’s units switch', () => {
     expect(engine.values()['Unit System']).toBe('metric');
     expect(scripted.asked.map((a) => a.what)).not.toContain('SET UNIT SYSTEM AND DECIMAL SEPARATOR');
   });
+
+  test('the PDF’s encumbrance labels follow (calculations that set rich text)', () => {
+    const scripted = new ScriptedHost();
+    const units = answerUnits('metric');
+    const engine = openSheet(undefined, {
+      alert: scripted.alert.bind(scripted),
+      popUpMenu: scripted.popUpMenu.bind(scripted),
+      dialog: (view: DialogView, first: boolean) => units(view) ?? scripted.dialog(view, first),
+    });
+    expect(engine.values()['Display.Speed.Enc']).toBe('10 FT SPEED');
+    engine.clickBookmark(['Functions', 'Unit System']);
+    // As the reference characters, saved in Acrobat on metric sheets, have it.
+    expect(engine.values()['Display.Speed.Enc']).toBe('3 M SPEED');
+  });
 });
 
 describe('what the next level brings', () => {

@@ -39,7 +39,9 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 0.25rem 0.75rem;
-    padding: 0.375rem max(1rem, env(safe-area-inset-right)) 0.375rem max(1rem, env(safe-area-inset-left));
+    /* The bar spans the screen; its contents line up with the page below, which stops at --page-max. */
+    padding: 0.375rem max(1rem, env(safe-area-inset-right), calc((100% - var(--page-max)) / 2 + 1rem)) 0.375rem
+      max(1rem, env(safe-area-inset-left), calc((100% - var(--page-max)) / 2 + 1rem));
     border-bottom: 1px solid var(--line);
     background: var(--surface);
   }

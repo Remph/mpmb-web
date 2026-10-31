@@ -6,6 +6,7 @@
   in the PDF. Where several may be chosen (invocations), a second tap on a chosen one takes it back.
 -->
 <script lang="ts">
+  import { choiceNamed } from '../../build/choose-link.ts';
   import type { BuilderInfo } from '../../engine/builder.ts';
   import type { Choice, ChoiceOption } from '../../engine/choices.ts';
   import { fill } from '../../i18n.ts';
@@ -13,15 +14,19 @@
 
   interface Props {
     info: BuilderInfo;
+    /** The feature the player came from (its "Choose Feature" note in the play view), if any. */
+    wanted: string | null;
     disabled: boolean;
     pick: (field: string, answer: string) => Promise<void>;
     t: Texts;
   }
 
-  let { info, disabled, pick, t }: Props = $props();
+  let { info, wanted, disabled, pick, t }: Props = $props();
 
   /** From this many options a search field helps (weapon masteries: about 50). */
   const SEARCH_FROM = 12;
+  /** Options whose top is below this share of the window's height are out of easy view. */
+  const LOW = 0.6;
 
   const choices = $derived(info.choices);
   let selectedId = $state('');
@@ -29,9 +34,13 @@
   let pending = $state('');
   let detailCard: HTMLElement | undefined = $state();
 
-  // The choice in view: the one the player tapped, else the first still open, else the first.
+  // The choice in view: the one the player tapped, else the feature's they came from, else the first
+  // still open, else the first.
   const selected = $derived(
-    choices.filter((c) => c.id === selectedId)[0] ?? choices.filter((c) => c.open)[0] ?? choices[0],
+    choices.filter((c) => c.id === selectedId)[0] ??
+      (wanted ? choiceNamed(choices, wanted) : null) ??
+      choices.filter((c) => c.open)[0] ??
+      choices[0],
   );
   const firstOpen = $derived(choices.filter((c) => c.open)[0]?.id);
 
@@ -78,11 +87,23 @@
   function show(choice: Choice) {
     selectedId = choice.id;
     query = '';
-    // Upright on an iPad the options sit below the list: bring them into view.
-    if (detailCard && detailCard.getBoundingClientRect().top > window.innerHeight * 0.6) {
-      detailCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    optionsIntoView('smooth');
+  }
+
+  /** Upright on an iPad the options sit below the list: brings them into view when they start low. */
+  function optionsIntoView(behavior: ScrollBehavior) {
+    if (detailCard && detailCard.getBoundingClientRect().top > window.innerHeight * LOW) {
+      detailCard.scrollIntoView({ behavior, block: 'start' });
     }
   }
+
+  // Coming from a feature's "Choose Feature" link: its options come into view once, as after "Choose".
+  let broughtIntoView = false;
+  $effect(() => {
+    if (broughtIntoView || !wanted || !detailCard || !choiceNamed(choices, wanted)) return;
+    broughtIntoView = true;
+    optionsIntoView('instant');
+  });
 
   /** A chosen option of a one-of choice is already on the sheet; MPMB's menu does nothing for it. */
   const canTap = (choice: Choice, option: ChoiceOption): boolean => option.enabled && (choice.many || !option.chosen);

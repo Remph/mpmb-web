@@ -39,6 +39,17 @@ describe('describeCharacter', () => {
     });
   });
 
+  test('adds the level to a class text without one, as MPMB writes classes', () => {
+    const only = describeCharacter(
+      sheetOf({ 'Class and Levels': 'Evoker', 'Character Level': '10' }),
+      NO_ADD_ONS,
+      null,
+    );
+    expect(only.classes).toBe('Evoker 10');
+    const both = sheetOf({ 'Class and Levels': 'Paladin 8, Warlock 2', 'Character Level': '10' });
+    expect(describeCharacter(both, NO_ADD_ONS, null).classes).toBe('Paladin 8, Warlock 2');
+  });
+
   test('copies the add-ons, so a reactive proxy from the page never reaches IndexedDB', () => {
     const addOns = { files: ['2026/10/29 - x.js'], manual: true };
     const meta = describeCharacter(sheetOf({}), addOns, null);

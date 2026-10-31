@@ -27,13 +27,18 @@
   interface Props {
     session: Session;
     open: OpenCharacter;
+    /** A feature's name from the play view: the screen opens on the Choices step, at that feature's choice. */
+    choice: string | null;
     toggleLanguage: () => void;
     t: Texts;
   }
 
-  let { session, open, toggleLanguage, t }: Props = $props();
+  let { session, open, choice, toggleLanguage, t }: Props = $props();
 
   let step = $state<BuildStep>('class');
+  $effect(() => {
+    if (choice !== null) step = 'choices';
+  });
   let menuOpen = $state(false);
   let levelUpOpen = $state(false);
   let info = $state<BuilderInfo | null>(null);
@@ -159,7 +164,7 @@
     {:else if step === 'feats'}
       <FeatsStep {info} {fields} {disabled} {change} {t} />
     {:else if step === 'choices'}
-      <ChoicesStep {info} {disabled} {pick} {t} />
+      <ChoicesStep {info} wanted={choice} {disabled} {pick} {t} />
     {:else}
       <ModifiersStep {fields} {disabled} {change} {t} />
     {/if}
@@ -176,10 +181,14 @@
 
 <style>
   .notes {
+    max-width: var(--page-max);
+    margin-inline: auto;
     padding: 0 1rem;
   }
 
   .build {
+    max-width: var(--page-max);
+    margin-inline: auto;
     display: grid;
     grid-template-columns: 280px minmax(0, 1fr);
     gap: 0.75rem;
@@ -264,17 +273,23 @@
   }
 
   /* "Done" is the screen's main way out: a link that looks like the primary button. */
+  /* Outlined, not filled: each step has its own main button ("Choose a class"), and only one may be filled. */
   .done {
     display: flex;
     align-items: center;
     justify-content: center;
     min-height: 44px;
     margin-top: 0.75rem;
+    border: 1px solid var(--accent);
     border-radius: 0.5rem;
-    background: var(--accent);
-    color: var(--on-accent);
+    background: var(--surface);
+    color: var(--accent);
     font-weight: 600;
     text-decoration: none;
+  }
+
+  .done:hover {
+    background: var(--accent-soft);
   }
 
   .main {

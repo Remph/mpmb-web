@@ -124,7 +124,7 @@
       {:else if shownTab === 'inventory'}
         <InventoryTab {fields} {disabled} {change} {t} />
       {:else if shownTab === 'features'}
-        <FeaturesTab {fields} {t} />
+        <FeaturesTab {fields} characterId={open.meta.id} {t} />
       {:else if shownTab === 'profile'}
         <ProfileTab {fields} {disabled} {change} {t} />
       {:else}
@@ -146,10 +146,14 @@
 
 <style>
   .notes {
+    max-width: var(--page-max);
+    margin-inline: auto;
     padding: 0 1rem;
   }
 
   .play {
+    max-width: var(--page-max);
+    margin-inline: auto;
     display: grid;
     grid-template-columns: 280px minmax(0, 1fr) 380px;
     gap: 0.75rem;

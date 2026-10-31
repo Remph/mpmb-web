@@ -41,17 +41,21 @@
     }
   }
 
-  // The address says what is on screen ("#/character/<id>", its Build screen "#/character/<id>/build"),
-  // so a reload opens the same screen. Matches both and takes the id; "#/" and "" are the list.
-  // Try it: https://regex101.com/?regex=%5E%23%5C%2Fcharacter%5C%2F(%5B%5E%2F%5D%2B)(%5C%2Fbuild)%3F%24&testString=%23%2Fcharacter%2Fabc%2Fbuild
-  const CHARACTER_ROUTE = /^#\/character\/([^/]+)(\/build)?$/;
+  // The address says what is on screen, so a reload opens the same screen: "#/character/<id>", its
+  // Build screen "…/build", or the Build screen's Choices step at one feature's choice,
+  // "…/build/choices/<feature name>" (from the play view's features). "#/" and "" are the list.
+  // Try it: https://regex101.com/?regex=%5E%23%5C%2Fcharacter%5C%2F%28%5B%5E%2F%5D%2B%29%28%5C%2Fbuild%28%3F%3A%5C%2Fchoices%5C%2F%28%5B%5E%2F%5D%2A%29%29%3F%29%3F%24&testString=%23%2Fcharacter%2Fabc%2Fbuild%2Fchoices%2FFighting%2520Style
+  const CHARACTER_ROUTE = /^#\/character\/([^/]+)(\/build(?:\/choices\/([^/]*))?)?$/;
   let missing = $state(false);
   let building = $state(false);
+  /** The feature whose choice the Build screen opens at, or null for its first step. */
+  let choiceOf = $state<string | null>(null);
 
   async function route() {
     const match = CHARACTER_ROUTE.exec(location.hash);
     const id = match?.[1];
     building = Boolean(match?.[2]);
+    choiceOf = match?.[3] === undefined ? null : decodeURIComponent(match[3]);
     if (!id) {
       if (session.current) await session.close();
       missing = false;
@@ -70,7 +74,7 @@
 {#if session.current}
   <!-- The play view brings its own top bar and uses the whole width; the language sits in its menu. -->
   {#if building}
-    <BuildView {session} open={session.current} {toggleLanguage} {t} />
+    <BuildView {session} open={session.current} choice={choiceOf} {toggleLanguage} {t} />
   {:else}
     <CharacterView {session} open={session.current} {toggleLanguage} {t} />
   {/if}

@@ -209,8 +209,9 @@
   /* The select itself is invisible on top of the arrow: its own text would repeat the input's. */
   .pick select {
     position: absolute;
-    inset: 0;
-    width: 100%;
+    /* Over the border too, so the tap area is the full 44 px (2.75rem). */
+    inset: 0 0 0 -1px;
+    width: calc(100% + 1px);
     opacity: 0;
     cursor: pointer;
   }
