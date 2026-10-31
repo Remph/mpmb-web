@@ -159,6 +159,28 @@ describe('play view values', () => {
 });
 
 describe('play view extras', () => {
+  it("marks a skill through the PDF's own boxes: advantage clears the armour's disadvantage", () => {
+    const engine = openSheet(referenceSheet('paladin8-warlock2'));
+    const stealth = () => readSkills(viewsOf(engine.doc)).filter((s) => s.key === 'Ste')[0];
+    expect(stealth()).toMatchObject({ advantage: false, disadvantage: true });
+    engine.click('Ste Adv');
+    expect(stealth()).toMatchObject({ advantage: true, disadvantage: false });
+    engine.click('Ste Adv');
+    expect(stealth()).toMatchObject({ advantage: false, disadvantage: false });
+  });
+
+  it('switches a mark from disadvantage to advantage and back with one click each', () => {
+    const engine = openSheet(referenceSheet('paladin8-warlock2'));
+    const perception = () => readSkills(viewsOf(engine.doc)).filter((s) => s.key === 'Perc')[0];
+    expect(perception()).toMatchObject({ advantage: false, disadvantage: false });
+    engine.click('Perc Dis');
+    expect(perception()).toMatchObject({ advantage: false, disadvantage: true });
+    engine.click('Perc Adv');
+    expect(perception()).toMatchObject({ advantage: true, disadvantage: false });
+    engine.click('Perc Dis');
+    expect(perception()).toMatchObject({ advantage: false, disadvantage: true });
+  });
+
   it("lists the Alignment field's nine alignments, and nothing for a text field", () => {
     const alignments = choicesOf(paladin, 'Alignment');
     expect(alignments).toHaveLength(9);
