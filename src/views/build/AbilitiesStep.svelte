@@ -12,6 +12,7 @@
     backgroundColumn,
     backgroundDone,
     bonusOf,
+    canLower,
     canRaise,
     changesOf,
     clampTyped,
@@ -41,17 +42,49 @@
     info: BuilderInfo;
     disabled: boolean;
     change: (steps: Step[]) => void;
-    setScores: (changes: ScoreChange[]) => void;
+    setScores: (changes: ScoreChange[]) => Promise<void>;
     t: Texts;
   }
 
   let { info, disabled, change, setScores, t }: Props = $props();
 
-  /** Columns written but not yet read back from MPMB: shown meanwhile, so quick taps count from them. */
-  let pending: ScoreColumn[] | null = $state(null);
+  /**
+   * Columns written but not yet read back from MPMB: shown meanwhile, so quick taps count from them. Raw
+   * state (always replaced, never changed in place), so the numbers can go to the worker as they are.
+   */
+  let pending: ScoreColumn[] | null = $state.raw(null);
+  /**
+   * Taps in quick succession go to MPMB as one change, a moment after the last one: one run of its dialog
+   * (and of any reminder it shows, like the hit points one) instead of one per tap.
+   */
+  const BATCH_MS = 600;
+  // Plain variables, not state: the effect below must run only when fresh info arrives.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let sending = 0;
   $effect(() => {
     void info;
-    pending = null;
+    // A reading taken while changes are still waiting or on their way doesn't have them yet: keep showing
+    // the pending columns, or the next tap would start from the older numbers and undo the ones before.
+    if (timer === undefined && sending === 0) pending = null;
+  });
+
+  function flush() {
+    timer = undefined;
+    if (!pending) return;
+    const changes = changesOf(info.scores.columns, pending);
+    if (!changes.length) return;
+    sending += 1;
+    void setScores(changes).finally(() => {
+      sending -= 1;
+    });
+  }
+
+  // Leaving the step (or the Build screen) sends what is still waiting.
+  $effect(() => () => {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      flush();
+    }
   });
   const columns = $derived(pending ?? info.scores.columns);
   const columnScores = (type: string): number[] | undefined => columns.filter((c) => c.type === type)[0]?.scores;
@@ -78,9 +111,9 @@
   const signed = (n: number): string => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0');
 
   function write(next: ScoreColumn[]) {
-    const changes = changesOf(info.scores.columns, next);
     pending = next;
-    if (changes.length) setScores(changes);
+    clearTimeout(timer);
+    timer = setTimeout(flush, BATCH_MS);
   }
 
   const writeBase = (scores: number[]) => write(withColumn(columns, 'base', scores));
@@ -88,7 +121,7 @@
   /** Runs MPMB's dialog with the columns as they are, so that it writes their totals onto the sheet. */
   function apply() {
     const column = info.scores.columns.findIndex((c) => c.type === 'base');
-    if (column !== -1) setScores([{ column, scores: base }]);
+    if (column !== -1) void setScores([{ column, scores: base }]);
   }
 
   function setMethod(next: Method) {
@@ -233,7 +266,7 @@
             <button
               type="button"
               aria-label={fill(t.buildScoreDown, { ability: `${name} (${t.buildColBonus})` })}
-              disabled={disabled || (bonus[i] ?? 0) <= 0}
+              disabled={disabled || !canLower(columns, i)}
               onclick={() => write(stepBonus(columns, i, -1))}>−</button
             >
             <b>{signed(bonus[i] ?? 0)}</b>

@@ -4,6 +4,7 @@ import {
   backgroundColumn,
   backgroundDone,
   bonusOf,
+  canLower,
   canRaise,
   changesOf,
   methodOf,
@@ -91,6 +92,15 @@ describe('feats & level-ups and the totals', () => {
     const withLevels = reference().map((c) => (c.type === 'levels' ? { ...c, scores: [0, 2, 0, 0, 0, 0] } : c));
     expect(stepBonus(withLevels, 1, -1).filter((c) => c.type === 'levels')[0]?.scores).toEqual([0, 1, 0, 0, 0, 0]);
     expect(stepBonus(reference(), 0, -1)).toEqual(reference());
+  });
+
+  test('− only where the feats or class levels column has something to take', () => {
+    // A level 20 barbarian: Primal Champion's +4 Strength sits in MPMB's class features column.
+    const barbarian = [...reference(), { type: 'classes', name: 'Class Features', scores: [4, 0, 0, 0, 0, 0] }];
+    expect(bonusOf(barbarian)[0]).toBe(4);
+    expect(canLower(barbarian, 0)).toBe(false);
+    expect(canLower(barbarian, 2)).toBe(true);
+    expect(canLower(stepBonus(barbarian, 0, 1), 0)).toBe(true);
   });
 
   test('only changed columns go to MPMB', () => {

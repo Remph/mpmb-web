@@ -156,6 +156,13 @@ export const bonusOf = (columns: ScoreColumn[]): number[] =>
     columns.filter((c) => !OWN_COLUMNS.includes(c.type)).reduce((sum, c) => sum + (c.scores[i] ?? 0), 0),
   );
 
+/**
+ * Whether − can take one off: only the feats and class levels columns are the page's to change. The
+ * figure also counts a species' or class feature's bonus (a level 20 barbarian's +4), which stays.
+ */
+export const canLower = (columns: ScoreColumn[], ability: number): boolean =>
+  (columnOf(columns, BONUS_COLUMN)[ability] ?? 0) > 0 || (columnOf(columns, LEVELS_COLUMN)[ability] ?? 0) > 0;
+
 /** The columns with one ability's Feats & level-ups figure one up or down. */
 export function stepBonus(columns: ScoreColumn[], ability: number, delta: 1 | -1): ScoreColumn[] {
   const feats = columnOf(columns, BONUS_COLUMN)[ability] ?? 0;

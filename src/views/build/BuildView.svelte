@@ -155,7 +155,7 @@
     {:else if step === 'background'}
       <BackgroundStep {info} {disabled} {change} {t} />
     {:else if step === 'abilities'}
-      <AbilitiesStep {info} {disabled} {change} setScores={(changes) => void session.setScores(changes)} {t} />
+      <AbilitiesStep {info} {disabled} {change} setScores={(changes) => session.setScores(changes)} {t} />
     {:else if step === 'feats'}
       <FeatsStep {info} {fields} {disabled} {change} {t} />
     {:else if step === 'choices'}
