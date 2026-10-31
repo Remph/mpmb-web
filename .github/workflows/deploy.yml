@@ -1,0 +1,64 @@
+# Builds the app and uploads it to its folder on remph.de (remph.de/mpmb/) on every push to main.
+# Setup and what to do when it fails: "Deploy" in README.md. This repo is public, so its Actions
+# minutes are free; pull requests from forks never see the secrets (the workflow doesn't run on them).
+name: Deploy to remph.de
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only list what would be uploaded or deleted (nothing changes on the server)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    # Two quick pushes must not upload at the same time.
+    concurrency:
+      group: deploy-remph-de
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # The same checks as before every pull request; a red one stops the upload.
+      - name: Test
+        run: pnpm test
+
+      - name: Type check
+        run: pnpm check
+
+      # The build names its commit on the start page and links to that source (src/version.ts).
+      - name: Build
+        run: pnpm build
+
+      - name: Install lftp
+        run: sudo apt-get update && sudo apt-get install -y lftp
+
+      - name: Upload
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+          # Pushes upload for real; a manual run is a dry run unless unticked.
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
+        run: bash scripts/deploy.sh dist
