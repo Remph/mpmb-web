@@ -9,6 +9,15 @@
   Header always set Cross-Origin-Opener-Policy "same-origin"
   Header always set Cross-Origin-Embedder-Policy "require-corp"
 
+  # What the page and the engine worker may load and contact (Content Security Policy). A sheet's
+  # add-on scripts run in the worker (src/worker/lockdown.ts); with connect-src and script-src limited
+  # to this site they can't send a character elsewhere or load code from elsewhere. The worker starts
+  # from a blob: URL and so takes this page's policy: hence worker-src blob: (and blob: in script-src,
+  # which Safari before 15.5 reads for workers instead), and 'unsafe-eval'
+  # because MPMB's scripts run through eval, as in Acrobat. Svelte sets style attributes, hence
+  # 'unsafe-inline' for styles only. vite.config.ts reads this line, so `pnpm preview` sends it too.
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
+
   # The page itself is checked on every visit, so a new version shows up at once...
   <FilesMatch "\.html$">
     Header set Cache-Control "no-cache"

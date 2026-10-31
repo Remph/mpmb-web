@@ -7,6 +7,7 @@
 // sends the dialog again with its new state (`first` false), or says that it closed.
 import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem } from '../engine/host.ts';
 import type { PopUps } from '../worker/client.ts';
+import { linkKind } from './links.ts';
 
 /** A question of the app itself (not MPMB's): a text and a few buttons. */
 export interface Choice<T extends string> {
@@ -31,11 +32,13 @@ export type Entry =
     }
   | { id: number; kind: 'choice'; choice: Choice<string>; resolve: (value: string) => void };
 
-/**
- * A web address: matches "https://www.flapkan.com/faq", not "javascript:alert(1)" or "file:///c:/".
- * Try it: https://regex101.com/?regex=%5Ehttps%3F%3A%5C%2F%5C%2F&testString=https%3A%2F%2Fwww.flapkan.com%2Ffaq
- */
-const WEB_LINK = /^https?:\/\//i;
+/** The page's words for the question before a link that leaves MPMB's sites. */
+export interface LinkQuestion {
+  title: string;
+  message: string;
+  open: string;
+  cancel: string;
+}
 
 /** An entry before it gets its id (Omit on each member of the union, not on the union). */
 type Without<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -46,10 +49,31 @@ export class PopUpStack implements PopUps {
   entries: Entry[] = $state.raw([]);
   private nextId = 1;
 
-  /** Opens a link the scripts ask for (MPMB's FAQ, its website), in a new tab. */
+  /** Set by the page; without it, links that leave MPMB's sites don't open. */
+  linkQuestion: (() => LinkQuestion) | null = null;
+
+  /**
+   * Opens a link the scripts ask for in a new tab: MPMB's own sites at once, any other web address
+   * after the player has seen it (see links.ts).
+   */
   launchURL(url: string): void {
-    // Only web links: a script could ask for anything.
-    if (WEB_LINK.test(url)) window.open(url, '_blank', 'noopener');
+    const kind = linkKind(url);
+    if (kind === 'mpmb') {
+      openTab(url);
+      return;
+    }
+    const words = this.linkQuestion?.();
+    if (kind === 'refused' || !words) return;
+    void this.choose({
+      title: words.title,
+      message: words.message,
+      lines: [url],
+      buttons: [
+        { value: 'cancel', label: words.cancel },
+        { value: 'open', label: words.open, primary: true },
+      ],
+      cancel: 'cancel',
+    }).then((answer) => answer === 'open' && openTab(url));
   }
 
   alert(request: AlertRequest): Promise<AlertReply> {
@@ -134,4 +158,9 @@ export class PopUpStack implements PopUps {
     this.remove(id);
     how(entry as Extract<Entry, { kind: K }>);
   }
+}
+
+// The click on "Open" counts as the player's own: browsers let a page open a tab shortly after one.
+function openTab(url: string): void {
+  window.open(url, '_blank', 'noopener');
 }
