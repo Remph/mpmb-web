@@ -1,17 +1,19 @@
 <!-- One of the app's own questions (delete, restore, replace on import). -->
 <script lang="ts">
+  import type { Texts } from '../i18n.ts';
   import type { Choice } from './popups.svelte.ts';
   import Modal from './Modal.svelte';
 
   interface Props {
     choice: Choice<string>;
+    t: Texts;
     answer: (value: string) => void;
   }
 
-  let { choice, answer }: Props = $props();
+  let { choice, t, answer }: Props = $props();
 </script>
 
-<Modal title={choice.title} onescape={() => answer(choice.cancel)}>
+<Modal title={choice.title} onescape={() => answer(choice.cancel)} closeLabel={t.close}>
   <p class="message">{choice.message}</p>
   {#if choice.lines?.length}
     <ul>

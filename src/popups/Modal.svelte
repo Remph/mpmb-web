@@ -1,13 +1,17 @@
 <!--
   A modal window on the browser's <dialog>: it sits in the top layer, keeps focus inside, and Escape
   asks `onescape` instead of closing it, because every pop-up must answer the script waiting for it.
+  The X in the top-right corner does the same as Escape.
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
   interface Props {
     title: string;
+    /** Escape and the X: the pop-up's "cancel" answer. */
     onescape: () => void;
+    /** The X button's name for screen readers ("Close" in the current language). */
+    closeLabel: string;
     /** Wide windows for lists (the sheet menu), narrow ones for questions. */
     wide?: boolean;
     /** MPMB's own dialogs: as wide as the screen allows, up to 96 rem. */
@@ -16,7 +20,7 @@
     actions?: Snippet;
   }
 
-  let { title, onescape, wide = false, widest = false, children, actions }: Props = $props();
+  let { title, onescape, closeLabel, wide = false, widest = false, children, actions }: Props = $props();
   let dialog: HTMLDialogElement | undefined = $state();
   const titleId = `modal-${Math.random().toString(36).slice(2)}`;
 
@@ -50,6 +54,13 @@
       {@render actions()}
     </div>
   {/if}
+  <!--
+    Last in the document so that opening the dialog still focuses the first field or menu entry, not
+    the X; the grid puts it in the top-right corner, where people look for it.
+  -->
+  <button type="button" class="close" aria-label={closeLabel} title={closeLabel} onclick={onescape}>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+  </button>
 </dialog>
 
 <style>
@@ -62,9 +73,13 @@
     background: var(--surface);
     color: var(--ink);
     box-shadow: 0 1rem 3rem rgb(0 0 0 / 0.3);
-    /* The header and buttons stay put; the body scrolls when the content is long. */
-    display: flex;
-    flex-direction: column;
+    /* The title row and buttons stay put; the body scrolls when the content is long. */
+    display: grid;
+    grid-template:
+      'title close' auto
+      'body body' minmax(0, 1fr)
+      'actions actions' auto
+      / minmax(0, 1fr) auto;
   }
 
   dialog:not([open]) {
@@ -88,24 +103,59 @@
   }
 
   h2 {
+    grid-area: title;
+    align-self: center;
     margin: 0;
-    padding: 1rem 1.25rem 0.5rem;
+    padding: 1rem 0.25rem 0.5rem 1.25rem;
     font-size: 1.125rem;
     line-height: 1.3;
   }
 
   .body {
+    grid-area: body;
     padding: 0.25rem 1.25rem 1rem;
     overflow: auto;
     overscroll-behavior: contain;
   }
 
   .actions {
+    grid-area: actions;
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: 0.5rem;
     padding: 0.75rem 1.25rem 1rem;
     border-top: 1px solid var(--line);
+  }
+
+  .close {
+    grid-area: close;
+    align-self: start;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin: 0.375rem 0.375rem 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0.5rem;
+    background: none;
+    color: var(--ink-muted);
+    cursor: pointer;
+  }
+
+  .close:hover,
+  .close:focus-visible {
+    background: var(--hover);
+    color: var(--ink);
+  }
+
+  .close svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.25;
+    stroke-linecap: round;
   }
 </style>

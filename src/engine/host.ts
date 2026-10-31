@@ -77,9 +77,29 @@ export interface MenuItem {
  */
 export function menuItems(raw: unknown): MenuItem[] {
   const list = Array.isArray(raw) ? raw : [raw];
-  return list
+  const items = list
     .filter((item): item is MenuItem => typeof item === 'object' && item !== null)
+    .filter((item) => !pdfLayoutOnly(item))
     .map((item) => (item.oSubMenu === undefined ? item : { ...item, oSubMenu: menuItems(item.oSubMenu) }));
+  return tidySeparators(items);
+}
+
+/**
+ * Entries that only arrange the printed sheet. "Move to left/right column" in a gear row's menu moves
+ * the item to the PDF table's other column; the app shows one list, where it would only make the item
+ * jump far down or up (the owner asked, 2026-10-31).
+ */
+function pdfLayoutOnly(item: MenuItem): boolean {
+  return item.cReturn?.includes('#movecol#') ?? false;
+}
+
+/** No separator at the start or end, and never two in a row (left behind by hidden entries). */
+function tidySeparators(items: MenuItem[]): MenuItem[] {
+  const isSeparator = (item: MenuItem | undefined) => item?.cName === '-';
+  const kept = items.filter((item, i) => !(isSeparator(item) && isSeparator(items[i + 1])));
+  const first = isSeparator(kept[0]) ? 1 : 0;
+  const end = isSeparator(kept[kept.length - 1]) ? kept.length - 1 : kept.length;
+  return kept.slice(first, end);
 }
 
 export interface Host {

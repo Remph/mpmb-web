@@ -43,7 +43,7 @@
 
 <svelte:window onkeydown={keydown} />
 
-<Modal {title} onescape={onclose}>
+<Modal {title} onescape={onclose} closeLabel={t.close}>
   {#if hint}<p class="hint">{hint}</p>{/if}
   <output class="display" class:danger aria-label={t.amount}>{digits || '0'}</output>
   <div class="keys">
