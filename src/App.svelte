@@ -5,6 +5,7 @@
   import { Session } from './session.svelte.ts';
   import CharacterList from './views/CharacterList.svelte';
   import CharacterView from './views/CharacterView.svelte';
+  import BuildView from './views/build/BuildView.svelte';
   import { BUILD, SOURCE_URL, sourceUrl } from './version.ts';
 
   const storageKey = 'mpmb-web.lang';
@@ -40,14 +41,17 @@
     }
   }
 
-  // The address says what is on screen ("#/character/<id>"), so a reload opens the same character.
-  // Matches "#/character/3f2a-…" and takes the id; "#/" and "" are the list.
-  // Try it: https://regex101.com/?regex=%5E%23%5C%2Fcharacter%5C%2F(.%2B)%24&testString=%23%2Fcharacter%2Fabc
-  const CHARACTER_ROUTE = /^#\/character\/(.+)$/;
+  // The address says what is on screen ("#/character/<id>", its Build screen "#/character/<id>/build"),
+  // so a reload opens the same screen. Matches both and takes the id; "#/" and "" are the list.
+  // Try it: https://regex101.com/?regex=%5E%23%5C%2Fcharacter%5C%2F(%5B%5E%2F%5D%2B)(%5C%2Fbuild)%3F%24&testString=%23%2Fcharacter%2Fabc%2Fbuild
+  const CHARACTER_ROUTE = /^#\/character\/([^/]+)(\/build)?$/;
   let missing = $state(false);
+  let building = $state(false);
 
   async function route() {
-    const id = CHARACTER_ROUTE.exec(location.hash)?.[1];
+    const match = CHARACTER_ROUTE.exec(location.hash);
+    const id = match?.[1];
+    building = Boolean(match?.[2]);
     if (!id) {
       if (session.current) await session.close();
       missing = false;
@@ -65,7 +69,11 @@
 
 {#if session.current}
   <!-- The play view brings its own top bar and uses the whole width; the language sits in its menu. -->
-  <CharacterView {session} open={session.current} {toggleLanguage} {t} />
+  {#if building}
+    <BuildView {session} open={session.current} {toggleLanguage} {t} />
+  {:else}
+    <CharacterView {session} open={session.current} {toggleLanguage} {t} />
+  {/if}
 {:else}
   <header>
     <a class="brand" href="#/">{t.title}</a>

@@ -28,6 +28,19 @@
     if (files.length) await session.importPdfs(files);
   }
 
+  let creating = $state(false);
+
+  /** A blank character, straight onto its Build screen (M6). */
+  async function newCharacter() {
+    creating = true;
+    try {
+      const id = await session.create();
+      if (id) location.hash = `#/character/${encodeURIComponent(id)}/build`;
+    } finally {
+      creating = false;
+    }
+  }
+
   async function pickedBackup(input: HTMLInputElement) {
     const file = input.files?.[0];
     input.value = '';
@@ -42,6 +55,7 @@
     <a class="button" href={MPMB_DOWNLOAD} target="_blank" rel="noopener" aria-label={t.getPdfLabel}>
       {t.getPdf}
     </a>
+    <button type="button" disabled={importing || creating} onclick={newCharacter}>{t.newCharacter}</button>
     <button type="button" class="primary" disabled={importing} onclick={() => pdfInput?.click()}>
       {t.importPdf}
     </button>

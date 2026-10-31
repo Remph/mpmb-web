@@ -5,8 +5,10 @@
 // One worker holds one open sheet. MPMB's scripts keep their state in globals, so a second sheet gets
 // a fresh worker (EngineClient does that) instead of reusing this global scope.
 import { addOnsOf } from '../engine/add-ons.ts';
+import { BUILDER_INFO_SCRIPT, answerUnits, readBuilderInfo } from '../engine/builder.ts';
+import type { UnitSystem } from '../engine/builder.ts';
 import { Engine } from '../engine/engine.ts';
-import type { AlertReply, DialogReply, Host } from '../engine/host.ts';
+import type { AlertReply, DialogReply, DialogView, Host } from '../engine/host.ts';
 import { currentRealm } from '../engine/realm.ts';
 import { mpmbScripts } from '../engine/scripts.ts';
 import { diffCharacter } from '../engine/sheet-data.ts';
@@ -57,9 +59,15 @@ const ask = (question: Ask): Answer => {
   return waitForAnswer<Answer>(channel);
 };
 
+/**
+ * An answer the app gives itself, for one command: the sheet menu's units switch sets MPMB's units dialog
+ * and presses OK, so that MPMB converts the sheet exactly as after the player's own OK.
+ */
+let answerItself: ((view: DialogView) => DialogReply | null) | null = null;
+
 const host: Host = {
   alert: (request) => ask({ kind: 'alert', request }) as AlertReply | null,
-  dialog: (view, first) => ask({ kind: 'dialog', view, first }) as DialogReply | null,
+  dialog: (view, first) => answerItself?.(view) ?? (ask({ kind: 'dialog', view, first }) as DialogReply | null),
   popUpMenu: (items) => ask({ kind: 'menu', items }) as string | null,
   // Without shared memory the page never showed the dialog, so there is nothing to close.
   dialogClosed: () => {
@@ -142,7 +150,19 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
   click: ({ field, widget }) => opened().click(field, widget),
   bookmark: ({ path }) => opened().clickBookmark(path),
   save: () => diffCharacter(blankSheet(), opened().snapshot()),
+  builder: () => readBuilderInfo(opened().evaluate(BUILDER_INFO_SCRIPT)),
+  units: ({ system }) => switchUnits(opened(), system),
 };
+
+/** MPMB's own units bookmark, with its dialog answered: imperial or metric, decimal separator unchanged. */
+function switchUnits(sheet: Engine, system: UnitSystem): void {
+  answerItself = answerUnits(system);
+  try {
+    sheet.clickBookmark(['Functions', 'Unit System']);
+  } finally {
+    answerItself = null;
+  }
+}
 
 async function run(id: number, command: Command): Promise<void> {
   try {

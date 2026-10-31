@@ -2,6 +2,7 @@
 // shows the pop-ups the scripts wait for (through the functions the UI passes in).
 import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem } from '../engine/host.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
+import type { BuilderInfo, UnitSystem } from '../engine/builder.ts';
 import { canWait, createChannel, sendAnswer } from './channel.ts';
 import type { Channel } from './channel.ts';
 import type { Answer, Ask, Command, FailureCode, FromWorker, MenuNode, Opened, Summary, ToWorker } from './protocol.ts';
@@ -90,6 +91,14 @@ export class EngineClient {
 
   bookmark(path: string[]): Promise<Done> {
     return this.send({ type: 'bookmark', path });
+  }
+
+  async builder(): Promise<BuilderInfo> {
+    return (await this.send({ type: 'builder' })).result as BuilderInfo;
+  }
+
+  units(system: UnitSystem): Promise<Done> {
+    return this.send({ type: 'units', system });
   }
 
   async save(): Promise<CharacterData> {
