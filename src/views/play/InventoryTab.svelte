@@ -57,9 +57,12 @@
     change([{ edit: field, text: name }]);
   }
 
-  /** Enter saves the name, as in a one-line field, instead of starting a new line. */
+  /**
+   * Enter saves the name, as in a one-line field, instead of starting a new line. Not while an input
+   * method is still composing a word: there Enter confirms the word and the name stays open.
+   */
   function enterSaves(event: KeyboardEvent) {
-    if (event.key !== 'Enter') return;
+    if (event.key !== 'Enter' || event.isComposing) return;
     event.preventDefault();
     (event.currentTarget as HTMLTextAreaElement).blur();
   }
