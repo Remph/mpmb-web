@@ -15,6 +15,13 @@ describe('dialog titles', () => {
     expect(dialogTitle('CHANGES ALERT DIALOG')).toBe('Changes alert');
   });
 
+  it('keeps names and abbreviations as they are written', () => {
+    expect(dialogTitle('IMPORT FROM PDF DIALOG')).toBe('Import from PDF');
+    expect(dialogTitle('XFDF FILE CREATION DIALOG')).toBe('XFDF file creation');
+    expect(dialogTitle('SUPPORT ON PATREON DIALOG')).toBe('Support on Patreon');
+    expect(dialogTitle('ADD FILE TO ACROBAT INSTALLATION DIALOG')).toBe('Add file to Acrobat installation');
+  });
+
   it('keeps a name in mixed case, and has a title for an empty name', () => {
     expect(dialogTitle('Set Unit System')).toBe('Set Unit System');
     expect(dialogTitle('')).toBe('MPMB');

@@ -74,8 +74,10 @@
       return;
     }
     const next = setLevel(rows, index, wanted);
-    box.value = String(next[index]?.level ?? row.level);
-    write(next);
+    const level = next[index]?.level ?? row.level;
+    box.value = String(level);
+    // Already at the limit (25 typed at 18 of 20): nothing to write, so MPMB isn't asked to redo the class.
+    if (level !== row.level) write(next);
   }
 
   async function remove(index: number) {

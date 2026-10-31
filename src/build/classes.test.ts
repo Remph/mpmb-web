@@ -54,6 +54,7 @@ describe('changing the rows', () => {
   test('levels stay between 1 and what a total of 20 leaves', () => {
     expect(setLevel(PALADIN_WARLOCK, 0, 9)[0]?.level).toBe(9);
     expect(setLevel(PALADIN_WARLOCK, 0, 25)[0]?.level).toBe(18);
+    expect(setLevel(PALADIN_WARLOCK, 1, 0)[1]?.level).toBe(1);
   });
 
   test('reads a typed level, and nothing that is not a whole number from 1', () => {
@@ -63,7 +64,6 @@ describe('changing the rows', () => {
     expect(parseLevel('0')).toBeNull();
     expect(parseLevel('8.5')).toBeNull();
     expect(parseLevel('acht')).toBeNull();
-    expect(setLevel(PALADIN_WARLOCK, 1, 0)[1]?.level).toBe(1);
   });
 
   test('a new class starts at level 1, once, and not past level 20', () => {
