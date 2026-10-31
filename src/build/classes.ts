@@ -33,6 +33,17 @@ export const classFieldText = (rows: ClassRow[], catalog: ClassInfo[]): string =
     .map((row) => `${className(row, catalog)} ${row.level}`)
     .join(', ');
 
+/** Only digits: what a player types into a level box ("8"). */
+const DIGITS = /^\d+$/;
+
+/** A typed level as a number, or null for anything that isn't a whole number from 1 ("", "abc", "0"). */
+export function parseLevel(text: string): number | null {
+  const trimmed = text.trim();
+  if (!DIGITS.test(trimmed)) return null;
+  const level = Number(trimmed);
+  return level >= 1 ? level : null;
+}
+
 /** The rows with one class's level changed, kept between 1 and what the total of 20 leaves. */
 export function setLevel(rows: ClassRow[], index: number, level: number): ClassRow[] {
   const others = totalLevel(rows) - (rows[index]?.level ?? 0);

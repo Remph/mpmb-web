@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DialogElement } from '../engine/host.ts';
-import { findCloser, isOffscreen } from './closer.ts';
+import { findCloser, isUnseen } from './closer.ts';
 
 // The bottom of MPMB's "Changes" reminder (Functions3.js): a visible Close and a hidden ok/cancel pair.
 const visible: DialogElement = { type: 'ok', item_id: 'CLOS', alignment: 'align_center', ok_name: 'Close' };
@@ -17,7 +17,14 @@ describe('dialog closers', () => {
   });
 
   it('tells hidden elements from visible ones', () => {
-    expect(isOffscreen(hidden)).toBe(true);
-    expect(isOffscreen(visible)).toBe(false);
+    expect(isUnseen(hidden)).toBe(true);
+    expect(isUnseen(visible)).toBe(false);
+  });
+
+  it("leaves out MPMB's 1 × 1 focus catcher, not other read-only fields", () => {
+    // SIMPLE TEXT DIALOG and COMPARE DIALOG (Functions2.js, Functions3.js).
+    expect(isUnseen({ type: 'edit_text', item_id: 'ding', readonly: true, width: 1, height: 1 })).toBe(true);
+    expect(isUnseen({ type: 'edit_text', item_id: 'Eval', readonly: true, width: 550, height: 500 })).toBe(false);
+    expect(isUnseen({ type: 'edit_text', item_id: 'name' })).toBe(false);
   });
 });

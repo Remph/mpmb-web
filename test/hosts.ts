@@ -1,6 +1,14 @@
 // Hosts that play the user in tests: they answer alerts, dialogs and menus from a script of answers
 // and record what was asked.
-import type { AlertReply, AlertRequest, DialogReply, DialogView, Host, MenuItem } from '../src/engine/host.ts';
+import type {
+  AlertReply,
+  AlertRequest,
+  DialogReply,
+  DialogView,
+  Host,
+  MenuItem,
+  Unavailable,
+} from '../src/engine/host.ts';
 import { ALERT_ANSWER, ALERT_BUTTONS } from '../src/engine/host.ts';
 
 /** How much of a menu's item names `asked` keeps. */
@@ -85,4 +93,11 @@ export class ScriptedHost implements Host {
   }
 
   launchURL(): void {}
+
+  /** The Acrobat features the scripts used that the app doesn't have yet, in order. */
+  readonly unavailableUsed: Unavailable[] = [];
+
+  unavailable(feature: Unavailable): void {
+    this.unavailableUsed.push(feature);
+  }
 }

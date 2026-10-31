@@ -92,6 +92,7 @@ const host: Host = {
     if (channel) post({ type: 'dialogClosed' });
   },
   launchURL: (url) => post({ type: 'launchURL', url }),
+  unavailable: (feature) => post({ type: 'unavailable', feature }),
 };
 
 /** Sends the page every field that looks different since the last time. */

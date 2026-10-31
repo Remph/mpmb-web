@@ -1,6 +1,6 @@
 // The page's side of the engine worker: sends commands, keeps the latest view of every field, and
 // shows the pop-ups the scripts wait for (through the functions the UI passes in).
-import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem } from '../engine/host.ts';
+import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem, Unavailable } from '../engine/host.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
 import type { BuilderInfo, UnitSystem } from '../engine/builder.ts';
 import type { ScoreChange } from '../engine/scores.ts';
@@ -59,6 +59,8 @@ export class EngineClient {
   /** MPMB's bookmarks (its menu) of the open sheet. */
   menu: MenuNode[] = [];
   onMenu: ((menu: MenuNode[]) => void) | null = null;
+  /** The scripts used something the app doesn't have yet; the page explains it in its own words. */
+  onUnavailable: ((feature: Unavailable) => void) | null = null;
   /** Whether pop-ups can be answered (the page is cross-origin isolated). */
   readonly answersPopUps = canWait();
 
@@ -165,6 +167,7 @@ export class EngineClient {
         if (ask.kind === 'alert') this.popUps.notice?.(ask.request);
       },
       launchURL: ({ url }) => this.popUps.launchURL?.(url),
+      unavailable: ({ feature }) => this.onUnavailable?.(feature),
       dialogClosed: () => this.popUps.dialogClosed?.(),
       menu: ({ menu }) => {
         this.menu = menu;

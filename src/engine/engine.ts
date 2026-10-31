@@ -368,7 +368,12 @@ export class Engine {
         return d ? (this.tools.realm.evaluate(`new Date(${d.getTime()})`) as Date) : null;
       },
       printx: (format: string, text: unknown) => String(text ?? ''),
-      readFileIntoStream: missing(doc, 'util.readFileIntoStream', null),
+      // Null is what Acrobat returns when the player cancels its file picker: MPMB then stops quietly.
+      readFileIntoStream: () => {
+        doc.missing('util.readFileIntoStream');
+        this.host.unavailable?.('openFile');
+        return null;
+      },
       stringFromStream: missing(doc, 'util.stringFromStream', ''),
       streamFromString: missing(doc, 'util.streamFromString', null),
       iconStreamFromIcon: missing(doc, 'util.iconStreamFromIcon', null),

@@ -2,7 +2,7 @@
 import type { AddOns } from '../engine/add-ons.ts';
 import type { UnitSystem } from '../engine/builder.ts';
 import type { ScoreChange } from '../engine/scores.ts';
-import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem } from '../engine/host.ts';
+import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem, Unavailable } from '../engine/host.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
 import type { FieldViews } from './views.ts';
 
@@ -87,6 +87,8 @@ export type FromWorker =
   /** A pop-up the page can only show, because the worker could not wait for an answer. */
   | { type: 'notice'; ask: Ask }
   | { type: 'launchURL'; url: string }
+  /** The scripts used something the app doesn't have yet (see Host.unavailable). */
+  | { type: 'unavailable'; feature: Unavailable }
   /** The dialog shown last has closed (see Host.dialogClosed). */
   | { type: 'dialogClosed' }
   | { type: 'fields'; changed: FieldViews; removed: string[] }

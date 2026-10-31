@@ -7,7 +7,18 @@ import type { DialogElement } from '../engine/host.ts';
  */
 const OFFSCREEN = 'align_offscreen';
 
-export const isOffscreen = (element: DialogElement): boolean => element.alignment === OFFSCREEN;
+/**
+ * MPMB's focus catcher: a read-only text field of 1 × 1 point ("ding") next to a long text, so that
+ * Acrobat doesn't put the cursor into the text. Drawn here it was an empty box.
+ */
+const isFocusCatcher = (element: DialogElement): boolean =>
+  element.type === 'edit_text' &&
+  element.readonly === true &&
+  Number(element.width) <= 1 &&
+  Number(element.height) <= 1;
+
+/** Whether the app leaves an element out: Acrobat keeps it out of sight too, or it is only there for focus. */
+export const isUnseen = (element: DialogElement): boolean => element.alignment === OFFSCREEN || isFocusCatcher(element);
 
 /** The element types that stand for the dialog's closing buttons (OK, Cancel, Other). */
 const CLOSERS = ['ok', 'ok_cancel', 'ok_cancel_other'];
@@ -18,7 +29,7 @@ const CLOSERS = ['ok', 'ok_cancel', 'ok_cancel_other'];
  */
 export function findCloser(elements: DialogElement[] = []): DialogElement | undefined {
   return elements.reduce<DialogElement | undefined>((found, e) => {
-    if (found || isOffscreen(e)) return found;
+    if (found || isUnseen(e)) return found;
     return CLOSERS.includes(e.type ?? '') ? e : findCloser(e.elements);
   }, undefined);
 }
