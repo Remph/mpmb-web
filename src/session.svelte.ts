@@ -2,6 +2,7 @@
 // restore. The views call these methods and draw the state; the engine runs in the worker behind
 // EngineClient, and its pop-ups go to the PopUpStack.
 import type { AddOns } from './engine/add-ons.ts';
+import type { BuilderInfo, UnitSystem } from './engine/builder.ts';
 import type { CharacterData } from './engine/sheet-data.ts';
 import { SHEET_ID } from './engine/sheet-id.ts';
 import { FF } from './engine/types.ts';
@@ -77,6 +78,8 @@ export class Session {
   current: OpenCharacter | null = $state(null);
   /** The storage could not be opened (e.g. a private window that forbids it). */
   storageError = $state('');
+  /** The sheet menu's "Level up": the Build screen opens with the level-up question. */
+  levelUpNext = $state(false);
   private store: CharacterStore | null = null;
   private nextNote = 1;
   /** Whether the open sheet changed since it was saved. */
@@ -230,6 +233,29 @@ export class Session {
     }
   }
 
+  /**
+   * A new character on the blank sheet, saved at once so it has its place in the list; returns its id
+   * (null when storage or the engine failed, with a note). MPMB greets a blank sheet with its welcome
+   * and source pop-ups, as in Acrobat.
+   */
+  async create(): Promise<string | null> {
+    await this.running;
+    this.clearNotes();
+    try {
+      await this.client.open(null);
+      const data = await this.client.save();
+      const meta = describeCharacter(data, { files: [], manual: false }, null);
+      await this.save({ meta, data });
+      await this.refresh();
+      return meta.id;
+    } catch (err) {
+      this.note('error', this.explain(err));
+      return null;
+    } finally {
+      this.client.close();
+    }
+  }
+
   // ---- One character ----
 
   async open(id: string): Promise<boolean> {
@@ -263,12 +289,37 @@ export class Session {
 
   /** Clicks one of MPMB's bookmarks; what the scripts change is saved right after. */
   runMenu(path: string[]): Promise<void> {
+    return this.work(() => this.client.bookmark(path));
+  }
+
+  /** Imperial or metric, through MPMB's own units bookmark (the app answers its dialog). */
+  setUnits(system: UnitSystem): Promise<void> {
+    return this.work(() => this.client.units(system));
+  }
+
+  /**
+   * What the Build screen offers and shows, read from the open sheet after the work before it (a change
+   * in line may add a class); null without an open character or when the sheet failed.
+   */
+  async builderInfo(): Promise<BuilderInfo | null> {
+    const open = this.current;
+    await this.running;
+    if (!open || this.current !== open || open.status === 'error') return null;
+    try {
+      return await this.client.builder();
+    } catch (err) {
+      this.note('error', this.explain(err));
+      return null;
+    }
+  }
+
+  /** One piece of work on the open sheet that isn't a play view change (a menu entry, the units); saved after. */
+  private work(job: () => Promise<unknown>): Promise<void> {
     const open = this.current;
     if (!open || open.status === 'opening' || open.status === 'working') return this.running;
     this.clearNotes();
     open.status = 'working';
-    this.running = this.client
-      .bookmark(path)
+    this.running = job()
       .then(() => this.saveOpen())
       .catch((err: unknown) => {
         open.status = 'error';

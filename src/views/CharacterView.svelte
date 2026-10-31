@@ -18,6 +18,7 @@
   import ProfileTab from './play/ProfileTab.svelte';
   import SheetMenu from './play/SheetMenu.svelte';
   import SpellsTab from './play/SpellsTab.svelte';
+  import TopBar from './TopBar.svelte';
   import { readSpells } from '../play/spells.ts';
   import Vitals from './play/Vitals.svelte';
 
@@ -56,9 +57,6 @@
 
   const fields = $derived(open.fields);
   const disabled = $derived(open.status === 'opening' || open.status === 'error');
-  const statusText = $derived(
-    { opening: t.opening, working: t.saving, saving: t.saving, saved: t.saved, error: '' }[open.status],
-  );
   const change = (steps: Step[]) => void session.change(steps);
 
   const restSteps = (edits: RestEdits): Step[] => [
@@ -90,19 +88,11 @@
 
 <svelte:window bind:innerWidth={width} />
 
-<header class="top">
-  <a class="back" href="#/">← {t.backToList}</a>
-  <div class="who">
-    <h1>{open.meta.name || t.unnamed}</h1>
-    <p>{[open.meta.classes, open.meta.species].filter(Boolean).join(' · ')}</p>
-  </div>
-  {#if statusText}<span class="status" class:busy={open.status !== 'saved'} aria-live="polite">{statusText}</span>{/if}
-  <div class="actions">
-    <button type="button" {disabled} onclick={() => rest('short')}>{t.shortRest}</button>
-    <button type="button" {disabled} onclick={() => rest('long')}>{t.longRest}</button>
-    <button type="button" onclick={() => (menuOpen = true)}>☰ {t.sheetMenu}</button>
-  </div>
-</header>
+<TopBar {open} back={{ href: '#/', label: t.backToList }} {t}>
+  <button type="button" {disabled} onclick={() => rest('short')}>{t.shortRest}</button>
+  <button type="button" {disabled} onclick={() => rest('long')}>{t.longRest}</button>
+  <button type="button" onclick={() => (menuOpen = true)}>☰ {t.sheetMenu}</button>
+</TopBar>
 
 <div class="notes"><Notes notes={session.notes} /></div>
 
@@ -155,81 +145,6 @@
 {/if}
 
 <style>
-  .top {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.25rem 0.75rem;
-    padding: 0.375rem max(1rem, env(safe-area-inset-right)) 0.375rem max(1rem, env(safe-area-inset-left));
-    border-bottom: 1px solid var(--line);
-    background: var(--surface);
-  }
-
-  .back {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-    color: var(--accent);
-    font-weight: 500;
-    text-decoration: none;
-  }
-
-  .who {
-    flex: 1;
-    min-width: 12rem;
-    line-height: 1.2;
-  }
-
-  h1 {
-    margin: 0;
-    font-size: 1.125rem;
-    font-weight: 800;
-  }
-
-  .who p {
-    margin: 0;
-    overflow: hidden;
-    color: var(--ink-muted);
-    font-size: 0.875rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .status {
-    color: var(--ink-muted);
-    font-size: 0.875rem;
-  }
-
-  .status.busy::before {
-    content: '';
-    display: inline-block;
-    width: 0.75rem;
-    height: 0.75rem;
-    margin-right: 0.375rem;
-    border: 2px solid var(--line);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    vertical-align: -0.1rem;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(1turn);
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .status.busy::before {
-      animation: none;
-    }
-  }
-
-  .actions {
-    display: flex;
-    gap: 0.5rem;
-  }
-
   .notes {
     padding: 0 1rem;
   }
@@ -317,10 +232,6 @@
 
     .side {
       position: static;
-    }
-
-    .actions {
-      flex-wrap: wrap;
     }
   }
 </style>
