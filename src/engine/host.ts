@@ -102,6 +102,12 @@ function tidySeparators(items: MenuItem[]): MenuItem[] {
   return kept.slice(first, end);
 }
 
+/**
+ * Acrobat features the player can reach in MPMB's dialogs but the app doesn't have yet. "openFile":
+ * "Add file" in MPMB's "Import custom script" asks Acrobat to open a script file (planned for M9).
+ */
+export type Unavailable = 'openFile';
+
 export interface Host {
   /** Shows an alert and returns the button pressed, or null when it can't wait for the user. */
   alert(request: AlertRequest): AlertReply | null;
@@ -115,6 +121,8 @@ export interface Host {
   /** Shows a pop-up menu; returns the chosen item's cReturn, or null for none. */
   popUpMenu(items: MenuItem[]): string | null;
   launchURL?(url: string): void;
+  /** The scripts used an Acrobat feature the app doesn't have yet; the page tells the player. */
+  unavailable?(feature: Unavailable): void;
   /** Acrobat's console (console.println). */
   log?(message: string): void;
 }

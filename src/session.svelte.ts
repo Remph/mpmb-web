@@ -104,6 +104,15 @@ export class Session {
     this.client.onMenu = (menu) => {
       if (this.current) this.current.menu = menu;
     };
+    // Shown over MPMB's dialog, which stays open: the player closes the note and carries on there.
+    this.client.onUnavailable = () => {
+      void this.popUps.choose({
+        title: this.t.openFileLaterTitle,
+        message: this.t.openFileLater,
+        buttons: [{ value: 'ok', label: this.t.ok, primary: true }],
+        cancel: 'ok',
+      });
+    };
   }
 
   private get t(): Texts {

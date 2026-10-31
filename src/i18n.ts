@@ -104,6 +104,9 @@ export const ui = {
     proficiency: 'Übungsbonus',
     speed: 'Bewegung',
     addOnsTitle: 'Zusatzskripte',
+    openFileLaterTitle: 'Dateien öffnen kommt später',
+    openFileLater:
+      'Skriptdateien vom Computer öffnen kann die App noch nicht. Bis dahin: die Datei in einem Texteditor öffnen, den ganzen Text kopieren und über Bogenmenü → Zusatzskripte → „Add material manually (copy-paste)“ einfügen.',
     pastedScript: 'Eingefügtes Skript',
     notIsolated:
       'Dieser Browser lässt die Seite nicht auf Antworten warten: Fragen von MPMBs Skripten werden nur angezeigt und mit „Abbrechen“ beantwortet.',
@@ -604,6 +607,9 @@ export const ui = {
     proficiency: 'Proficiency',
     speed: 'Speed',
     addOnsTitle: 'Add-on scripts',
+    openFileLaterTitle: 'Opening files comes later',
+    openFileLater:
+      'The app can’t open script files from your computer yet. Until then: open the file in a text editor, copy all of its text and paste it in through Sheet menu → Add-on scripts → “Add material manually (copy-paste)”.',
     pastedScript: 'Pasted script',
     notIsolated:
       'This browser doesn’t let the page wait for answers: questions from MPMB’s scripts are only shown and answered with “Cancel”.',

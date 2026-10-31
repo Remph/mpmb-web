@@ -90,6 +90,19 @@ describe('engine client', () => {
     expect(all[0]?.terminated).toBe(true);
   });
 
+  test('something the app does not have yet reaches the page, which explains it', () => {
+    const { all, make } = workers();
+    const client = new EngineClient(
+      popUps(() => Promise.resolve({ answer: 1 })),
+      make,
+    );
+    const used: string[] = [];
+    client.onUnavailable = (feature) => used.push(feature);
+    void client.open().catch(() => undefined);
+    all[0]?.emit({ type: 'unavailable', feature: 'openFile' });
+    expect(used).toEqual(['openFile']);
+  });
+
   test('a worker that fails rejects the commands waiting for it', async () => {
     const { all, make } = workers();
     const client = new EngineClient(

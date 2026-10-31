@@ -144,6 +144,19 @@ describe('buttons', () => {
     expect(takeLog(engine)).toEqual(['alert 4, dialog ok Bea']);
   });
 
+  test('opening a file tells the host it is not there yet, and the script gets no file', () => {
+    const host = new ScriptedHost();
+    const engine = Engine.load({
+      sheet: sheet(),
+      scripts: [{ name: 'Test', code: DOCUMENT_SCRIPT }],
+      host,
+      realm: vmRealm(),
+    });
+    // MPMB's "Add file" (ImportUserScriptFile) stops when the stream is empty, as after a cancelled picker.
+    expect(engine.evaluate('util.readFileIntoStream() === null')).toBe(true);
+    expect(host.unavailableUsed).toEqual(['openFile']);
+  });
+
   test('a dialog the user cancels does not commit', () => {
     const engine = load({ dialogs: { 'NAME DIALOG': { close: 'cancel' } } });
     engine.click('Button');
