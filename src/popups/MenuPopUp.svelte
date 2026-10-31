@@ -31,7 +31,17 @@
   }
 </script>
 
-<Modal title={path.length ? (path[path.length - 1]?.cName ?? '') : t.menuTitle} onescape={() => answer(null)}>
+<!-- No Cancel button: the X in the corner answers "nothing picked", as Escape does. A submenu has Back. -->
+{#snippet back()}
+  <button type="button" onclick={() => (path = path.slice(0, -1))}>{t.back}</button>
+{/snippet}
+
+<Modal
+  title={path.length ? (path[path.length - 1]?.cName ?? '') : t.menuTitle}
+  onescape={() => answer(null)}
+  closeLabel={t.close}
+  actions={path.length ? back : undefined}
+>
   <ul role="menu">
     {#each shown as item, i (i)}
       {#if isSeparator(item)}
@@ -47,12 +57,6 @@
       {/if}
     {/each}
   </ul>
-  {#snippet actions()}
-    {#if path.length}
-      <button type="button" onclick={() => (path = path.slice(0, -1))}>{t.back}</button>
-    {/if}
-    <button type="button" onclick={() => answer(null)}>{t.cancel}</button>
-  {/snippet}
 </Modal>
 
 <style>

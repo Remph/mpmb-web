@@ -18,6 +18,16 @@ export function valueOf(fields: FieldViews, name: string): string {
   return (Array.isArray(value) ? value.join(', ') : value).trim();
 }
 
+/**
+ * A combo box's entries as [value, label] (the PDF's /Opt pairs are [export value, shown text]);
+ * empty for a text field. The sheet's Alignment field lists MPMB's nine alignments.
+ */
+export function choicesOf(fields: FieldViews, name: string): [value: string, label: string][] {
+  return (fields[name]?.options ?? [])
+    .map((o): [string, string] => (Array.isArray(o) ? [o[0], o[1]] : [o, o]))
+    .filter(([value]) => value.trim() !== '');
+}
+
 /** A number in a field, or null when it is empty or not a number. */
 export function numberOf(fields: FieldViews, name: string): number | null {
   const text = valueOf(fields, name);

@@ -4,6 +4,7 @@ import { openSheet, referenceSheet } from '../../test/characters.ts';
 import { viewsOf } from '../worker/views.ts';
 import type { FieldViews } from '../worker/views.ts';
 import {
+  choicesOf,
   featureLine,
   goldTotal,
   readAbilities,
@@ -158,6 +159,14 @@ describe('play view values', () => {
 });
 
 describe('play view extras', () => {
+  it("lists the Alignment field's nine alignments, and nothing for a text field", () => {
+    const alignments = choicesOf(paladin, 'Alignment');
+    expect(alignments).toHaveLength(9);
+    expect(alignments[0]).toEqual(['Lawful Good', 'Lawful Good']);
+    expect(alignments.map(([value]) => value)).toContain('Chaotic Evil');
+    expect(choicesOf(paladin, 'Age')).toEqual([]);
+  });
+
   it('knows the rest and dawn recovery texts, however MPMB writes them', () => {
     expect(['long rest', 'Long Rest', 'LR', 'short rest', 'SR', 'dawn', 'Dawn', '7 days'].map(recoveryKind)).toEqual([
       'long',
