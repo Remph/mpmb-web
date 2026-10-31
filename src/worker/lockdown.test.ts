@@ -9,12 +9,16 @@ function workerLikeScope(): Record<string, unknown> {
     get indexedDB() {
       return {};
     },
+    get fonts() {
+      return {};
+    },
   };
   const scope = Object.create(prototype) as Record<string, unknown>;
   Object.assign(scope, {
     fetch: () => undefined,
     XMLHttpRequest: class {},
     WebSocket: class {},
+    FontFace: class {},
     caches: {},
     postMessage: () => undefined,
     setTimeout: () => 0,
@@ -28,6 +32,7 @@ describe('lockDown', () => {
     expect(lockDown(scope)).toEqual([]);
     REMOVED_GLOBALS.forEach((name) => expect(scope[name]).toBeUndefined());
     expect('indexedDB' in scope).toBe(false);
+    expect('fonts' in scope).toBe(false);
   });
 
   test('keeps what the engine needs', () => {

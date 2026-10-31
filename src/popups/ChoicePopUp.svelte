@@ -45,4 +45,10 @@
     margin: 0.75rem 0 0;
     padding-left: 1.25rem;
   }
+
+  /* A line can be one long word: the web address of the link question must show in full, so that
+     nothing (a look-alike host, data in the query) hides past the dialog's edge. */
+  li {
+    overflow-wrap: anywhere;
+  }
 </style>

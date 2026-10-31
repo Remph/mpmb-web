@@ -9,7 +9,10 @@
 // This is one of two layers. Code can still reach the network in ways no global covers (`import()`
 // is syntax, not a property), which the Content Security Policy in public/.htaccess blocks.
 
-/** The worker's ways out: network, other workers, and the site's storage. */
+/**
+ * The worker's ways out: network, other workers, and the site's storage. FontFace and fonts load a
+ * font from any address (the address can carry data); the engine draws nothing, so it needs neither.
+ */
 export const REMOVED_GLOBALS = [
   'fetch',
   'XMLHttpRequest',
@@ -17,6 +20,8 @@ export const REMOVED_GLOBALS = [
   'WebSocketStream',
   'WebTransport',
   'EventSource',
+  'FontFace',
+  'fonts',
   'importScripts',
   'Worker',
   'SharedWorker',
