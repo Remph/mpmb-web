@@ -53,6 +53,27 @@ node tools/extract-sheet.ts <blank Colorful A4.pdf>            # src/engine/data
 node tools/extract-character.ts <filled sheet.pdf> <out.json>  # a character as differences from it
 ```
 
+## Deploy
+
+The live app is at <https://remph.de/mpmb/>. Every push to `main` (a merged pull request) runs
+`.github/workflows/deploy.yml`: install, test, type check, build, then `scripts/deploy.sh` uploads
+`dist/` into that folder over FTP with TLS. The folder then equals the build; characters are not on
+the server (they live in each player's browser), so a deploy never touches them.
+
+- The folder needs Apache with `mod_headers`: `public/.htaccess` sends the two cross-origin isolation
+  headers the pop-ups depend on, keeps `index.html` fresh and caches the hashed build files.
+- Setup, once: an FTP user whose base folder is the app's folder (so it can't reach the rest of the
+  site). Then in Settings, Environments, a new environment `remph.de` with "Deployment branches"
+  set to `main` only, and in it the secrets `DEPLOY_HOST` (the server name in its TLS certificate),
+  `DEPLOY_USER`, `DEPLOY_PASSWORD` and `DEPLOY_DIR` (`/` for such a user). Then Actions, "Deploy to
+  remph.de", Run workflow with "dry run" ticked, and read the list of uploads and deletions.
+- Safety nets: no upload without `index.html`, `.htaccess` and `assets/` in the build, and none into
+  a folder that has subfolders the app doesn't make (a wrong `DEPLOY_DIR` pointing at the site's root).
+  The new build files go up before `index.html`, and the old ones are removed last, so the app keeps
+  working during an upload; a tab left open from before needs a reload afterwards.
+- By hand: `pnpm build`, then copy everything in `dist/` into the folder, including the hidden
+  `.htaccess`, and delete files from an older build.
+
 ## Credits and licence
 
 - Sheet logic and data: [MPMB's Character Record Sheet](https://github.com/morepurplemorebetter/2024_MPMBs-Character-Record-Sheet)

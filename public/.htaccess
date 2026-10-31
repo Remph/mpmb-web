@@ -1,6 +1,26 @@
-# Cross-origin isolation for the engine worker: it waits for the answers to the sheet's pop-ups
-# with shared memory, which browsers only allow on isolated pages. Apache with mod_headers.
+# Settings for the app's own folder on the live site (Apache). Each block is skipped when its
+# module is missing, so the file never breaks the site.
+
 <IfModule mod_headers.c>
-  Header set Cross-Origin-Opener-Policy "same-origin"
-  Header set Cross-Origin-Embedder-Policy "require-corp"
+  # Cross-origin isolation for the engine worker: it waits for the answers to the sheet's pop-ups
+  # with shared memory, which browsers only allow on isolated pages. "always" puts them on every
+  # answer, also 304 Not Modified and errors, whatever the Apache version: Safari refused a cached
+  # worker script whose 304 lacked COEP (seen with vite preview).
+  Header always set Cross-Origin-Opener-Policy "same-origin"
+  Header always set Cross-Origin-Embedder-Policy "require-corp"
+
+  # The page itself is checked on every visit, so a new version shows up at once...
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  # ...while the build's files carry a content hash in their name ("index-CH5oqtRN.js"): a new
+  # version has new names, so the old ones can stay cached for good.
+  <FilesMatch "-[A-Za-z0-9_-]{8}\.(js|css|woff2?)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>
+
+# The engine is a 5 MB script; compressed it is about 1.2 MB.
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json image/svg+xml
 </IfModule>
