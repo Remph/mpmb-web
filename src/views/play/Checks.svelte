@@ -1,19 +1,24 @@
 <!--
   Abilities, saving throws and skills: on screen all the time on a laptop (the right column), a tab of
-  its own on the iPad in portrait. A dot marks proficiency, a ring around it expertise.
+  its own on the iPad in portrait. A dot marks proficiency, a ring around it expertise. Tapping a skill
+  marks it with advantage or disadvantage (the owner chose this, 2026-10-31).
 -->
 <script lang="ts">
   import type { Texts } from '../../i18n.ts';
+  import Modal from '../../popups/Modal.svelte';
   import { readAbilities, readSkills, readTool } from '../../play/read.ts';
-  import type { Advantage } from '../../play/read.ts';
+  import type { Advantage, Skill, SkillKey } from '../../play/read.ts';
+  import type { Step } from '../../session.svelte.ts';
   import type { FieldViews } from '../../worker/views.ts';
 
   interface Props {
     fields: FieldViews;
+    disabled: boolean;
+    change: (steps: Step[]) => void;
     t: Texts;
   }
 
-  let { fields, t }: Props = $props();
+  let { fields, disabled, change, t }: Props = $props();
 
   const abilities = $derived(readAbilities(fields));
   const skills = $derived(readSkills(fields));
@@ -29,6 +34,31 @@
   const label = (e: 'adv' | 'dis'): string => (e === 'adv' ? t.advantage : t.disadvantage);
   const edges = $derived([...abilities, ...skills].map(edge).filter((e): e is 'adv' | 'dis' => e !== ''));
   const legend = $derived((['adv', 'dis'] as const).filter((e) => edges.includes(e)));
+
+  /** The skill whose pop-up is open. */
+  let marking: SkillKey | null = $state(null);
+  const marked = $derived(skills.filter((s) => s.key === marking)[0]);
+  type Mark = '' | 'adv' | 'dis';
+  const CHOICES: [Mark, 'rollNormal' | 'rollAdvantage' | 'rollDisadvantage'][] = [
+    ['', 'rollNormal'],
+    ['adv', 'rollAdvantage'],
+    ['dis', 'rollDisadvantage'],
+  ];
+
+  /**
+   * The PDF's own check boxes ("Ste Adv", "Ste Dis") hold the mark, so it stays in the sheet and in a
+   * printed PDF. Ticking one makes MPMB untick the other (SetDisAdv); Normal unticks what is ticked.
+   * The armour's disadvantage on Stealth is one of these boxes too, set by MPMB.
+   */
+  function mark(skill: Skill, to: Mark) {
+    const steps: Step[] = [];
+    if (to === 'adv' && !skill.advantage) steps.push({ click: `${skill.key} Adv` });
+    if (to === 'dis' && !skill.disadvantage) steps.push({ click: `${skill.key} Dis` });
+    if (to === '' && skill.advantage) steps.push({ click: `${skill.key} Adv` });
+    if (to === '' && skill.disadvantage) steps.push({ click: `${skill.key} Dis` });
+    if (steps.length) change(steps);
+    marking = null;
+  }
 </script>
 
 <section class="panel" aria-labelledby="abilities-title">
@@ -72,16 +102,39 @@
     {#each skills as s (s.key)}
       {@const e = edge(s)}
       <li>
-        <span>
-          <span class="prof" class:no={!s.proficient} class:exp={s.expertise}></span>{t[`skill${s.key}`]}
-          <span class="ability">{t[`short${s.ability}`]}</span>
-          {#if e}<span class="edge {e}" aria-label={label(e)}>{ARROW[e]}</span>{/if}
-        </span>
-        <b>{s.bonus}</b>
+        <button type="button" class="skill" aria-haspopup="dialog" onclick={() => (marking = s.key)}>
+          <span>
+            <span class="prof" class:no={!s.proficient} class:exp={s.expertise}></span>{t[`skill${s.key}`]}
+            <span class="ability">{t[`short${s.ability}`]}</span>
+            {#if e}<span class="edge {e}" aria-label={label(e)}>{ARROW[e]}</span>{/if}
+          </span>
+          <b>{s.bonus}</b>
+        </button>
       </li>
     {/each}
   </ul>
 </section>
+
+{#if marked}
+  {@const current = edge(marked)}
+  <Modal title={t[`skill${marked.key}`]} onescape={() => (marking = null)} closeLabel={t.close}>
+    <p class="roll">{t[`short${marked.ability}`]} {marked.bonus}</p>
+    <div class="choices">
+      {#each CHOICES as [to, text] (to)}
+        <button
+          type="button"
+          class="choice {to}"
+          aria-pressed={current === to}
+          {disabled}
+          onclick={() => mark(marked, to)}
+          >{#if to}<span aria-hidden="true">{ARROW[to]}</span>{/if}
+          {t[text]}</button
+        >
+      {/each}
+    </div>
+    <p class="hint">{t.edgeHint}</p>
+  </Modal>
+{/if}
 
 <style>
   .panel {
@@ -193,15 +246,92 @@
   }
 
   .skills li {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.25rem;
-    min-height: 30px;
     border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
     font-size: 0.9375rem;
     line-height: 1.2;
     break-inside: avoid;
+  }
+
+  /* The whole row is the button: 44 px tall, so it is easy to hit at the table. */
+  .skill {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem;
+    width: calc(100% + 0.75rem);
+    min-height: 44px;
+    margin: 0 -0.375rem;
+    padding: 0 0.375rem;
+    border: 0;
+    border-radius: 0.375rem;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .skill:hover,
+  .skill:focus-visible {
+    background: var(--hover);
+  }
+
+  .roll {
+    margin: 0 0 0.75rem;
+    color: var(--ink-muted);
+  }
+
+  .choices {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .choice {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 48px;
+    padding: 0 0.875rem;
+    border: 1px solid var(--line);
+    border-radius: 0.625rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .choice.adv {
+    color: var(--ok);
+  }
+
+  .choice.dis {
+    color: var(--hp);
+  }
+
+  .choice[aria-pressed='true'] {
+    border-color: currentColor;
+    background: var(--accent-soft);
+  }
+
+  .choice.adv[aria-pressed='true'] {
+    background: color-mix(in srgb, var(--ok) 14%, var(--surface));
+  }
+
+  .choice.dis[aria-pressed='true'] {
+    background: var(--hp-soft);
+  }
+
+  .choice:hover:not(:disabled, [aria-pressed='true']) {
+    background: var(--hover);
+  }
+
+  .hint {
+    margin: 0.75rem 0 0;
+    color: var(--ink-muted);
+    font-size: 0.875rem;
   }
 
   .ability {

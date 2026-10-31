@@ -123,7 +123,7 @@
       {#if shownTab === 'combat'}
         <CombatTab {fields} {disabled} {change} {t} />
       {:else if shownTab === 'checks'}
-        <Checks {fields} {t} />
+        <Checks {fields} {disabled} {change} {t} />
       {:else if shownTab === 'inventory'}
         <InventoryTab {fields} {disabled} {change} {t} />
       {:else if shownTab === 'features'}
@@ -138,7 +138,7 @@
 
   {#if wide}
     <div class="side right">
-      <Checks {fields} {t} />
+      <Checks {fields} {disabled} {change} {t} />
     </div>
   {/if}
 </div>
