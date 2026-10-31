@@ -418,11 +418,19 @@ export class SheetDocument implements FieldOwner {
       this.calcList.forEach((state) => {
         // A field removed by an earlier calculation in this run is skipped.
         if (this.states.get(state.name) !== state) return;
-        const ev = this.runEvent(state, 'C', { value: this.readValue(state), source });
+        const isRich = (state.def.flags & FF.richText) !== 0;
+        const before = isRich ? JSON.stringify(state.spans ?? [{ text: this.textOf(state) }]) : '';
+        const richValue = isRich ? this.tools.copy(JSON.parse(before) as Span[]) : undefined;
+        const ev = this.runEvent(state, 'C', { value: this.readValue(state), source, richValue });
         if (!ev || ev.rc === false) return;
-        const value = this.normalize(state, ev.value);
-        if (JSON.stringify(value) === JSON.stringify(state.value)) return;
+        // A calculation may set the rich text instead of the value (the PDF's "10 FT SPEED" labels,
+        // which switch to "3 M" with the units): as in Acrobat, the field then holds the spans' text.
+        const after = isRich && Array.isArray(ev.richValue) ? JSON.stringify(ev.richValue) : before;
+        const spans = after === before ? null : (JSON.parse(after) as Span[]);
+        const value = spans ? spansText(spans) : this.normalize(state, ev.value);
+        if (!spans && JSON.stringify(value) === JSON.stringify(state.value)) return;
         this.commit(state, value);
+        if (spans) state.spans = spans;
         this.runFormat(state);
       });
     } finally {

@@ -6,6 +6,7 @@
   in the PDF. Where several may be chosen (invocations), a second tap on a chosen one takes it back.
 -->
 <script lang="ts">
+  import { choiceNamed } from '../../build/choose-link.ts';
   import type { BuilderInfo } from '../../engine/builder.ts';
   import type { Choice, ChoiceOption } from '../../engine/choices.ts';
   import { fill } from '../../i18n.ts';
@@ -13,12 +14,14 @@
 
   interface Props {
     info: BuilderInfo;
+    /** The feature the player came from (its "Choose Feature" note in the play view), if any. */
+    wanted: string | null;
     disabled: boolean;
     pick: (field: string, answer: string) => Promise<void>;
     t: Texts;
   }
 
-  let { info, disabled, pick, t }: Props = $props();
+  let { info, wanted, disabled, pick, t }: Props = $props();
 
   /** From this many options a search field helps (weapon masteries: about 50). */
   const SEARCH_FROM = 12;
@@ -29,9 +32,13 @@
   let pending = $state('');
   let detailCard: HTMLElement | undefined = $state();
 
-  // The choice in view: the one the player tapped, else the first still open, else the first.
+  // The choice in view: the one the player tapped, else the feature's they came from, else the first
+  // still open, else the first.
   const selected = $derived(
-    choices.filter((c) => c.id === selectedId)[0] ?? choices.filter((c) => c.open)[0] ?? choices[0],
+    choices.filter((c) => c.id === selectedId)[0] ??
+      (wanted ? choiceNamed(choices, wanted) : null) ??
+      choices.filter((c) => c.open)[0] ??
+      choices[0],
   );
   const firstOpen = $derived(choices.filter((c) => c.open)[0]?.id);
 

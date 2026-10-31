@@ -97,9 +97,23 @@ export class CharacterStore {
 
 /** A field's text in the saved character; the blank sheet's fields are empty where these are read. */
 const textOf = (data: CharacterData, field: string): string => {
-  const value = data.fields[field]?.value;
-  return (Array.isArray(value) ? value.join(', ') : (value ?? '')).trim();
+  const value: unknown = data.fields[field]?.value;
+  // String(): a calculated field (Character Level) may hold a number at run time, whatever the type says.
+  return (Array.isArray(value) ? value.join(', ') : String(value ?? '')).trim();
 };
+
+/** Any digit: a class text with a level in it ("Paladin 8"). */
+const HAS_LEVEL = /\d/;
+
+/**
+ * The class line of the list and the top bar. A player may type only a subclass ("Evoker"), which MPMB
+ * understands; the line then gets the character's level, as MPMB writes classes: "Evoker 10".
+ */
+function classLine(data: CharacterData): string {
+  const classes = textOf(data, 'Class and Levels');
+  const level = textOf(data, 'Character Level');
+  return classes && level && !HAS_LEVEL.test(classes) ? `${classes} ${level}` : classes;
+}
 
 /** The list entry for a character, from its sheet. `before` keeps the id and creation date. */
 export function describeCharacter(
@@ -111,7 +125,7 @@ export function describeCharacter(
   return {
     id: before?.id ?? crypto.randomUUID(),
     name: textOf(data, 'PC Name'),
-    classes: textOf(data, 'Class and Levels'),
+    classes: classLine(data),
     species: textOf(data, 'Race'),
     // A copy: the page's add-ons can be reactive proxies, which IndexedDB can't store.
     addOns: { files: [...addOns.files], manual: addOns.manual },

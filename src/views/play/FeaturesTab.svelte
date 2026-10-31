@@ -1,11 +1,13 @@
 <!-- Senses and defenses, then MPMB's feature texts: class, species, feats, background. -->
 <script lang="ts">
+  import { choicesHref } from '../../build/choose-link.ts';
   import type { Texts } from '../../i18n.ts';
   import { readDefenses, readFeatures, textRuns } from '../../play/read.ts';
   import type { FieldViews } from '../../worker/views.ts';
   import RichText from './RichText.svelte';
 
-  let { fields, t }: { fields: FieldViews; t: Texts } = $props();
+  let { fields, characterId, t }: { fields: FieldViews; characterId: string; t: Texts } = $props();
+  const choose = $derived({ href: (feature: string) => choicesHref(characterId, feature), label: t.featuresChoose });
   const features = $derived(readFeatures(fields));
   const defenses = $derived(readDefenses(fields));
   /** Senses, resistances, MPMB's labelled lines (immunities …), then the rest: one card each. */
@@ -51,7 +53,7 @@
 {#each features as block, i (i)}
   <section class="panel">
     {#if block.title}<h2>{block.title}</h2>{/if}
-    <RichText text={block.text} />
+    <RichText text={block.text} {choose} />
   </section>
 {/each}
 

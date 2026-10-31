@@ -4,6 +4,11 @@
  * reading at a glance: every digit looks different from its neighbours, across a table too.
  */
 :root {
+  /*
+   * The play and build views' widest: on a 2560 px screen their columns would otherwise sit so far
+   * apart that a score's name and its number are hard to read together.
+   */
+  --page-max: 105rem;
   --ink: #1d1a26;
   --ink-muted: #615b6e;
   --paper: #f3f2f7;
