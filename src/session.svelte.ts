@@ -303,13 +303,27 @@ export class Session {
    * after the changes before it, like a play view change, so that quick taps on the Build screen all count.
    */
   setScores(changes: ScoreChange[]): Promise<void> {
+    if (changes.length === 0) return this.running;
+    return this.inLine(() => this.client.scores(changes));
+  }
+
+  /**
+   * Picks an option of one of MPMB's menus on the Build screen's Choices step (see the worker's `pick`).
+   * In line like setScores, so that three quick taps on invocations pick three.
+   */
+  pick(field: string, answer: string): Promise<void> {
+    return this.inLine(() => this.client.pick(field, answer));
+  }
+
+  /** Runs a worker command after the work before it, then shows and saves what it changed. */
+  private inLine(job: () => Promise<unknown>): Promise<void> {
     const open = this.current;
-    if (!open || open.status === 'opening' || open.status === 'error' || changes.length === 0) return this.running;
+    if (!open || open.status === 'opening' || open.status === 'error') return this.running;
     this.running = this.running
       .then(async () => {
         if (this.current !== open) return;
         open.status = 'working';
-        await this.client.scores(changes);
+        await job();
         open.fields = this.shownFields();
         await this.saveOpen();
       })
