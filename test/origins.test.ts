@@ -46,11 +46,8 @@ describe('species, backgrounds and feats from MPMB', () => {
     expect(origins.background).toEqual({ key: 'acolyte', variant: '' });
 
     const initiate = origins.feats.filter((f) => f.key === 'magic initiate')[0];
-    expect(initiate?.choices.map((c) => c.text)).toEqual([
-      'Magic Initiate [Cleric]',
-      'Magic Initiate [Druid]',
-      'Magic Initiate [Wizard]',
-    ]);
+    // The cleric form is on the sheet already, and MPMB allows each form once.
+    expect(initiate?.choices.map((c) => c.text)).toEqual(['Magic Initiate [Druid]', 'Magic Initiate [Wizard]']);
     // Magic Initiate may be taken twice; epic boons need level 19.
     expect(initiate?.taken).toBe(false);
     expect(origins.feats.filter((f) => f.key === 'boon of fate')[0]?.meets).toBe(false);

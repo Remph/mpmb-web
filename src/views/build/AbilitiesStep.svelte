@@ -111,8 +111,7 @@
     <div>
       <h2>{t.buildAbilities}</h2>
       <p>
-        {t.buildScoresLine}{#if method === 'points' && used !== null}
-          · <span class:over={used > POINT_BUDGET}
+        {t.buildScoresLine}{#if method === 'points' && used !== null}{' · '}<span class:over={used > POINT_BUDGET}
             >{used > POINT_BUDGET
               ? fill(t.buildPointsOver, { over: used - POINT_BUDGET })
               : fill(t.buildPointsLeft, { left: POINT_BUDGET - used, budget: POINT_BUDGET })}</span
@@ -224,7 +223,7 @@
               disabled={disabled || (bonus[i] ?? 0) <= 0}
               onclick={() => write(stepBonus(columns, i, -1))}>−</button
             >
-            <b>{bonus[i] ? signed(bonus[i] ?? 0) : '–'}</b>
+            <b>{signed(bonus[i] ?? 0)}</b>
             <button
               type="button"
               aria-label={fill(t.buildScoreUp, { ability: `${name} (${t.buildColBonus})` })}
@@ -507,8 +506,10 @@
       font-weight: 700;
     }
 
+    /* After the total (order), so the total stays on the row's first line. */
     .row .magic {
       grid-column: 1 / -1;
+      order: 1;
       margin-top: -0.25rem;
     }
 

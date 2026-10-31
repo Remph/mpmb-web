@@ -75,8 +75,9 @@ export interface FeatInfo {
   meets: boolean | null;
   /** MPMB's short description (the one it writes on the sheet). */
   description: string;
+  /** Its forms, without those the character has and may not take twice. */
   choices: FeatChoice[];
-  /** Whether the character already has it and can't take it twice. */
+  /** Whether the character already has it and can't take it (or another of its forms) again. */
   taken: boolean;
 }
 
@@ -198,13 +199,20 @@ export const ORIGINS_SCRIPT = `(function () {
       var ck = String(ch[c]).toLowerCase();
       var co = f[ck];
       if (!co || testSource(fKey + '-' + ck, co, 'featsExcl')) continue;
+      // The same form twice only where MPMB allows it (ApplyFeat warns otherwise and keeps the line empty).
+      var twice = false;
+      for (var t = 0; t < CurrentFeats.known.length; t++) {
+        if (CurrentFeats.known[t] === fKey && CurrentFeats.choices[t] === ck && !co.allowDuplicates) twice = true;
+      }
+      if (twice) continue;
       choices.push({ key: ck, name: String(ch[c]), text: co.name ? String(co.name) : f.name + ' [' + ch[c] + ']' });
     }
     out.feats.push({
       key: fKey, name: String(f.name), source: source(f), type: f.type ? String(f.type) : '',
       prerequisite: f.prerequisite ? String(f.prerequisite) : '', meets: meets,
       description: f.description ? String(f.description) : '', choices: choices,
-      taken: CurrentFeats.known.indexOf(fKey) !== -1 && !f.allowDuplicates
+      // Every form taken (Magic Initiate as cleric, druid and wizard) counts as taken too.
+      taken: (CurrentFeats.known.indexOf(fKey) !== -1 && !f.allowDuplicates) || (ch.length > 0 && !choices.length)
     });
   }
   out.feats.sort(byName);
