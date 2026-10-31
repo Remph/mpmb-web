@@ -73,7 +73,7 @@ export interface MenuItem {
 
 /**
  * A menu as Acrobat shows it. MPMB deletes empty groups from its menu arrays (`delete menu[i]`), which
- * leaves holes; after the JSON copy they are nulls, and Acrobat simply skips them.
+ * leaves holes; after the copy (`copyMenu`) they are nulls, and Acrobat simply skips them.
  */
 export function menuItems(raw: unknown): MenuItem[] {
   const list = Array.isArray(raw) ? raw : [raw];
