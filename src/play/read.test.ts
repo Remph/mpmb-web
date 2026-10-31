@@ -169,6 +169,18 @@ describe('play view extras', () => {
     expect(stealth()).toMatchObject({ advantage: false, disadvantage: false });
   });
 
+  it('switches a mark from disadvantage to advantage and back with one click each', () => {
+    const engine = openSheet(referenceSheet('paladin8-warlock2'));
+    const perception = () => readSkills(viewsOf(engine.doc)).filter((s) => s.key === 'Perc')[0];
+    expect(perception()).toMatchObject({ advantage: false, disadvantage: false });
+    engine.click('Perc Dis');
+    expect(perception()).toMatchObject({ advantage: false, disadvantage: true });
+    engine.click('Perc Adv');
+    expect(perception()).toMatchObject({ advantage: true, disadvantage: false });
+    engine.click('Perc Dis');
+    expect(perception()).toMatchObject({ advantage: false, disadvantage: true });
+  });
+
   it("lists the Alignment field's nine alignments, and nothing for a text field", () => {
     const alignments = choicesOf(paladin, 'Alignment');
     expect(alignments).toHaveLength(9);

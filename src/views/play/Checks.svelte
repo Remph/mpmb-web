@@ -4,6 +4,7 @@
   marks it with advantage or disadvantage (the owner chose this, 2026-10-31).
 -->
 <script lang="ts">
+  import { tick } from 'svelte';
   import type { Texts } from '../../i18n.ts';
   import Modal from '../../popups/Modal.svelte';
   import { readAbilities, readSkills, readTool } from '../../play/read.ts';
@@ -37,6 +38,21 @@
 
   /** The skill whose pop-up is open. */
   let marking: SkillKey | null = $state(null);
+  /** The row that opened it: focus goes back there, or a keyboard user would start again at the top. */
+  let opener: HTMLButtonElement | null = null;
+
+  function open(skill: SkillKey, row: HTMLButtonElement) {
+    opener = row;
+    marking = skill;
+  }
+
+  /** Focus can only move once the pop-up is gone: while it is open, the page behind it is inert. */
+  async function close() {
+    marking = null;
+    await tick();
+    opener?.focus();
+    opener = null;
+  }
   const marked = $derived(skills.filter((s) => s.key === marking)[0]);
   type Mark = '' | 'adv' | 'dis';
   const CHOICES: [Mark, 'rollNormal' | 'rollAdvantage' | 'rollDisadvantage'][] = [
@@ -57,7 +73,7 @@
     if (to === '' && skill.advantage) steps.push({ click: `${skill.key} Adv` });
     if (to === '' && skill.disadvantage) steps.push({ click: `${skill.key} Dis` });
     if (steps.length) change(steps);
-    marking = null;
+    void close();
   }
 </script>
 
@@ -102,7 +118,7 @@
     {#each skills as s (s.key)}
       {@const e = edge(s)}
       <li>
-        <button type="button" class="skill" aria-haspopup="dialog" onclick={() => (marking = s.key)}>
+        <button type="button" class="skill" aria-haspopup="dialog" onclick={(ev) => open(s.key, ev.currentTarget)}>
           <span>
             <span class="prof" class:no={!s.proficient} class:exp={s.expertise}></span>{t[`skill${s.key}`]}
             <span class="ability">{t[`short${s.ability}`]}</span>
@@ -117,7 +133,7 @@
 
 {#if marked}
   {@const current = edge(marked)}
-  <Modal title={t[`skill${marked.key}`]} onescape={() => (marking = null)} closeLabel={t.close}>
+  <Modal title={t[`skill${marked.key}`]} onescape={close} closeLabel={t.close}>
     <p class="roll">{t[`short${marked.ability}`]} {marked.bonus}</p>
     <div class="choices">
       {#each CHOICES as [to, text] (to)}
