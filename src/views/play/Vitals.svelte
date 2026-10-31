@@ -202,7 +202,7 @@
 {/if}
 
 {#if picking}
-  <Modal title={t.conditions} onescape={() => (picking = false)}>
+  <Modal title={t.conditions} onescape={() => (picking = false)} closeLabel={t.close}>
     <div class="chips">
       {#each CONDITIONS as c (c)}
         <button
@@ -228,9 +228,6 @@
         {t}
       />
     </div>
-    {#snippet actions()}
-      <button type="button" class="primary" onclick={() => (picking = false)}>{t.close}</button>
-    {/snippet}
   </Modal>
 {/if}
 

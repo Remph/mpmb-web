@@ -51,8 +51,40 @@
   );
   const free = $derived(inventory.freeRow[list]);
 
+  /** A name is one line on the sheet; a pasted line break becomes a space. */
   function rename(field: string, event: Event) {
-    change([{ edit: field, text: (event.currentTarget as HTMLInputElement).value.trim() }]);
+    const name = (event.currentTarget as HTMLTextAreaElement).value.split('\n').join(' ').trim();
+    change([{ edit: field, text: name }]);
+  }
+
+  /** Enter saves the name, as in a one-line field, instead of starting a new line. */
+  function enterSaves(event: KeyboardEvent) {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    (event.currentTarget as HTMLTextAreaElement).blur();
+  }
+
+  /**
+   * Long names wrap onto more lines instead of being cut off (the owner asked, 2026-10-31), so the
+   * name is a text area as tall as its text. CSS `field-sizing: content` would do this, but Firefox,
+   * the group's browser, doesn't have it yet. Runs again when the name or the column's width changes.
+   */
+  function fitHeight(node: HTMLTextAreaElement, _name: string) {
+    const fit = () => {
+      node.style.height = 'auto';
+      // scrollHeight leaves out the borders; the box is border-box.
+      node.style.height = `${node.scrollHeight + node.offsetHeight - node.clientHeight}px`;
+    };
+    const resized = new ResizeObserver(fit);
+    resized.observe(node);
+    node.addEventListener('input', fit);
+    return {
+      update: fit,
+      destroy: () => {
+        resized.disconnect();
+        node.removeEventListener('input', fit);
+      },
+    };
   }
 
   /** A name typed into the empty row goes into the list's first free row, one of it. */
@@ -120,14 +152,15 @@
       <ul>
         {#each group.items as item (item.nameField)}
           <li class="row item">
-            <input
+            <textarea
               class="name"
-              type="text"
+              rows="1"
               value={item.name}
               aria-label={t.itemName}
               {disabled}
-              onchange={(event) => rename(item.nameField, event)}
-            />
+              use:fitHeight={item.name}
+              onkeydown={enterSaves}
+              onchange={(event) => rename(item.nameField, event)}></textarea>
             <span class="controls">
               {#if item.amount !== null}
                 <Stepper
@@ -340,7 +373,7 @@
   }
 
   /* The name looks like text until it is tapped, then it is a field to type in. */
-  input.name {
+  .name {
     flex: 1 1 auto;
     min-width: 0;
     min-height: 44px;
@@ -353,11 +386,11 @@
     font: inherit;
   }
 
-  input.name:hover:not(:disabled) {
+  .name:hover:not(:disabled) {
     border-color: var(--line);
   }
 
-  input.name:focus {
+  .name:focus {
     border-color: var(--accent);
     outline: none;
     background: var(--paper);
@@ -376,8 +409,13 @@
     flex-wrap: wrap;
   }
 
-  .item input.name {
+  /* One line of text is as tall as the 44 px buttons beside it: 0.625rem + 1.375em + 0.625rem. */
+  .item .name {
     flex: 1 1 10rem;
+    padding-block: 0.625rem;
+    line-height: 1.375;
+    overflow: hidden;
+    resize: none;
   }
 
   .controls {

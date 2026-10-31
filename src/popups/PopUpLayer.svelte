@@ -21,7 +21,7 @@
   {:else if entry.kind === 'menu'}
     <MenuPopUp items={entry.items} {t} answer={(picked) => popUps.answerMenu(entry.id, picked)} />
   {:else if entry.kind === 'choice'}
-    <ChoicePopUp choice={entry.choice} answer={(value) => popUps.answerChoice(entry.id, value)} />
+    <ChoicePopUp choice={entry.choice} {t} answer={(value) => popUps.answerChoice(entry.id, value)} />
   {:else}
     <DialogPopUp
       view={entry.view}

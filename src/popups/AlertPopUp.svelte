@@ -39,7 +39,7 @@
   const reply = (n: number) => answer(request.checkbox ? { answer: n, checkboxValue: checked } : { answer: n });
 </script>
 
-<Modal title={request.title || 'MPMB'} onescape={() => reply(escapeAnswer)}>
+<Modal title={request.title || 'MPMB'} onescape={() => reply(escapeAnswer)} closeLabel={t.close}>
   <p class="message" lang="en">{request.message}</p>
   {#if request.checkbox}
     <label class="check">

@@ -53,7 +53,7 @@
   }
 </script>
 
-<Modal title={t.sheetMenu} onescape={onclose} wide>
+<Modal title={t.sheetMenu} onescape={onclose} closeLabel={t.close} wide>
   <div class="row">
     <button type="button" onclick={() => session.backUp([open.meta.id])}>{t.backUp}</button>
     <button type="button" onclick={toggleLanguage} lang={t.switchLanguage === 'English' ? 'en' : 'de'}
@@ -78,10 +78,6 @@
   <div class="menu" lang="en">
     <MenuTree nodes={menu} path={[MENU_ROOT]} disabled={busy} {run} />
   </div>
-
-  {#snippet actions()}
-    <button type="button" class="primary" onclick={onclose}>{t.close}</button>
-  {/snippet}
 </Modal>
 
 <style>

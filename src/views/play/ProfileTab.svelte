@@ -6,7 +6,7 @@
 <script lang="ts">
   import type { Texts, UiKey } from '../../i18n.ts';
   import type { Step } from '../../session.svelte.ts';
-  import { valueOf } from '../../play/read.ts';
+  import { choicesOf, valueOf } from '../../play/read.ts';
   import type { FieldViews } from '../../worker/views.ts';
 
   interface Props {
@@ -51,7 +51,7 @@
   const rows = (field: string): number => Math.max(2, text(field).split('\n').length + 1);
 
   function save(field: string, event: Event) {
-    const value = (event.currentTarget as HTMLInputElement | HTMLTextAreaElement).value;
+    const value = (event.currentTarget as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement).value;
     if (value.trim() !== text(field)) change([{ edit: field, text: value }]);
   }
 </script>
@@ -60,10 +60,32 @@
   <div class="facts">
     {#each boxes as [field, label] (field)}
       {#if fields[field]}
-        <label class="fact">
-          <span>{t[label]}</span>
-          <input type="text" value={text(field)} {disabled} onchange={(event) => save(field, event)} />
-        </label>
+        {@const choices = choicesOf(fields, field)}
+        <div class="fact" class:choices={choices.length}>
+          <label>
+            <span>{t[label]}</span>
+            <input type="text" value={text(field)} {disabled} onchange={(event) => save(field, event)} />
+          </label>
+          {#if choices.length}
+            <!--
+              The PDF's drop-down (Alignment) lets you type or pick. The input keeps the typing; this
+              select is the picking, drawn as a ▾ so it opens the system's own list (a wheel on the iPad).
+            -->
+            <span class="pick">
+              <select
+                aria-label={`${t[label]}: ${t.chooseFromList}`}
+                lang="en"
+                value={choices.some(([value]) => value === text(field)) ? text(field) : ''}
+                {disabled}
+                onchange={(event) => save(field, event)}
+              >
+                <option value="" disabled hidden>{t.chooseFromList}</option>
+                {#each choices as [value, shown] (value)}<option {value}>{shown}</option>{/each}
+              </select>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+            </span>
+          {/if}
+        </div>
       {/if}
     {/each}
   </div>
@@ -136,7 +158,7 @@
     font-size: 0.75rem;
   }
 
-  .fact span {
+  .fact label > span {
     position: absolute;
     top: 0.25rem;
     left: 0.5rem;
@@ -159,6 +181,63 @@
   .fact input:focus {
     border-color: var(--accent);
     outline: none;
+  }
+
+  /* Two boxes wide, so "Chaotic Neutral" fits next to the ▾. */
+  .fact.choices {
+    grid-column: span 2;
+  }
+
+  /* Room on the right for the ▾, which covers the box's full height so it is easy to hit. */
+  .fact.choices input {
+    padding-right: 2.75rem;
+  }
+
+  .pick {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 2.75rem;
+    display: grid;
+    place-items: center;
+    border-left: 1px solid var(--line);
+    border-radius: 0 0.5rem 0.5rem 0;
+    color: var(--ink-muted);
+  }
+
+  /* The select itself is invisible on top of the arrow: its own text would repeat the input's. */
+  .pick select {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .pick:hover,
+  .pick:has(select:focus-visible) {
+    background: var(--hover);
+    color: var(--ink);
+  }
+
+  .pick:has(select:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  .pick:has(select:disabled) {
+    opacity: 0.5;
+  }
+
+  .pick svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.25;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   /* Two side by side where there is room (traits next to ideal), one below the other on narrow columns. */
