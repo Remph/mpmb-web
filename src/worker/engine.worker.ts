@@ -8,13 +8,14 @@ import { addOnsOf } from '../engine/add-ons.ts';
 import { BUILDER_INFO_SCRIPT, answerUnits, readBuilderInfo } from '../engine/builder.ts';
 import type { UnitSystem } from '../engine/builder.ts';
 import { Engine } from '../engine/engine.ts';
-import type { AlertReply, DialogReply, DialogView, Host } from '../engine/host.ts';
+import type { AlertReply, DialogReply, DialogView, Host, MenuItem } from '../engine/host.ts';
 import { currentRealm } from '../engine/realm.ts';
 import { mpmbScripts } from '../engine/scripts.ts';
 import { diffCharacter } from '../engine/sheet-data.ts';
 import { blankSheet, characterSheet } from '../engine/sheet.ts';
 import { allowTimer } from '../engine/startup.ts';
 import type { Bookmark, SheetSnapshot } from '../engine/types.ts';
+import { offers } from '../engine/choices.ts';
 import { answerScores } from '../engine/scores.ts';
 import { readSheetPdf } from '../pdf/read-sheet.ts';
 import { waitForAnswer } from './channel.ts';
@@ -66,10 +67,25 @@ const ask = (question: Ask): Answer => {
  */
 let answerItself: ((view: DialogView) => DialogReply | null) | null = null;
 
+/**
+ * The menu answer of a `pick` command, for the first menu its button shows; later menus (MPMB may ask
+ * a follow-up question) go to the player.
+ */
+let menuAnswer: string | null = null;
+let menuPicked = false;
+
+function popUpMenu(items: MenuItem[]): string | null {
+  const answer = menuAnswer;
+  if (answer === null) return ask({ kind: 'menu', items }) as string | null;
+  menuAnswer = null;
+  menuPicked = offers(items, answer);
+  return menuPicked ? answer : null;
+}
+
 const host: Host = {
   alert: (request) => ask({ kind: 'alert', request }) as AlertReply | null,
   dialog: (view, first) => answerItself?.(view) ?? (ask({ kind: 'dialog', view, first }) as DialogReply | null),
-  popUpMenu: (items) => ask({ kind: 'menu', items }) as string | null,
+  popUpMenu,
   // Without shared memory the page never showed the dialog, so there is nothing to close.
   dialogClosed: () => {
     if (channel) post({ type: 'dialogClosed' });
@@ -154,7 +170,19 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
   builder: () => readBuilderInfo(opened().evaluate(BUILDER_INFO_SCRIPT)),
   units: ({ system }) => switchUnits(opened(), system),
   scores: ({ changes }) => answered(answerScores(changes), () => opened().click('Ability Scores Button')),
+  pick: ({ field, answer }) => pick(opened(), field, answer),
 };
+
+function pick(sheet: Engine, field: string, answer: string): boolean {
+  menuAnswer = answer;
+  menuPicked = false;
+  try {
+    sheet.click(field);
+  } finally {
+    menuAnswer = null;
+  }
+  return menuPicked;
+}
 
 /** Runs MPMB's script with the app answering its dialog (the answer gives null for any other pop-up). */
 function answered(answer: (view: DialogView) => DialogReply | null, job: () => void): void {

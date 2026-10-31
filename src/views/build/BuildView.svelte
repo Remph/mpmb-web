@@ -4,7 +4,9 @@
   and for a new character. Every change goes through MPMB's own fields, as in the play view.
 -->
 <script lang="ts">
+  import { setCount } from '../../build/modifiers.ts';
   import type { BuilderInfo } from '../../engine/builder.ts';
+  import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import { ABILITIES, shown, valueOf } from '../../play/read.ts';
   import type { OpenCharacter, Session, Step } from '../../session.svelte.ts';
@@ -15,7 +17,8 @@
   import BackgroundStep from './BackgroundStep.svelte';
   import ClassStep from './ClassStep.svelte';
   import FeatsStep from './FeatsStep.svelte';
-  import InterimStep from './InterimStep.svelte';
+  import ChoicesStep from './ChoicesStep.svelte';
+  import ModifiersStep from './ModifiersStep.svelte';
   import SpeciesStep from './SpeciesStep.svelte';
   import LevelUp from './LevelUp.svelte';
   import { BUILD_STEPS } from './steps.ts';
@@ -41,6 +44,16 @@
   const change = (steps: Step[]) => void session.change(steps);
 
   /**
+   * A pick on the Choices step, with MPMB's choices read again right after: the step shows the new
+   * state even where the pick changed nothing to save (MPMB no longer offered it).
+   */
+  async function pick(field: string, answer: string) {
+    await session.pick(field, answer);
+    const fresh = await session.builderInfo();
+    if (fresh) info = fresh;
+  }
+
+  /**
    * MPMB's class data again after every saved change (a new level brings new features), and once the
    * sheet is open. `updated` changes with each save.
    */
@@ -61,6 +74,8 @@
     }
   });
 
+  const openChoices = $derived(info?.choices.filter((c) => c.open).length ?? 0);
+  const modifiersSet = $derived(setCount(fields));
   const filled = (names: string[]) => names.map((n) => valueOf(fields, n)).filter(Boolean);
   const summaries = $derived<Record<BuildStep, string>>({
     class: info?.known.length
@@ -74,9 +89,15 @@
       ? ABILITIES.map((a) => shown(fields, a) || '–').join(' · ')
       : t.buildNotChosen,
     feats: filled(Array.from({ length: 9 }, (_, i) => `Feat Name ${i + 1}`)).join(', ') || t.buildNone,
-    choices: t.buildChoicesSummary,
-    modifiers: t.buildComingNextShort,
+    choices: !info?.choices.length
+      ? t.buildNone
+      : openChoices
+        ? fill(t.buildChoicesOpen, { n: String(openChoices) })
+        : t.buildChoicesDone,
+    modifiers: modifiersSet ? fill(t.buildModSetCount, { n: String(modifiersSet) }) : t.buildNone,
   });
+  /** Shown as a badge on the step, like the mock-up: what still waits for the player. */
+  const badges = $derived<Partial<Record<BuildStep, number>>>({ choices: openChoices });
   const stepTitles = $derived<Record<BuildStep, string>>({
     class: t.buildClassTitle,
     species: t.buildSpecies,
@@ -108,6 +129,7 @@
           >
             <span class="n">{i + 1}</span>
             <span class="t"><b>{stepTitles[key]}</b><small>{summaries[key]}</small></span>
+            {#if badges[key]}<span class="badge" aria-hidden="true">{badges[key]}</span>{/if}
           </button>
         </li>
       {/each}
@@ -136,8 +158,10 @@
       <AbilitiesStep {info} {disabled} {change} setScores={(changes) => session.setScores(changes)} {t} />
     {:else if step === 'feats'}
       <FeatsStep {info} {fields} {disabled} {change} {t} />
+    {:else if step === 'choices'}
+      <ChoicesStep {info} {disabled} {pick} {t} />
     {:else}
-      <InterimStep step={step === 'modifiers' ? 'modifiers' : 'choices'} {disabled} {change} {t} />
+      <ModifiersStep {fields} {disabled} {change} {t} />
     {/if}
   </div>
 </div>
@@ -202,6 +226,20 @@
     background: var(--accent-soft);
     color: var(--accent);
     font-size: 0.875rem;
+    font-weight: 700;
+  }
+
+  .badge {
+    display: grid;
+    flex: none;
+    place-items: center;
+    min-width: 1.5rem;
+    height: 1.5rem;
+    padding: 0 0.375rem;
+    border-radius: 0.75rem;
+    background: var(--danger);
+    color: var(--surface);
+    font-size: 0.8125rem;
     font-weight: 700;
   }
 

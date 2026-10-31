@@ -106,6 +106,11 @@ export class EngineClient {
     return this.send({ type: 'scores', changes });
   }
 
+  /** Picks an item of the menu that the button shows (see the `pick` command); false when not offered. */
+  async pick(field: string, answer: string): Promise<boolean> {
+    return (await this.send({ type: 'pick', field, answer })).result === true;
+  }
+
   async save(): Promise<CharacterData> {
     return (await this.send({ type: 'save' })).result as CharacterData;
   }

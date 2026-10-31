@@ -2,6 +2,8 @@
 // the player chose) with their subclasses, the classes the character has, and what each next level brings.
 // Read inside the sheet, where MPMB keeps it in globals (ClassList, ClassSubList, classes.known), and
 // handed out as JSON, since objects of the script realm can't leave it as they are.
+import { CHOICES_SCRIPT, choicesOf } from './choices.ts';
+import type { Choice, RawChoices } from './choices.ts';
 import type { DialogReply, DialogView } from './host.ts';
 import { ORIGINS_SCRIPT } from './origins.ts';
 import type { OriginsInfo } from './origins.ts';
@@ -54,6 +56,8 @@ export interface BuilderInfo {
   origins: OriginsInfo;
   /** The ability score columns (scores.ts). */
   scores: ScoresInfo;
+  /** What the class features, species and feats let the player choose, from MPMB's menus (choices.ts). */
+  choices: Choice[];
 }
 
 /**
@@ -107,12 +111,14 @@ export const BUILDER_INFO_SCRIPT = `(function () {
   var info = JSON.parse(${CLASSES_SCRIPT});
   info.origins = JSON.parse(${ORIGINS_SCRIPT});
   info.scores = JSON.parse(${SCORES_SCRIPT});
+  info.choices = JSON.parse(${CHOICES_SCRIPT});
   return JSON.stringify(info);
 })()`;
 
 export function readBuilderInfo(json: unknown): BuilderInfo {
   if (typeof json !== 'string') throw new Error('The sheet gave no builder information');
-  return JSON.parse(json) as BuilderInfo;
+  const info = JSON.parse(json) as Omit<BuilderInfo, 'choices'> & { choices: RawChoices };
+  return { ...info, choices: choicesOf(info.choices) };
 }
 
 /** The name of MPMB's units dialog, which the app answers itself for the sheet menu's units switch. */

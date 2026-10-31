@@ -22,7 +22,13 @@ export type Command =
   /** Switches MPMB's unit system, answering its units dialog in the player's place. */
   | { type: 'units'; system: UnitSystem }
   /** Sets ability score columns through MPMB's Ability Scores dialog, answered in the player's place. */
-  | { type: 'scores'; changes: ScoreChange[] };
+  | { type: 'scores'; changes: ScoreChange[] }
+  /**
+   * Presses a button whose script shows one of MPMB's menus (class features, species, a feat line) and
+   * answers the menu with this item's cReturn, as the player's pick. Returns false (and picks nothing)
+   * when the menu doesn't offer it.
+   */
+  | { type: 'pick'; field: string; answer: string };
 
 /** The page's first message: the shared memory for answers, when the page is cross-origin isolated. */
 export interface Setup {
