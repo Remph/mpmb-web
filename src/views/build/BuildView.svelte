@@ -115,7 +115,15 @@
     {#if !info}
       <p class="loading">{t.opening}</p>
     {:else if step === 'class'}
-      <ClassStep {info} {fields} {disabled} {change} onlevelup={() => (levelUpOpen = true)} {t} />
+      <ClassStep
+        {info}
+        {fields}
+        {disabled}
+        {change}
+        onlevelup={() => (levelUpOpen = true)}
+        confirmRemove={(name, first) => session.confirmRemoveClass(name, first)}
+        {t}
+      />
     {:else}
       <InterimStep {step} {fields} {disabled} {change} {t} />
     {/if}

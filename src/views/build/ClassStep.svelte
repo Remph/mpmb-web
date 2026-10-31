@@ -31,10 +31,12 @@
     disabled: boolean;
     change: (steps: Step[]) => void;
     onlevelup: () => void;
+    /** Asks the player before a class is removed (true: remove it). */
+    confirmRemove: (name: string, first: boolean) => Promise<boolean>;
     t: Texts;
   }
 
-  let { info, fields, disabled, change, onlevelup, t }: Props = $props();
+  let { info, fields, disabled, change, onlevelup, confirmRemove, t }: Props = $props();
 
   /** Rows written but not yet read back from MPMB: shown meanwhile, so quick taps count from them. */
   let pending: ClassRow[] | null = $state(null);
@@ -57,6 +59,14 @@
   function write(next: ClassRow[]) {
     pending = next;
     change([{ edit: 'Class and Levels', text: classFieldText(next, info.classes) }]);
+  }
+
+  async function remove(index: number) {
+    const row = rows[index];
+    if (!row || !(await confirmRemove(classInfo(row.key)?.name ?? row.key, index === 0 && rows.length > 1))) return;
+    // The rows may have changed while the question was open: remove the class by its key.
+    const now = rows.findIndex((r) => r.key === row.key);
+    if (now >= 0) write(removeClass(rows, now));
   }
 
   function prereqNote(key: string): string {
@@ -185,7 +195,7 @@
         aria-label={fill(t.buildRemoveClass, { name: classInfo(row.key)?.name ?? row.key })}
         title={fill(t.buildRemoveClass, { name: classInfo(row.key)?.name ?? row.key })}
         {disabled}
-        onclick={() => write(removeClass(rows, i))}>✕</button
+        onclick={() => remove(i)}>✕</button
       >
       {#if note(row, i)}<p class="note">{note(row, i)}</p>{/if}
     </div>
