@@ -108,6 +108,10 @@ export const ui = {
     openFileLater:
       'Skriptdateien vom Computer öffnen kann die App noch nicht. Bis dahin: die Datei in einem Texteditor öffnen, den ganzen Text kopieren und über Bogenmenü → Zusatzskripte → „Add material manually (copy-paste)“ einfügen.',
     pastedScript: 'Eingefügtes Skript',
+    linkTitle: 'Link öffnen?',
+    linkMessage:
+      'Der Bogen will eine Seite außerhalb von MPMBs Websites öffnen. Öffne sie nur, wenn du die Adresse kennst:',
+    openLink: 'Öffnen',
     notIsolated:
       'Dieser Browser lässt die Seite nicht auf Antworten warten: Fragen von MPMBs Skripten werden nur angezeigt und mit „Abbrechen“ beantwortet.',
     notFound: 'Diesen Charakter gibt es in diesem Browser nicht (mehr).',
@@ -611,6 +615,9 @@ export const ui = {
     openFileLater:
       'The app can’t open script files from your computer yet. Until then: open the file in a text editor, copy all of its text and paste it in through Sheet menu → Add-on scripts → “Add material manually (copy-paste)”.',
     pastedScript: 'Pasted script',
+    linkTitle: 'Open this link?',
+    linkMessage: 'The sheet wants to open a page outside MPMB’s websites. Only open it if you know the address:',
+    openLink: 'Open',
     notIsolated:
       'This browser doesn’t let the page wait for answers: questions from MPMB’s scripts are only shown and answered with “Cancel”.',
     notFound: 'This character is not (or no longer) in this browser.',

@@ -23,6 +23,7 @@ import { waitForAnswer } from './channel.ts';
 import type { Channel } from './channel.ts';
 import type { Answer, Ask, Command, FailureCode, FromWorker, MenuNode, Opened, ToWorker } from './protocol.ts';
 import { changedViews, viewsOf } from './views.ts';
+import { lockDown } from './lockdown.ts';
 import type { FieldViews } from './views.ts';
 
 // The worker's global scope, typed by hand: the app's TypeScript setup has the DOM types, not the
@@ -32,6 +33,10 @@ const scope = globalThis as unknown as {
   onmessage: ((event: MessageEvent<ToWorker>) => void) | null;
 };
 const post = (message: FromWorker): void => scope.postMessage(message);
+
+// Before any sheet script can run (see lockdown.ts). The imports above have loaded the engine already.
+const stillReachable = lockDown(globalThis);
+if (stillReachable.length) console.warn(`The engine worker could not remove: ${stillReachable.join(', ')}`);
 
 let channel: Channel | null = null;
 let engine: Engine | null = null;

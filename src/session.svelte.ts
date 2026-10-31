@@ -104,6 +104,12 @@ export class Session {
     this.client.onMenu = (menu) => {
       if (this.current) this.current.menu = menu;
     };
+    this.popUps.linkQuestion = () => ({
+      title: this.t.linkTitle,
+      message: this.t.linkMessage,
+      open: this.t.openLink,
+      cancel: this.t.cancel,
+    });
     // Shown over MPMB's dialog, which stays open: the player closes the note and carries on there.
     this.client.onUnavailable = () => {
       void this.popUps.choose({
