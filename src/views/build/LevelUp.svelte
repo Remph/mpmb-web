@@ -4,7 +4,15 @@
   features, spell slots) as when the player types a higher level into the PDF.
 -->
 <script lang="ts">
-  import { addClass, classFieldText, meetsPrereqs, rowsOf, setLevel, totalLevel } from '../../build/classes.ts';
+  import {
+    addClass,
+    classFieldText,
+    meetsPrereqs,
+    rowsOf,
+    setLevel,
+    totalLevel,
+    MAX_LEVEL,
+  } from '../../build/classes.ts';
   import type { BuilderInfo } from '../../engine/builder.ts';
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
@@ -34,10 +42,13 @@
   });
 
   const name = (key: string) => info.classes.filter((c) => c.key === key)[0]?.name ?? key;
-  const brings = (features: string[]) =>
-    features.length ? fill(t.levelUpNew, { features: features.join(', ') }) : t.levelUpNothingNew;
+  const brings = (features: string[], feat = false) => {
+    const all = feat ? [...features, t.levelUpFeat] : features;
+    return all.length ? fill(t.levelUpNew, { features: all.join(', ') }) : t.levelUpNothingNew;
+  };
 
   function levelUp() {
+    if (next > MAX_LEVEL) return onclose();
     const index = rows.findIndex((r) => r.key === choice);
     const updated = choice.startsWith('new:')
       ? addClass(rows, choice.slice('new:'.length))
@@ -55,7 +66,7 @@
         <input type="radio" name="level-up" value={known.key} bind:group={choice} />
         <span>
           <b>{name(known.key)} {known.level + 1}</b>
-          <small>{brings(known.nextFeatures)}</small>
+          <small>{brings(known.nextFeatures, known.nextFeat)}</small>
         </span>
       </label>
     {/each}

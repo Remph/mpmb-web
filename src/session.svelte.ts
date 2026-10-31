@@ -440,6 +440,24 @@ export class Session {
     await this.refresh();
   }
 
+  /**
+   * Asks before the Build screen removes a class: MPMB takes its features away at once, and adding the
+   * class again doesn't bring back the choices made for it (nor its place as the first class).
+   */
+  async confirmRemoveClass(name: string, first: boolean): Promise<boolean> {
+    const answer = await this.popUps.choose({
+      title: fill(this.t.buildRemoveTitle, { name }),
+      message: this.t.buildRemoveConfirm,
+      lines: first ? [this.t.buildRemoveFirst] : [],
+      buttons: [
+        { value: 'cancel', label: this.t.cancel },
+        { value: 'remove', label: this.t.buildRemove, danger: true },
+      ],
+      cancel: 'cancel',
+    });
+    return answer === 'remove';
+  }
+
   /** Downloads a backup of these characters (all when no ids are given). */
   async backUp(ids?: string[]): Promise<void> {
     if (!this.store) return;

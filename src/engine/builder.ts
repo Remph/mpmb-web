@@ -37,6 +37,11 @@ export interface KnownClass {
   subclass: string;
   /** The features its next level brings (class and subclass), by name. */
   nextFeatures: string[];
+  /**
+   * Whether its next level brings a feat (Ability Score Improvement, Epic Boon). MPMB keeps these out of
+   * the features, in the class's `improvements` count per level.
+   */
+  nextFeat: boolean;
 }
 
 export interface BuilderInfo {
@@ -86,9 +91,11 @@ const CLASSES_SCRIPT = `(function () {
   for (var j = 0; j < order.length; j++) {
     var kn = classes.known[order[j]];
     var next = kn.level + 1;
+    var imp = (ClassList[order[j]] && ClassList[order[j]].improvements) || [];
     out.known.push({
       key: order[j], level: kn.level, subclass: kn.subclass || '',
-      nextFeatures: featuresAt(ClassList[order[j]], next).concat(kn.subclass ? featuresAt(ClassSubList[kn.subclass], next) : [])
+      nextFeatures: featuresAt(ClassList[order[j]], next).concat(kn.subclass ? featuresAt(ClassSubList[kn.subclass], next) : []),
+      nextFeat: next <= imp.length && Number(imp[next - 1]) > Number(imp[next - 2] || 0)
     });
   }
   for (var x = 0; x < ExperiencePointsList.length; x++) out.xpTable.push(Number(ExperiencePointsList[x]) || 0);

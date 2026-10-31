@@ -73,3 +73,16 @@ describe('the sheet menu’s units switch', () => {
     expect(scripted.asked.map((a) => a.what)).not.toContain('SET UNIT SYSTEM AND DECIMAL SEPARATOR');
   });
 });
+
+describe('what the next level brings', () => {
+  test('a fighter gets a feat at levels 4, 6, 8, 12, 14, 16 and 19 (MPMB’s improvements), not otherwise', () => {
+    const engine = openSheet();
+    const feats: number[] = [];
+    for (let level = 1; level < 20; level++) {
+      engine.edit('Class and Levels', `Fighter ${level}`);
+      const info = readBuilderInfo(engine.evaluate(BUILDER_INFO_SCRIPT));
+      if (info.known[0]?.nextFeat) feats.push(level + 1);
+    }
+    expect(feats).toEqual([4, 6, 8, 12, 14, 16, 19]);
+  });
+});

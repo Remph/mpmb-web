@@ -5,6 +5,7 @@
   else. Opened from the top bar of the play view and the Build screen.
 -->
 <script lang="ts">
+  import { MAX_LEVEL } from '../../build/classes.ts';
   import type { UnitSystem } from '../../engine/builder.ts';
   import { counted, fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
@@ -86,8 +87,10 @@
     <button type="button" class="tile main" onclick={() => build(false)}>
       <b>{t.menuBuild}</b><small>{t.menuBuildLine}</small>
     </button>
-    <button type="button" class="tile" disabled={busy || level === 0} onclick={() => build(true)}>
-      <b>{t.levelUp}</b><small>{level ? fill(t.menuLevelNow, { level }) : t.menuLevelNone}</small>
+    <button type="button" class="tile" disabled={busy || level === 0 || level >= MAX_LEVEL} onclick={() => build(true)}>
+      <b>{t.levelUp}</b><small
+        >{level >= MAX_LEVEL ? t.menuLevelMax : level ? fill(t.menuLevelNow, { level }) : t.menuLevelNone}</small
+      >
     </button>
     <button type="button" class="tile" disabled={busy} onclick={() => run([MENU_ROOT, 'Add Extra Materials'])}>
       <b>{t.addOnsTitle}</b>
