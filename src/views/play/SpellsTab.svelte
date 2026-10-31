@@ -79,15 +79,24 @@
     const key = TIMES[spell.time];
     return key ? String(t[key]) : spell.time;
   };
-  /** MPMB writes "S:9-m rad" for an area around the caster. */
-  const range = (spell: Spell): string => spell.range.replace(/^S:\s*/, `${t.spellSelf}, `);
+  /**
+   * MPMB writes "S:9-m rad" for an area around the caster. Its most common words get translated too, so
+   * the line doesn't read "Aktion · Touch · Instantaneous"; rarer ones ("Till dispelled") stay as MPMB has them.
+   */
+  const WORDS: Record<string, keyof Texts> = { Self: 'spellSelf', Touch: 'spellTouch', Instantaneous: 'spellInstant' };
+  const word = (text: string): string => {
+    const key = WORDS[text];
+    return key ? String(t[key]) : text;
+  };
+  const range = (spell: Spell): string => word(spell.range).replace(/^S:\s*/, `${t.spellSelf}, `);
+  const duration = (spell: Spell): string => word(spell.duration);
   const save = (spell: Spell): string => {
     if (!spell.save) return '';
     const ability = ABILITIES.find((a) => a === spell.save);
     return fill(t.spellSave, { ability: ability ? t[`short${ability}`] : spell.save });
   };
   const meta = (spell: Spell): string =>
-    [time(spell), range(spell), save(spell), spell.duration].filter(Boolean).join(' · ');
+    [time(spell), range(spell), save(spell), duration(spell)].filter(Boolean).join(' · ');
 
   const markLabel = (spell: Spell): string => {
     const name = spell.fullName;
@@ -271,7 +280,7 @@
           {shown.components.replaceAll(',', ', ')}{#if shown.material}{' '}({shown.material}){/if}
         </dd>{/if}
       {#if shown.duration}<dt>{t.spellDuration}</dt>
-        <dd>{shown.concentration ? `${t.concentration}, ` : ''}{shown.duration}</dd>{/if}
+        <dd>{shown.concentration ? `${t.concentration}, ` : ''}{duration(shown)}</dd>{/if}
       {#if shown.save}<dt>{t.savingThrow}</dt>
         <dd>{save(shown)}</dd>{/if}
       {#if shown.bookPage}<dt>{t.spellSource}</dt>
