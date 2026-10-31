@@ -260,7 +260,8 @@
   .tabs button {
     position: relative;
     flex: none;
-    border: 0;
+    /* No visible edge: the tab's text may come close to the button's side. */
+    border: 0 solid transparent;
     border-radius: 0.5rem 0.5rem 0 0;
     background: none;
     color: var(--ink-muted);
@@ -272,10 +273,15 @@
   }
 
   /*
-   * Seven tabs (with Spells) in the middle column of a 768 px iPad, 444 px: less padding and a slightly
-   * smaller size keep the last one whole, also in German (measured: about 425 px).
+   * Seven tabs (with Spells) in the middle column of a 768 px iPad (444 px), six in the three-column
+   * layout of a 1180 px iPad (464 px): less padding and a slightly smaller size keep the last one whole,
+   * also in German (measured: about 425 px). The column's width decides, so a container query.
    */
-  @media (max-width: 860px) {
+  .middle {
+    container-type: inline-size;
+  }
+
+  @container (max-width: 560px) {
     .tabs {
       gap: 0;
     }
