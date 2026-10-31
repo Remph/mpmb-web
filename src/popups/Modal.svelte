@@ -93,9 +93,13 @@
   /*
    * MPMB's dialogs are laid out for Acrobat's wide windows; take what the screen offers. Source
    * Selection with its list of excluded elements needs about 1400 px to keep its lists readable.
+   * Dialogs whose elements keep MPMB's narrower widths (Spell and Class Selection) get only as wide
+   * as their content, so they don't show an empty band on the right.
    */
   dialog.widest {
-    width: min(96rem, calc(100vw - 2rem));
+    width: fit-content;
+    min-width: min(56rem, calc(100vw - 2rem));
+    max-width: min(96rem, calc(100vw - 2rem));
   }
 
   dialog::backdrop {
