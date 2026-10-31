@@ -4,6 +4,8 @@
 import type { FieldViews } from '../worker/views.ts';
 import { isOn, readConditions, readHitPoints, readLimitedFeatures, readSpellSlotUse, recoveryKind } from './read.ts';
 import type { HitPoints } from './read.ts';
+import { checkboxField, readSpells } from './spells.ts';
+import type { Spell } from './spells.ts';
 
 export interface HpChange {
   current: number;
@@ -43,8 +45,8 @@ export const tickedDeathSaves = (fields: FieldViews): string[] => DEATH_SAVES.fi
 
 /**
  * A long rest (SRD 5.2.1): all hit points and spent hit dice back, temporary hit points gone, one level
- * of exhaustion less, death saves cleared, all spell slots, and every feature that recovers on a short or
- * long rest.
+ * of exhaustion less, death saves cleared, all spell slots, every feature that recovers on a short or
+ * long rest, and the spells cast once for free (MPMB's once-per-rest boxes; "dawn" counts as a long rest).
  */
 export function longRest(fields: FieldViews): RestEdits {
   const values: Record<string, string> = { 'HP Current': '', 'HP Temp': '' };
@@ -56,12 +58,30 @@ export function longRest(fields: FieldViews): RestEdits {
   const { exhaustion } = readConditions(fields);
   if (exhaustion > 0) values['Condition.Exhaustion'] = exhaustion > 1 ? String(exhaustion - 1) : '';
   const slotBoxes = readSpellSlotUse(fields).flatMap((slots) => slots.boxes);
-  return { values, untick: [...tickedDeathSaves(fields), ...slotBoxes.filter((name) => isOn(fields, name))] };
+  return {
+    values,
+    untick: [
+      ...tickedDeathSaves(fields),
+      ...slotBoxes.filter((name) => isOn(fields, name)),
+      ...usedFreeCasts(fields, ['long', 'short', 'day']),
+    ],
+  };
 }
 
 /**
- * A short rest: features that recover on a short rest come back, and those MPMB marks "regain 1/SR"
- * get that many back. Spending hit dice is the player's choice, so it stays a tap on the dice.
+ * The spells whose free cast is used and comes back on this rest, as the check boxes to click: MPMB's own
+ * click turns "oncelr_used" back into "oncelr". The same spell can be on the sheet twice (two pages).
+ */
+function usedFreeCasts(fields: FieldViews, kinds: NonNullable<Spell['mark']['free']>[]): string[] {
+  const spells = readSpells(fields).flatMap((source) => source.levels.flatMap((level) => level.spells));
+  return spells
+    .filter((spell) => spell.mark.freeUsed && spell.mark.free !== null && kinds.includes(spell.mark.free))
+    .map(checkboxField);
+}
+
+/**
+ * A short rest: features and free spell casts that recover on a short rest come back, and features MPMB
+ * marks "regain 1/SR" get that many back. Spending hit dice is the player's choice, so it stays a tap on the dice.
  */
 export function shortRest(fields: FieldViews): RestEdits {
   const values: Record<string, string> = {};
@@ -72,7 +92,7 @@ export function shortRest(fields: FieldViews): RestEdits {
       if (recoveryKind(f.recovery) === 'short') values[`Limited Feature Used ${f.row}`] = '';
       else if (partial) values[`Limited Feature Used ${f.row}`] = usedText(f.used - Number(partial[1]));
     });
-  return { values, untick: [] };
+  return { values, untick: usedFreeCasts(fields, ['short']) };
 }
 
 /** MPMB leaves "used" empty rather than 0. */
