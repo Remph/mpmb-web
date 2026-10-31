@@ -15,6 +15,7 @@ import { diffCharacter } from '../engine/sheet-data.ts';
 import { blankSheet, characterSheet } from '../engine/sheet.ts';
 import { allowTimer } from '../engine/startup.ts';
 import type { Bookmark, SheetSnapshot } from '../engine/types.ts';
+import { answerScores } from '../engine/scores.ts';
 import { readSheetPdf } from '../pdf/read-sheet.ts';
 import { waitForAnswer } from './channel.ts';
 import type { Channel } from './channel.ts';
@@ -152,16 +153,22 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
   save: () => diffCharacter(blankSheet(), opened().snapshot()),
   builder: () => readBuilderInfo(opened().evaluate(BUILDER_INFO_SCRIPT)),
   units: ({ system }) => switchUnits(opened(), system),
+  scores: ({ changes }) => answered(answerScores(changes), () => opened().click('Ability Scores Button')),
 };
 
-/** MPMB's own units bookmark, with its dialog answered: imperial or metric, decimal separator unchanged. */
-function switchUnits(sheet: Engine, system: UnitSystem): void {
-  answerItself = answerUnits(system);
+/** Runs MPMB's script with the app answering its dialog (the answer gives null for any other pop-up). */
+function answered(answer: (view: DialogView) => DialogReply | null, job: () => void): void {
+  answerItself = answer;
   try {
-    sheet.clickBookmark(['Functions', 'Unit System']);
+    job();
   } finally {
     answerItself = null;
   }
+}
+
+/** MPMB's own units bookmark, with its dialog answered: imperial or metric, decimal separator unchanged. */
+function switchUnits(sheet: Engine, system: UnitSystem): void {
+  answered(answerUnits(system), () => sheet.clickBookmark(['Functions', 'Unit System']));
 }
 
 async function run(id: number, command: Command): Promise<void> {

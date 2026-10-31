@@ -3,6 +3,7 @@
 import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem } from '../engine/host.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
 import type { BuilderInfo, UnitSystem } from '../engine/builder.ts';
+import type { ScoreChange } from '../engine/scores.ts';
 import { canWait, createChannel, sendAnswer } from './channel.ts';
 import type { Channel } from './channel.ts';
 import type { Answer, Ask, Command, FailureCode, FromWorker, MenuNode, Opened, Summary, ToWorker } from './protocol.ts';
@@ -99,6 +100,10 @@ export class EngineClient {
 
   units(system: UnitSystem): Promise<Done> {
     return this.send({ type: 'units', system });
+  }
+
+  scores(changes: ScoreChange[]): Promise<Done> {
+    return this.send({ type: 'scores', changes });
   }
 
   async save(): Promise<CharacterData> {

@@ -3,6 +3,7 @@
 // EngineClient, and its pop-ups go to the PopUpStack.
 import type { AddOns } from './engine/add-ons.ts';
 import type { BuilderInfo, UnitSystem } from './engine/builder.ts';
+import type { ScoreChange } from './engine/scores.ts';
 import type { CharacterData } from './engine/sheet-data.ts';
 import { SHEET_ID } from './engine/sheet-id.ts';
 import { FF } from './engine/types.ts';
@@ -295,6 +296,28 @@ export class Session {
   /** Imperial or metric, through MPMB's own units bookmark (the app answers its dialog). */
   setUnits(system: UnitSystem): Promise<void> {
     return this.work(() => this.client.units(system));
+  }
+
+  /**
+   * New ability score columns, through MPMB's own Ability Scores dialog (the app answers it). In line
+   * after the changes before it, like a play view change, so that quick taps on the Build screen all count.
+   */
+  setScores(changes: ScoreChange[]): Promise<void> {
+    const open = this.current;
+    if (!open || open.status === 'opening' || open.status === 'error' || changes.length === 0) return this.running;
+    this.running = this.running
+      .then(async () => {
+        if (this.current !== open) return;
+        open.status = 'working';
+        await this.client.scores(changes);
+        open.fields = this.shownFields();
+        await this.saveOpen();
+      })
+      .catch((err: unknown) => {
+        open.status = 'error';
+        this.note('error', this.explain(err));
+      });
+    return this.running;
   }
 
   /**

@@ -3,6 +3,10 @@
 // Read inside the sheet, where MPMB keeps it in globals (ClassList, ClassSubList, classes.known), and
 // handed out as JSON, since objects of the script realm can't leave it as they are.
 import type { DialogReply, DialogView } from './host.ts';
+import { ORIGINS_SCRIPT } from './origins.ts';
+import type { OriginsInfo } from './origins.ts';
+import { SCORES_SCRIPT } from './scores.ts';
+import type { ScoresInfo } from './scores.ts';
 
 export interface SubclassInfo {
   /** MPMB's key in ClassSubList, e.g. "paladin-devotion". */
@@ -41,14 +45,18 @@ export interface BuilderInfo {
   known: KnownClass[];
   /** The experience points each level starts at; index 1 is level 2. */
   xpTable: number[];
+  /** Species, backgrounds and feats (origins.ts). */
+  origins: OriginsInfo;
+  /** The ability score columns (scores.ts). */
+  scores: ScoresInfo;
 }
 
 /**
- * Runs in the sheet and returns BuilderInfo as JSON. ES5 only: it runs next to MPMB's own scripts, in the
+ * Runs in the sheet and returns the classes part of BuilderInfo as JSON. ES5 only: it runs next to MPMB's own scripts, in the
  * same dialect. `testSource` is MPMB's check against the player's source choices ("classExcl" holds the
  * classes and subclasses switched off in the Source Material dialog).
  */
-export const BUILDER_INFO_SCRIPT = `(function () {
+const CLASSES_SCRIPT = `(function () {
   var source = function (obj) { return stringSource(obj, 'first,abbr') || ''; };
   var featuresAt = function (obj, level) {
     var names = [];
@@ -85,6 +93,14 @@ export const BUILDER_INFO_SCRIPT = `(function () {
   }
   for (var x = 0; x < ExperiencePointsList.length; x++) out.xpTable.push(Number(ExperiencePointsList[x]) || 0);
   return JSON.stringify(out);
+})()`;
+
+/** The three readings in one, so the Build screen gets them from one moment of the sheet. */
+export const BUILDER_INFO_SCRIPT = `(function () {
+  var info = JSON.parse(${CLASSES_SCRIPT});
+  info.origins = JSON.parse(${ORIGINS_SCRIPT});
+  info.scores = JSON.parse(${SCORES_SCRIPT});
+  return JSON.stringify(info);
 })()`;
 
 export function readBuilderInfo(json: unknown): BuilderInfo {
