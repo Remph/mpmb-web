@@ -130,7 +130,11 @@
         {titleOf(selected)} <small>· {selected.owner || t.buildChoiceBonus} · {howMany(selected)}</small>
       </h3>
       {#if selected.many}
-        <p class="count" class:open={selected.open}>{statusOf(selected)}</p>
+        <p class="count" class:open={selected.open}>
+          {selected.chosen.length
+            ? fill(t.buildChosenList, { count: statusOf(selected), names: selected.chosen.join(', ') })
+            : statusOf(selected)}
+        </p>
       {/if}
       {#if optionCount >= SEARCH_FROM}
         <input

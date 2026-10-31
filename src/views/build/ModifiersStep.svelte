@@ -93,6 +93,8 @@
   <div class="tiles">
     <div class="tile">
       <h3>{t.buildModArmorInitiative}</h3>
+      <!-- MPMB fills these extras itself too (Defense Fighting Style), with the name next to it. -->
+      {#if shown(fields, 'AC')}<p class="total">{fill(t.buildModArmorNow, { value: shown(fields, 'AC') })}</p>{/if}
       {#each ARMOR_CLASS as modifier, i (modifier.field)}
         {@render row(modifier, fill(t.buildModArmorExtra, { n: String(i + 1) }))}
       {/each}
@@ -182,15 +184,23 @@
 
   .row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 6.5rem;
+    grid-template-columns: minmax(0, 1fr) 8rem;
     gap: 0.375rem 0.75rem;
     align-items: center;
     padding: 0.5rem 0;
     border-top: 1px solid var(--line);
   }
 
-  h3 + .row {
+  h3 + .row,
+  .total + .row {
     border-top: 0;
+  }
+
+  .total {
+    margin: 0;
+    color: var(--accent);
+    font-size: 0.875rem;
+    font-weight: 600;
   }
 
   .what {
@@ -252,7 +262,13 @@
     cursor: pointer;
   }
 
+  summary span {
+    flex: 1;
+    min-width: 0;
+  }
+
   summary small {
+    flex: none;
     color: var(--ink-muted);
     font-size: 0.8125rem;
   }

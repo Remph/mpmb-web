@@ -18,8 +18,9 @@ export interface Modifier {
 const mod = (field: string, result: string, name = ''): Modifier => ({ field, result, name });
 
 export const ARMOR_CLASS = [
-  mod('AC Misc Mod 1', 'AC', 'AC Misc Mod 1 Description'),
-  mod('AC Misc Mod 2', 'AC', 'AC Misc Mod 2 Description'),
+  // Both add to the armor class, which the page shows once for the two.
+  mod('AC Misc Mod 1', '', 'AC Misc Mod 1 Description'),
+  mod('AC Misc Mod 2', '', 'AC Misc Mod 2 Description'),
 ];
 export const INITIATIVE = mod('Init Bonus', 'Initiative bonus');
 export const ALL_SAVES = mod('All ST Bonus', '');
