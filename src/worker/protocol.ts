@@ -1,6 +1,7 @@
 // Messages between the page and the engine worker.
 import type { AddOns } from '../engine/add-ons.ts';
 import type { UnitSystem } from '../engine/builder.ts';
+import type { ScoreChange } from '../engine/scores.ts';
 import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem } from '../engine/host.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
 import type { FieldViews } from './views.ts';
@@ -19,7 +20,9 @@ export type Command =
   /** What the Build screen offers and shows (BuilderInfo), read from MPMB's data. */
   | { type: 'builder' }
   /** Switches MPMB's unit system, answering its units dialog in the player's place. */
-  | { type: 'units'; system: UnitSystem };
+  | { type: 'units'; system: UnitSystem }
+  /** Sets ability score columns through MPMB's Ability Scores dialog, answered in the player's place. */
+  | { type: 'scores'; changes: ScoreChange[] };
 
 /** The page's first message: the shared memory for answers, when the page is cross-origin isolated. */
 export interface Setup {

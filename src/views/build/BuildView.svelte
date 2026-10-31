@@ -11,8 +11,12 @@
   import Notes from '../Notes.svelte';
   import SheetMenu from '../play/SheetMenu.svelte';
   import TopBar from '../TopBar.svelte';
+  import AbilitiesStep from './AbilitiesStep.svelte';
+  import BackgroundStep from './BackgroundStep.svelte';
   import ClassStep from './ClassStep.svelte';
+  import FeatsStep from './FeatsStep.svelte';
   import InterimStep from './InterimStep.svelte';
+  import SpeciesStep from './SpeciesStep.svelte';
   import LevelUp from './LevelUp.svelte';
   import { BUILD_STEPS } from './steps.ts';
   import type { BuildStep } from './steps.ts';
@@ -124,8 +128,16 @@
         confirmRemove={(name, first) => session.confirmRemoveClass(name, first)}
         {t}
       />
+    {:else if step === 'species'}
+      <SpeciesStep {info} {disabled} {change} {t} />
+    {:else if step === 'background'}
+      <BackgroundStep {info} {disabled} {change} {t} />
+    {:else if step === 'abilities'}
+      <AbilitiesStep {info} {disabled} {change} setScores={(changes) => session.setScores(changes)} {t} />
+    {:else if step === 'feats'}
+      <FeatsStep {info} {fields} {disabled} {change} {t} />
     {:else}
-      <InterimStep {step} {fields} {disabled} {change} {t} />
+      <InterimStep step={step === 'modifiers' ? 'modifiers' : 'choices'} {disabled} {change} {t} />
     {/if}
   </div>
 </div>
