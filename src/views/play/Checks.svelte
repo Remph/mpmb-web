@@ -1,14 +1,16 @@
 <!--
   Abilities, saving throws and skills: on screen all the time on a laptop (the right column), a tab of
   its own on the iPad in portrait. A dot marks proficiency, a ring around it expertise. Tapping a skill
-  marks it with advantage or disadvantage (the owner chose this, 2026-10-31).
+  marks it with advantage or disadvantage (the owner chose this, 2026-10-31); a saving throw the same
+  way (M6.5 fix round).
 -->
 <script lang="ts">
   import { tick } from 'svelte';
+  import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import Modal from '../../popups/Modal.svelte';
   import { readAbilities, readSkills, readTool } from '../../play/read.ts';
-  import type { Advantage, Skill, SkillKey } from '../../play/read.ts';
+  import type { AbilityKey, Advantage, SkillKey } from '../../play/read.ts';
   import type { Step } from '../../session.svelte.ts';
   import type { FieldViews } from '../../worker/views.ts';
 
@@ -36,14 +38,14 @@
   const edges = $derived([...abilities, ...skills].map(edge).filter((e): e is 'adv' | 'dis' => e !== ''));
   const legend = $derived((['adv', 'dis'] as const).filter((e) => edges.includes(e)));
 
-  /** The skill whose pop-up is open. */
-  let marking: SkillKey | null = $state(null);
+  /** The skill or saving throw whose pop-up is open. */
+  let marking: { kind: 'skill'; key: SkillKey } | { kind: 'save'; key: AbilityKey } | null = $state(null);
   /** The row that opened it: focus goes back there, or a keyboard user would start again at the top. */
   let opener: HTMLButtonElement | null = null;
 
-  function open(skill: SkillKey, row: HTMLButtonElement) {
+  function open(what: NonNullable<typeof marking>, row: HTMLButtonElement) {
     opener = row;
-    marking = skill;
+    marking = what;
   }
 
   /** Focus can only move once the pop-up is gone: while it is open, the page behind it is inert. */
@@ -53,7 +55,25 @@
     opener?.focus();
     opener = null;
   }
-  const marked = $derived(skills.filter((s) => s.key === marking)[0]);
+  /**
+   * What the pop-up marks: its title, the roll, its state and the prefix of MPMB's boxes ("Ste" for
+   * "Ste Adv", "Str ST" for "Str ST Adv").
+   */
+  const marked = $derived.by(() => {
+    const at = marking;
+    if (at?.kind === 'skill') {
+      const s = skills.filter((x) => x.key === at.key)[0];
+      if (!s) return null;
+      return { title: t[`skill${s.key}`], roll: `${t[`short${s.ability}`]} ${s.bonus}`, state: s, boxes: s.key };
+    }
+    if (at?.kind === 'save') {
+      const a = abilities.filter((x) => x.key === at.key)[0];
+      if (!a) return null;
+      const title = fill(t.saveTitle, { ability: t[`ability${a.key}`] });
+      return { title, roll: `${t.save} ${a.save}`, state: a as Advantage, boxes: `${a.key} ST` };
+    }
+    return null;
+  });
   type Mark = '' | 'adv' | 'dis';
   const CHOICES: [Mark, 'rollNormal' | 'rollAdvantage' | 'rollDisadvantage'][] = [
     ['', 'rollNormal'],
@@ -62,16 +82,16 @@
   ];
 
   /**
-   * The PDF's own check boxes ("Ste Adv", "Ste Dis") hold the mark, so it stays in the sheet and in a
-   * printed PDF. Ticking one makes MPMB untick the other (SetDisAdv); Normal unticks what is ticked.
-   * The armour's disadvantage on Stealth is one of these boxes too, set by MPMB.
+   * The PDF's own check boxes ("Ste Adv", "Ste Dis", "Str ST Adv") hold the mark, so it stays in the
+   * sheet and in a printed PDF. Ticking one makes MPMB untick the other (SetDisAdv); Normal unticks what
+   * is ticked. The armour's disadvantage on Stealth is one of these boxes too, set by MPMB.
    */
-  function mark(skill: Skill, to: Mark) {
+  function mark(state: Advantage, boxes: string, to: Mark) {
     const steps: Step[] = [];
-    if (to === 'adv' && !skill.advantage) steps.push({ click: `${skill.key} Adv` });
-    if (to === 'dis' && !skill.disadvantage) steps.push({ click: `${skill.key} Dis` });
-    if (to === '' && skill.advantage) steps.push({ click: `${skill.key} Adv` });
-    if (to === '' && skill.disadvantage) steps.push({ click: `${skill.key} Dis` });
+    if (to === 'adv' && !state.advantage) steps.push({ click: `${boxes} Adv` });
+    if (to === 'dis' && !state.disadvantage) steps.push({ click: `${boxes} Dis` });
+    if (to === '' && state.advantage) steps.push({ click: `${boxes} Adv` });
+    if (to === '' && state.disadvantage) steps.push({ click: `${boxes} Dis` });
     if (steps.length) change(steps);
     void close();
   }
@@ -99,9 +119,17 @@
           <td class="score">{a.score}</td>
           <td class="num">{a.modifier}</td>
           <td class="num">
-            <span class="prof" class:no={!a.saveProficient} title={a.saveProficient ? t.proficient : undefined}
-            ></span>{a.save}
-            {#if e}<span class="edge {e}" aria-label={label(e)}>{ARROW[e]}</span>{/if}
+            <button
+              type="button"
+              class="save"
+              aria-haspopup="dialog"
+              aria-label={fill(t.saveTitle, { ability: t[`ability${a.key}`] })}
+              onclick={(ev) => open({ kind: 'save', key: a.key }, ev.currentTarget)}
+            >
+              <span class="prof" class:no={!a.saveProficient} title={a.saveProficient ? t.proficient : undefined}
+              ></span>{a.save}
+              {#if e}<span class="edge {e}" aria-label={label(e)}>{ARROW[e]}</span>{/if}
+            </button>
           </td>
         </tr>
       {/each}
@@ -118,7 +146,12 @@
     {#each skills as s (s.key)}
       {@const e = edge(s)}
       <li>
-        <button type="button" class="skill" aria-haspopup="dialog" onclick={(ev) => open(s.key, ev.currentTarget)}>
+        <button
+          type="button"
+          class="skill"
+          aria-haspopup="dialog"
+          onclick={(ev) => open({ kind: 'skill', key: s.key }, ev.currentTarget)}
+        >
           <span>
             <span class="prof" class:no={!s.proficient} class:exp={s.expertise}></span>{t[`skill${s.key}`]}
             <span class="ability">{t[`short${s.ability}`]}</span>
@@ -132,9 +165,9 @@
 </section>
 
 {#if marked}
-  {@const current = edge(marked)}
-  <Modal title={t[`skill${marked.key}`]} onescape={close} closeLabel={t.close}>
-    <p class="roll">{t[`short${marked.ability}`]} {marked.bonus}</p>
+  {@const current = edge(marked.state)}
+  <Modal title={marked.title} onescape={close} closeLabel={t.close}>
+    <p class="roll">{marked.roll}</p>
     <div class="choices">
       {#each CHOICES as [to, text] (to)}
         <button
@@ -142,7 +175,7 @@
           class="choice {to}"
           aria-pressed={current === to}
           {disabled}
-          onclick={() => mark(marked, to)}
+          onclick={() => mark(marked.state, marked.boxes, to)}
           >{#if to}<span aria-hidden="true">{ARROW[to]}</span>{/if}
           {t[text]}</button
         >
@@ -266,6 +299,28 @@
     font-size: 0.9375rem;
     line-height: 1.2;
     break-inside: avoid;
+  }
+
+  /* The save opens the same pop-up as a skill: a 44 px button filling its cell. */
+  .save {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    width: calc(100% + 0.5rem);
+    min-height: 44px;
+    margin: 0 -0.25rem;
+    padding: 0 0.25rem;
+    border: 0;
+    border-radius: 0.375rem;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .save:hover,
+  .save:focus-visible {
+    background: var(--hover);
   }
 
   /* The whole row is the button: 44 px tall, so it is easy to hit at the table. */
