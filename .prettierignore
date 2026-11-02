@@ -6,3 +6,5 @@ LICENSE
 vendor/mpmb/
 src/engine/data/
 test/characters/*.json
+test-results
+playwright-report

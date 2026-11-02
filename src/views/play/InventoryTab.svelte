@@ -494,7 +494,8 @@
 
   .weight {
     flex: 0 0 auto;
-    min-width: 5.5rem;
+    /* Wide enough for "0.25 kg each" with the padding, so the steppers line up row by row. */
+    min-width: 7rem;
     min-height: 44px;
     padding: 0 0.375rem;
     border: 0;
