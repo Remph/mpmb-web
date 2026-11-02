@@ -36,8 +36,27 @@ export interface SkillSource {
 // https://regex101.com/?regex=%5Cbchoose%5Cs%2B(%3Fany%5Cs%2B)%3F(%5Cd%2B%7Cone%7Ctwo%7Cthree%7Cfour%7Cfive%7Csix)%3F&flags=i&testString=Choose%202%3A%20Athletics
 const CHOOSE = /\bchoose\s+(?:any\s+)?(\d+|one|two|three|four|five|six)?/i;
 // One entry of MPMB's tooltip list: " • Paladin: Choose 2: Athletics, …". Try it:
-// https://regex101.com/?regex=%5E%5Cs*%E2%80%A2%5Cs*(%5B%5E%3A%5D%2B)%3A%5Cs*(.*)%24&testString=%20%E2%80%A2%20Paladin%3A%20Choose%202%3A%20Athletics
-const ENTRY = /^\s*•\s*([^:]+):\s*(.*)$/;
+// https://regex101.com/?regex=%5E%5Cs*%E2%80%A2%5Cs*(.*)%24&testString=%20%E2%80%A2%20Paladin%3A%20Choose%202%3A%20Athletics
+const ENTRY = /^\s*•\s*(.*)$/;
+// MPMB's bold letters (Mathematical Alphanumeric Symbols), which it writes the source in: "𝐖" matches, "W"
+// doesn't. Try it: https://regex101.com/?regex=%5B%5Cu%7B1D400%7D-%5Cu%7B1D7FF%7D%5D&flags=u&testString=%F0%9D%90%96izard
+const BOLD = /[\u{1D400}-\u{1D7FF}]/u;
+// Texts about expertise ("I gain Expertise in one skill: Arcana, …") give no proficiency to pick; "Expertises"
+// doesn't occur. Try it: https://regex101.com/?regex=%5Cbexpertise%5Cb&flags=i&testString=I%20gain%20Expertise%20in%20one%20skill
+const EXPERTISE = /\bexpertise\b/i;
+
+/**
+ * Splits one entry into its source and text. The source may hold a colon itself ("𝐖𝐢𝐳𝐚𝐫𝐝: 𝐒𝐜𝐡𝐨𝐥𝐚𝐫: I gain
+ * Expertise …"), so it ends at the first colon after its last bold letter; without bold letters (an
+ * add-on script's own text) at the first colon.
+ */
+function splitEntry(entry: string): { source: string; text: string } | null {
+  const chars = [...entry];
+  const lastBold = chars.findLastIndex((c) => BOLD.test(c));
+  const colon = chars.indexOf(':', lastBold + 1);
+  if (colon < 0) return null;
+  return { source: plain(chars.slice(0, colon).join('')).trim(), text: plain(chars.slice(colon + 1).join('')).trim() };
+}
 
 /** The skills a text names, in the sheet's order. */
 function skillsIn(text: string): SkillKey[] {
@@ -51,20 +70,22 @@ function skillsIn(text: string): SkillKey[] {
  * "Skill proficiencies gained from:\n • Acolyte (background): Insight and Religion.\n • Paladin: Choose 2: …".
  */
 export function readSkillSources(fields: FieldViews): SkillSource[] {
-  const tooltip = plain(fields['Acr Prof']?.userName ?? '');
+  const tooltip = fields['Acr Prof']?.userName ?? '';
   return (
     tooltip
       // One entry per line: Acrobat's "\r", or "\n" from a script. Try it:
       // https://regex101.com/?regex=%5Cr%5Cn%3F%7C%5Cn&testString=a%0Ab
       .split(/\r\n?|\n/)
       .map((line) => ENTRY.exec(line))
-      .filter((m): m is RegExpExecArray => m !== null)
-      .map((m) => {
-        const text = (m[2] ?? '').trim();
+      .map((m) => (m ? splitEntry(m[1] ?? '') : null))
+      .filter((entry) => entry !== null)
+      .map(({ source, text }) => {
+        // Expertise is shown with the rest but is no proficiency: it neither gives nor offers skills.
+        if (EXPERTISE.test(text)) return { source, text, choose: 0, skills: [] };
         const choice = CHOOSE.exec(text);
         const named = skillsIn(text);
         return {
-          source: (m[1] ?? '').trim(),
+          source,
           text,
           choose: choice ? countOf(choice[1]) : 0,
           // "Choose any 3 skills" names none: then every skill may be picked.
@@ -77,22 +98,36 @@ export function readSkillSources(fields: FieldViews): SkillSource[] {
 /** A choice of skills (from a class, say) and how many of them the player has ticked. */
 export interface SkillChoice extends SkillSource {
   chosen: number;
+  /** The ticked skills counted for this choice. */
+  picked: SkillKey[];
 }
 
 /**
  * How many skills of each choice are ticked. A skill that another source gives as it is ("Acolyte:
  * Insight and Religion") doesn't count for the choice, so the paladin above has 0 of 2 with only the
- * background's two ticked, as the 2024 rules have the player pick a different skill then.
+ * background's two ticked, as the 2024 rules have the player pick a different skill then. Each ticked
+ * skill counts for one choice only, the narrowest first: with a paladin's "Choose 2: Athletics, …" and a
+ * feat's "Choose any three", Athletics fills the paladin's choice, not both.
  */
 export function skillChoices(fields: FieldViews, sources: SkillSource[]): SkillChoice[] {
   const given = new Set(sources.filter((s) => s.choose === 0).flatMap((s) => s.skills));
-  const ticked = (key: SkillKey): boolean => isOn(fields, `${key} Prof`);
+  const free = new Set(SKILLS.map(([key]) => key).filter((key) => isOn(fields, `${key} Prof`) && !given.has(key)));
+  // The narrowest choice takes its skills first; toSorted is stable, so equal lists go in the sheet's order.
+  const picks = new Map<SkillSource, SkillKey[]>();
+  sources
+    .filter((s) => s.choose > 0)
+    .toSorted((a, b) => a.skills.length - b.skills.length)
+    .forEach((s) => {
+      const picked = s.skills.filter((key) => free.has(key)).slice(0, s.choose);
+      picked.forEach((key) => free.delete(key));
+      picks.set(s, picked);
+    });
   return sources
     .filter((s) => s.choose > 0)
-    .map((s) => ({
-      ...s,
-      chosen: Math.min(s.choose, s.skills.filter((key) => ticked(key) && !given.has(key)).length),
-    }));
+    .map((s) => {
+      const picked = picks.get(s) ?? [];
+      return { ...s, chosen: picked.length, picked };
+    });
 }
 
 /** Skill picks still open over all choices: the Build screen's badge. */
@@ -127,8 +162,9 @@ export function readLangTools(fields: FieldViews, kind: LangToolKind): LangTool[
         field,
         name: valueOf(fields, field),
         sources: [...tooltip.matchAll(SOURCE_LINE)].map((m) => (m[1] ?? '').trim()),
-        // MPMB names a choice "<source>_#_<what>_#_<n>-<i>" in the row's submitName (SetProf).
-        choice: tooltip.includes('"from '),
+        // MPMB names a choice "<source>_#_<what>_#_<n>-<i>" in the row's submitName (SetProf): a species'
+        // "from Silver Dragonborn" language, but also a background's "Gaming Set" the player picks one of.
+        choice: (fields[field]?.submitName ?? '').includes('_#_'),
       };
     })
     .filter((row) => row.name !== '');

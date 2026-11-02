@@ -51,7 +51,7 @@
     const fixed = sources.filter((s) => s.choose === 0 && s.skills.includes(key))[0];
     if (isOn(fields, `${key} Prof`)) {
       if (fixed) return fixed.source;
-      return choices.filter((c) => c.skills.includes(key))[0]?.source ?? t.skillsOwnPick;
+      return choices.filter((c) => c.picked.includes(key))[0]?.source ?? t.skillsOwnPick;
     }
     const open = choices.filter((c) => c.chosen < c.choose && c.skills.includes(key))[0];
     return open ? fill(t.skillsCanPick, { source: open.source }) : '';

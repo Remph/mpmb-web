@@ -57,6 +57,40 @@ describe('skill sources', () => {
     expect(Number(fields['Ins']?.value)).toBe(Number(before) + 4);
   });
 
+  it("the wizard's Scholar: a source with a colon, and expertise that gives no proficiency", () => {
+    const engine = openSheet(referenceSheet('wizard10-evoker'));
+    let fields = viewsOf(engine.doc);
+    const sources = readSkillSources(fields);
+    expect(sources.map((s) => [s.source, s.choose, s.skills])).toEqual([
+      ['Sage (background)', 0, ['Arc', 'His']],
+      ['Wizard', 2, ['Arc', 'His', 'Ins', 'Inv', 'Med', 'Nat', 'Rel']],
+      ['Wizard: Scholar', 0, []],
+    ]);
+    expect(sources[2]?.text.startsWith('I gain Expertise in one skill')).toBe(true);
+    // The test wizard has only the background's Arcana and History: both class picks are open, and
+    // Investigation counts for the class (Scholar's list names it too, but gives nothing).
+    expect(openSkillPicks(skillChoices(fields, sources))).toBe(2);
+    engine.click('Inv Prof');
+    fields = viewsOf(engine.doc);
+    expect(skillChoices(fields, readSkillSources(fields))[0]?.picked).toEqual(['Inv']);
+  });
+
+  it('a ticked skill counts for one choice only, the narrowest first', () => {
+    const engine = openSheet(referenceSheet('paladin8-warlock2'));
+    engine.click('Ath Prof');
+    engine.click('Med Prof');
+    engine.click('Ste Prof');
+    const fields = viewsOf(engine.doc);
+    fields['Acr Prof'] = {
+      ...fields['Acr Prof']!,
+      userName: `${fields['Acr Prof']!.userName}\n • 𝐒𝐤𝐢𝐥𝐥𝐞𝐝: Choose three skills or tools`,
+    };
+    const [paladin, skilled] = skillChoices(fields, readSkillSources(fields));
+    expect(paladin?.picked).toEqual(['Ath', 'Med']);
+    expect(skilled?.picked).toEqual(['Ste']);
+    expect(openSkillPicks([paladin!, skilled!])).toBe(2);
+  });
+
   it('a choice that names no skill lets the player pick any', () => {
     const fields = viewsOf(openSheet().doc);
     fields['Acr Prof'] = {
@@ -81,6 +115,14 @@ describe('languages and tools', () => {
       { field: 'Tool 1', name: "Calligrapher's Supplies", sources: ['Acolyte (background)'], choice: false },
     ]);
     expect(freeLangToolRow(fields, 'Language')).toBe('Language 4');
+  });
+
+  it("a background's tool choice may be changed too, also when it kept MPMB's name", () => {
+    const engine = openSheet();
+    engine.edit('Background', 'Soldier');
+    expect(readLangTools(viewsOf(engine.doc), 'Tool')).toEqual([
+      { field: 'Tool 1', name: 'Gaming Set', sources: ['Soldier (background)'], choice: true },
+    ]);
   });
 
   it("a language typed into a free row shows as the player's own", () => {
