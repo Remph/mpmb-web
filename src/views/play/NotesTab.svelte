@@ -188,6 +188,7 @@
   }
 
   .panel {
+    container-type: inline-size;
     padding: 0.75rem;
     border: 1px solid var(--line);
     border-radius: 0.75rem;
@@ -261,16 +262,19 @@
     line-height: 1.45;
   }
 
+  /* The divider follows the grid: a line above the second column while they stack, and beside it once
+     the panel has room for two (2 × 18rem and the gap, the grid's own break, not the window's: the
+     middle column narrows when the play view gets its third column). */
   .col + .col {
-    padding-left: 1rem;
-    border-left: 1px dashed var(--line);
+    padding-top: 0.5rem;
+    border-top: 1px dashed var(--line);
   }
 
-  @media (max-width: 899px) {
+  @container (min-width: 37rem) {
     .col + .col {
-      padding: 0.5rem 0 0;
-      border-top: 1px dashed var(--line);
-      border-left: 0;
+      padding: 0 0 0 1rem;
+      border-top: 0;
+      border-left: 1px dashed var(--line);
     }
   }
 </style>
