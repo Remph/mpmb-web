@@ -82,12 +82,17 @@ export const withMagic = (name: string, bonus: number): string => (bonus > 0 ? `
  */
 const MAGIC_PREFIX = /^\+(\d+)\s+(.+)$/;
 
+/** A field's weapon split into its name and magic bonus: "+1 Longsword" gives Longsword and 1. */
+export function splitMagic(text: string): { name: string; bonus: number } {
+  const plain = MAGIC_PREFIX.exec(text.trim());
+  return plain?.[2] ? { name: plain[2], bonus: Number(plain[1]) } : { name: text.trim(), bonus: 0 };
+}
+
 /** The step's list entry for what a field holds: by name, else without the magic bonus ("+1 Longsword"). */
 function entryNamed<T extends { name: string }>(entries: T[], name: string): T | null {
   const find = (wanted: string): T | null =>
     entries.filter((e) => e.name.toLowerCase() === wanted.trim().toLowerCase())[0] ?? null;
-  const plain = MAGIC_PREFIX.exec(name.trim());
-  return find(name) ?? (plain?.[2] ? find(plain[2]) : null);
+  return find(name) ?? find(splitMagic(name).name);
 }
 
 export const armourNamed = (gear: GearInfo, name: string): ArmourEntry | null => entryNamed(gear.armour, name);
@@ -126,6 +131,35 @@ export function weightText(weight: number | null, unit: string, locale = 'en'): 
   return `${weight.toLocaleString(locale, { maximumFractionDigits: WEIGHT_DECIMALS })} ${unit}`;
 }
 
+/**
+ * Training with martial weapons by their properties, as MPMB writes it on the "other weapons" line:
+ * "Finesse/Light Martial Weapons" (Rogue), "Light Martial Weapons" (Monk). MPMB's own attack scripts then
+ * count such a weapon as trained when its properties name one of them, so the step does the same.
+ * Captures "Finesse/Light" in "Finesse/Light Martial Weapons"; "Longswords, Rapiers" has no match. Try it:
+ * https://regex101.com/?regex=(%5Ba-z%5D%2B(%3F%3A%5Cs*%5C%2F%5Cs*%5Ba-z%5D%2B)*)%5Cs%2Bmartial%5Cs%2Bweapons%3F&flags=gi&testString=Finesse%2FLight%20Martial%20Weapons%2C%20Longswords
+ */
+const MARTIAL_BY_PROPERTY = /([a-z]+(?:\s*\/\s*[a-z]+)*)\s+martial\s+weapons?/gi;
+/**
+ * The commas between a weapon's properties: "Finesse, Light" splits in two, "Versatile (1d10)" stays one.
+ * Try it: https://regex101.com/?regex=%5Cs%2A%2C%5Cs%2A&testString=Finesse%2C%20Light%2C%20Thrown
+ */
+const PROPERTY_COMMA = /\s*,\s*/;
+/**
+ * The slashes between the properties in the training: "Finesse/Light" splits in two, "Light" stays one.
+ * Try it: https://regex101.com/?regex=%5Cs%2A%5C%2F%5Cs%2A&testString=Finesse%2FLight
+ */
+const PROPERTY_SLASH = /\s*\/\s*/;
+
+function trainedByProperty(entry: WeaponEntry, otherWeapons: string): boolean {
+  const properties = entry.properties.toLowerCase().split(PROPERTY_COMMA);
+  return [...otherWeapons.matchAll(MARTIAL_BY_PROPERTY)].some((match) =>
+    (match[1] ?? '')
+      .toLowerCase()
+      .split(PROPERTY_SLASH)
+      .some((property) => properties.includes(property)),
+  );
+}
+
 /** Whether the character is trained with an armour or weapon from the step's lists (null: no training needed). */
 export function trainedWith(entry: ArmourEntry | WeaponEntry, prof: Proficiencies): boolean | null {
   if ('ac' in entry) {
@@ -135,6 +169,7 @@ export function trainedWith(entry: ArmourEntry | WeaponEntry, prof: Proficiencie
   const kind = entry.type.toLowerCase();
   if (kind !== 'simple' && kind !== 'martial') return null;
   if (prof.weapons.includes(kind)) return true;
+  if (kind === 'martial' && trainedByProperty(entry, prof.otherWeapons)) return true;
   // MPMB's "other weapons" line lists single weapons by name ("Longswords, Rapiers").
   return prof.otherWeapons.toLowerCase().includes(entry.name.toLowerCase());
 }

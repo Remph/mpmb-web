@@ -5,7 +5,8 @@
   Acrobat ("Silvered Longsword" counts as a longsword).
 -->
 <script lang="ts">
-  import { MAX_MAGIC } from '../../build/gear.ts';
+  import { untrack } from 'svelte';
+  import { MAX_MAGIC, splitMagic } from '../../build/gear.ts';
   import type { GearOption } from '../../build/gear.ts';
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
@@ -28,7 +29,19 @@
   let { title, line, groups, current, magic, placeholder, ontake, onclose, t }: Props = $props();
   let query = $state('');
   let typed = $state('');
-  let bonus = $state(0);
+
+  const same = (a: string, b: string): boolean => a.trim().toLowerCase() === b.trim().toLowerCase();
+  /**
+   * What the field holds when the list opens, as a list entry and a bonus: "+1 Longsword" marks Longsword
+   * and starts at +1, so changing nothing keeps the bonus. An entry of the list's own ("+2 Halberd" from a
+   * magic item) stays as it is. The list is opened afresh for each pick, so the start values are enough.
+   */
+  const start = untrack(() =>
+    groups.some((g) => g.options.some((o) => same(o.name, current))) || !magic
+      ? { name: current, bonus: 0 }
+      : splitMagic(current),
+  );
+  let bonus = $state(Math.min(start.bonus, MAX_MAGIC));
   const BONUSES = Array.from({ length: MAX_MAGIC + 1 }, (_, i) => i);
 
   const matches = (option: GearOption): boolean =>
@@ -36,7 +49,7 @@
   const shown = $derived(
     groups.map((g) => ({ ...g, options: g.options.filter(matches) })).filter((g) => g.options.length),
   );
-  const isCurrent = (name: string): boolean => name.toLowerCase() === current.trim().toLowerCase();
+  const isCurrent = (name: string): boolean => same(name, start.name);
 
   function submit(event: SubmitEvent) {
     event.preventDefault();

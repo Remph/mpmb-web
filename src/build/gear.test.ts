@@ -12,6 +12,7 @@ import {
   damageText,
   readShield,
   shieldText,
+  splitMagic,
   takesMagic,
   trainedWith,
   weaponField,
@@ -75,6 +76,12 @@ describe("MPMB's armour and weapon lists", () => {
 
   it('finds a weapon behind its magic bonus', () => {
     expect(weaponNamed(gearOf(), '+1 Longsword')?.name).toBe('Longsword');
+  });
+
+  it('splits a magic bonus off the name, for the list to start at it', () => {
+    expect(splitMagic('+1 Longsword')).toEqual({ name: 'Longsword', bonus: 1 });
+    expect(splitMagic(' Longsword ')).toEqual({ name: 'Longsword', bonus: 0 });
+    expect(splitMagic('+1')).toEqual({ name: '+1', bonus: 0 });
   });
 
   it('only weapons from the lists take a magic bonus', () => {
@@ -159,5 +166,27 @@ describe('texts and training', () => {
     expect(trainedWith(weaponNamed(gear, 'Fire Bolt')!, prof)).toBe(null);
     expect(trainedWith(armourNamed(gear, 'Plate')!, prof)).toBe(false);
     expect(trainedWith(armourNamed(gear, 'Unarmored')!, prof)).toBe(null);
+  });
+
+  it("rogues and monks are trained with martial weapons by their properties, as MPMB's attack rows say", () => {
+    // MPMB writes "Finesse/Light Martial Weapons" (Rogue) and "Light Martial Weapons" (Monk) on the
+    // "other weapons" line and gives the proficiency in its attack scripts; the step's mark must agree.
+    const cases = [
+      ['Rogue 1', { Rapier: true, Shortsword: true, 'Hand Crossbow': true, Longsword: false, Whip: true }],
+      ['Monk 1', { Rapier: false, Shortsword: true, Scimitar: true, Longsword: false }],
+    ] as const;
+    for (const [cls, expected] of cases) {
+      const engine = openSheet();
+      engine.edit('Class and Levels', cls);
+      const gear = gearOf(engine);
+      const prof = readProficiencies(viewsOf(engine.doc));
+      for (const [name, trained] of Object.entries(expected)) {
+        expect(trainedWith(weaponNamed(gear, name)!, prof), `${cls}: ${name}`).toBe(trained);
+        engine.edit(weaponField(1), name);
+        expect(viewsOf(engine.doc)['Attack.1.Proficiency']?.value, `${cls}: MPMB's ${name}`).toBe(
+          trained ? 'True' : 'Off',
+        );
+      }
+    }
   });
 });
