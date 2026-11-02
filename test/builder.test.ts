@@ -1,6 +1,8 @@
 // The Build screen's data from MPMB (src/engine/builder.ts) and the class field it writes, on the engine.
 import { describe, expect, test } from 'vitest';
 import { BUILDER_INFO_SCRIPT, answerUnits, readBuilderInfo } from '../src/engine/builder.ts';
+import { displaySettings, refreshFormats } from '../src/engine/display-settings.ts';
+import { viewsOf } from '../src/worker/views.ts';
 import type { DialogView } from '../src/engine/host.ts';
 import { ScriptedHost } from './hosts.ts';
 import { classFieldText, rowsOf, setLevel } from '../src/build/classes.ts';
@@ -88,6 +90,24 @@ describe('the sheet menu’s units switch', () => {
     engine.clickBookmark(['Functions', 'Unit System']);
     // As the reference characters, saved in Acrobat on metric sheets, have it.
     expect(engine.values()['Display.Speed.Enc']).toBe('3 M SPEED');
+  });
+
+  test('fields whose value stays the same show the new unit too (every Format runs again)', () => {
+    const scripted = new ScriptedHost();
+    const units = answerUnits('imperial');
+    const engine = openSheet(referenceSheet('paladin8-warlock2'), {
+      alert: scripted.alert.bind(scripted),
+      popUpMenu: scripted.popUpMenu.bind(scripted),
+      dialog: (view: DialogView, first: boolean) => units(view) ?? scripted.dialog(view, first),
+    });
+    const before = displaySettings(engine);
+    expect(viewsOf(engine.doc)['AC Shield Weight']?.text).toBe('0 kg');
+    engine.clickBookmark(['Functions', 'Unit System']);
+    // MPMB left the empty shield weight at 0, so its Format didn't run.
+    expect(viewsOf(engine.doc)['AC Shield Weight']?.text).toBe('0 kg');
+    expect(refreshFormats(engine, before)).toBe(true);
+    expect(viewsOf(engine.doc)['AC Shield Weight']?.text).toBe('0 lb');
+    expect(refreshFormats(engine, displaySettings(engine))).toBe(false);
   });
 });
 

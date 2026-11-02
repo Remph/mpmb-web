@@ -403,11 +403,14 @@ export interface GearItem {
   nameField: string;
   amountField: string;
   locationField: string;
+  weightField: string;
   button: string;
   name: string;
   amount: number | null;
   /** The weight of one, with the sheet's unit ("0.25 kg"), '' when none. */
   weight: string;
+  /** The same as MPMB keeps it, without the unit ("0.25"). */
+  weightValue: string;
   location: string;
 }
 
@@ -420,6 +423,8 @@ export interface Inventory {
   /** Platinum, gold, electrum, silver, copper. */
   coins: { field: string; key: 'pp' | 'gp' | 'ep' | 'sp' | 'cp'; amount: string }[];
   carried: string;
+  /** The unit the sheet weighs in ("kg" or "lb"), '' when the sheet doesn't say. */
+  unit: string;
   capacity: string;
   /** MPMB's lifestyle ("comfortable") and its daily cost ("2 gp"), both as typed on the sheet. */
   lifestyle: string;
@@ -461,11 +466,13 @@ export function readInventory(fields: FieldViews): Inventory {
       nameField: `${prefix} Row ${row}`,
       amountField: `${prefix} Amount ${row}`,
       locationField: `${prefix} Location.Row ${row}`,
+      weightField: `${prefix} Weight ${row}`,
       button: `${prefix} Button ${row}`,
       name: clean(valueOf(fields, `${prefix} Row ${row}`)),
       amount: numberOf(fields, `${prefix} Amount ${row}`),
       weight:
         valueOf(fields, `${prefix} Weight ${row}`) && `${valueOf(fields, `${prefix} Weight ${row}`)} ${unit}`.trim(),
+      weightValue: valueOf(fields, `${prefix} Weight ${row}`),
       location: valueOf(fields, `${prefix} Location.Row ${row}`),
     }));
   };
@@ -486,6 +493,7 @@ export function readInventory(fields: FieldViews): Inventory {
     freeRow: { gear: free(gearRows), extra: free(extraRows) },
     coins: COINS.map(([field, key]) => ({ field, key, amount: valueOf(fields, field) })),
     carried,
+    unit,
     capacity: shown(fields, 'Weight Carrying Capacity.Field'),
     lifestyle: clean(valueOf(fields, 'Lifestyle')),
     lifestyleCost: valueOf(fields, 'Lifestyle daily cost'),
