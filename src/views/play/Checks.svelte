@@ -123,7 +123,7 @@
               type="button"
               class="save"
               aria-haspopup="dialog"
-              aria-label={fill(t.saveTitle, { ability: t[`ability${a.key}`] })}
+              aria-label={`${fill(t.saveTitle, { ability: t[`ability${a.key}`] })} ${a.save}${e ? `, ${label(e)}` : ''}`}
               onclick={(ev) => open({ kind: 'save', key: a.key }, ev.currentTarget)}
             >
               <span class="prof" class:no={!a.saveProficient} title={a.saveProficient ? t.proficient : undefined}

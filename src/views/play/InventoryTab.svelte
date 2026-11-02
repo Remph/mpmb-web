@@ -116,9 +116,14 @@
 
   /** MPMB's weight field takes a number; a decimal comma is read as a point. */
   function setWeight(item: GearItem, event: Event) {
-    const text = (event.currentTarget as HTMLInputElement).value.trim().replace(',', '.');
+    const input = event.currentTarget as HTMLInputElement;
+    const text = input.value.trim().replace(',', '.');
     if (text === item.weightValue) return;
-    if (text !== '' && !Number.isFinite(Number(text))) return;
+    // Not a number: show the stored weight again, so the field never shows what wasn't saved.
+    if (text !== '' && !Number.isFinite(Number(text))) {
+      input.value = item.weightValue;
+      return;
+    }
     change([{ edit: item.weightField, text }]);
   }
 
@@ -509,6 +514,12 @@
 
   .weight:hover:not(:disabled) {
     background: var(--hover);
+  }
+
+  /* On a touch screen there is no hover: a dashed underline says it can be tapped, as on the steppers. */
+  .weight:not(:disabled) {
+    text-decoration: underline dashed var(--ink-muted);
+    text-underline-offset: 0.25rem;
   }
 
   .weight .none {
