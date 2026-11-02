@@ -128,7 +128,7 @@
       {:else if shownTab === 'profile'}
         <ProfileTab {fields} {disabled} {change} {t} />
       {:else}
-        <NotesTab {fields} {disabled} {change} {t} />
+        <NotesTab {fields} {disabled} {change} pick={(field, answer) => session.pick(field, answer)} {t} />
       {/if}
     </div>
   </div>
