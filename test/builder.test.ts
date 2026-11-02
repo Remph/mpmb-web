@@ -16,6 +16,9 @@ describe('builder information', () => {
     expect(paladin?.subclasses).toEqual([{ key: 'paladin-devotion', name: 'Oath of Devotion', source: "SRD'24 56" }]);
     expect(info.known).toEqual([]);
     expect(info.xpTable[10]).toBe(85000);
+    // MPMB's tools for the "Skills & languages" step, written as on the sheet.
+    expect(info.tools).toContain("Thieves' Tools");
+    expect(info.tools).toContain("Cook's Utensils");
   });
 
   test('the reference paladin/warlock: first class first, and what the next levels bring', () => {

@@ -1,12 +1,13 @@
 <!--
-  The Build screen (M6, Nick picked its own screen, 2026-10-31): seven steps on the left, each with what
+  The Build screen (M6, Nick picked its own screen, 2026-10-31): the steps on the left, each with what
   the character has, the chosen step on the right. Opened from the sheet menu (Build character, Level up)
   and for a new character. Every change goes through MPMB's own fields, as in the play view.
 -->
 <script lang="ts">
   import { setCount } from '../../build/modifiers.ts';
+  import { openSkillPicks, readLangTools, readSkillSources, skillChoices } from '../../build/proficiencies.ts';
   import type { BuilderInfo } from '../../engine/builder.ts';
-  import { fill } from '../../i18n.ts';
+  import { counted, fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import { ABILITIES, shown, valueOf } from '../../play/read.ts';
   import type { OpenCharacter, Session, Step } from '../../session.svelte.ts';
@@ -19,6 +20,7 @@
   import FeatsStep from './FeatsStep.svelte';
   import ChoicesStep from './ChoicesStep.svelte';
   import ModifiersStep from './ModifiersStep.svelte';
+  import SkillsStep from './SkillsStep.svelte';
   import SpeciesStep from './SpeciesStep.svelte';
   import LevelUp from './LevelUp.svelte';
   import { BUILD_STEPS } from './steps.ts';
@@ -81,6 +83,7 @@
 
   const openChoices = $derived(info?.choices.filter((c) => c.open).length ?? 0);
   const modifiersSet = $derived(setCount(fields));
+  const skillsOpen = $derived(openSkillPicks(skillChoices(fields, readSkillSources(fields))));
   const filled = (names: string[]) => names.map((n) => valueOf(fields, n)).filter(Boolean);
   const summaries = $derived<Record<BuildStep, string>>({
     class: info?.known.length
@@ -93,6 +96,11 @@
     abilities: ABILITIES.some((a) => shown(fields, a))
       ? ABILITIES.map((a) => shown(fields, a) || '–').join(' · ')
       : t.buildNotChosen,
+    skills: skillsOpen
+      ? counted(t.buildSkillsOpenOne, t.buildSkillsOpen, skillsOpen)
+      : readLangTools(fields, 'Language')
+          .map((row) => row.name)
+          .join(', ') || t.buildNone,
     feats: filled(Array.from({ length: 9 }, (_, i) => `Feat Name ${i + 1}`)).join(', ') || t.buildNone,
     choices: !info?.choices.length
       ? t.buildNone
@@ -102,12 +110,13 @@
     modifiers: modifiersSet ? fill(t.buildModSetCount, { n: String(modifiersSet) }) : t.buildNone,
   });
   /** Shown as a badge on the step, like the mock-up: what still waits for the player. */
-  const badges = $derived<Partial<Record<BuildStep, number>>>({ choices: openChoices });
+  const badges = $derived<Partial<Record<BuildStep, number>>>({ skills: skillsOpen, choices: openChoices });
   const stepTitles = $derived<Record<BuildStep, string>>({
     class: t.buildClassTitle,
     species: t.buildSpecies,
     background: t.buildBackground,
     abilities: t.buildAbilities,
+    skills: t.buildSkillsStep,
     feats: t.buildFeats,
     choices: t.buildChoices,
     modifiers: t.buildModifiers,
@@ -161,6 +170,8 @@
       <BackgroundStep {info} {disabled} {change} {t} />
     {:else if step === 'abilities'}
       <AbilitiesStep {info} {disabled} {change} setScores={(changes) => session.setScores(changes)} {t} />
+    {:else if step === 'skills'}
+      <SkillsStep {info} {fields} {disabled} {change} {t} />
     {:else if step === 'feats'}
       <FeatsStep {info} {fields} {disabled} {change} {t} />
     {:else if step === 'choices'}
