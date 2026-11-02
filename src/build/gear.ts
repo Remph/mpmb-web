@@ -18,7 +18,13 @@ export interface GearOption {
   line: string;
   /** Marked "not trained" (worked out from the training boxes). */
   untrained: boolean;
+  /** Takes a magic bonus: real weapons do, spells, unarmed strikes and entries from items don't. */
+  magic: boolean;
 }
+
+/** Only simple and martial weapons from MPMB's lists get the step's magic bonus. */
+export const takesMagic = (entry: ArmourEntry | WeaponEntry): boolean =>
+  !('ac' in entry) && ['simple', 'martial'].includes(entry.type.toLowerCase()) && entry.group !== 'own';
 
 /** The highest magic bonus the step offers (+3 is the rarest magic weapon, armour or shield). */
 export const MAX_MAGIC = 3;
@@ -111,10 +117,13 @@ export function damageText(damage: (string | number)[]): string {
 /** Weights show at most two decimals: a dart weighs 0.13 kg. */
 const WEIGHT_DECIMALS = 2;
 
-/** A weight with its unit, without trailing zeros ("4.5 kg"); empty for none or next to none. */
-export function weightText(weight: number | null, unit: string): string {
+/**
+ * A weight with its unit in the page's language, without trailing zeros ("4.5 kg", "4,5 kg"); empty for
+ * none or next to none.
+ */
+export function weightText(weight: number | null, unit: string, locale = 'en'): string {
   if (weight === null || weight <= 0) return '';
-  return `${weight.toLocaleString('en', { maximumFractionDigits: WEIGHT_DECIMALS })} ${unit}`;
+  return `${weight.toLocaleString(locale, { maximumFractionDigits: WEIGHT_DECIMALS })} ${unit}`;
 }
 
 /** Whether the character is trained with an armour or weapon from the step's lists (null: no training needed). */

@@ -12,6 +12,7 @@ import {
   damageText,
   readShield,
   shieldText,
+  takesMagic,
   trainedWith,
   weaponField,
   weaponNamed,
@@ -75,6 +76,15 @@ describe("MPMB's armour and weapon lists", () => {
   it('finds a weapon behind its magic bonus', () => {
     expect(weaponNamed(gearOf(), '+1 Longsword')?.name).toBe('Longsword');
   });
+
+  it('only weapons from the lists take a magic bonus', () => {
+    const gear = gearOf();
+    expect(takesMagic(weaponNamed(gear, 'Longsword')!)).toBe(true);
+    expect(takesMagic(weaponNamed(gear, 'Fire Bolt')!)).toBe(false);
+    expect(takesMagic(weaponNamed(gear, 'Unarmed Strike (DC)')!)).toBe(false);
+    expect(takesMagic(weaponNamed(gear, '+2 Halberd')!)).toBe(false);
+    expect(takesMagic(armourNamed(gear, 'Plate')!)).toBe(false);
+  });
 });
 
 describe('writing armour, shield and weapons', () => {
@@ -132,6 +142,7 @@ describe('texts and training', () => {
   it('weights', () => {
     expect(weightText(27.5, 'kg')).toBe('27.5 kg');
     expect(weightText(0.13, 'kg')).toBe('0.13 kg');
+    expect(weightText(27.5, 'kg', 'de')).toBe('27,5 kg');
     expect(weightText(0, 'kg')).toBe('');
     expect(weightText(null, 'lb')).toBe('');
   });

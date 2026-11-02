@@ -42,20 +42,26 @@
   }
 
   // The address says what is on screen, so a reload opens the same screen: "#/character/<id>", its
-  // Build screen "…/build", or the Build screen's Choices step at one feature's choice,
-  // "…/build/choices/<feature name>" (from the play view's features). "#/" and "" are the list.
-  // Try it: https://regex101.com/?regex=%5E%23%5C%2Fcharacter%5C%2F%28%5B%5E%2F%5D%2B%29%28%5C%2Fbuild%28%3F%3A%5C%2Fchoices%5C%2F%28%5B%5E%2F%5D%2A%29%29%3F%29%3F%24&testString=%23%2Fcharacter%2Fabc%2Fbuild%2Fchoices%2FFighting%2520Style
-  const CHARACTER_ROUTE = /^#\/character\/([^/]+)(\/build(?:\/choices\/([^/]*))?)?$/;
+  // Build screen "…/build", the Build screen's Choices step at one feature's choice,
+  // "…/build/choices/<feature name>" (from the play view's features), or its "Armour & weapons" step,
+  // "…/build/gear" (from the Combat tab). "#/" and "" are the list. "#/character/abc/build/gear" passes,
+  // "#/character/abc/build/spells" doesn't.
+  // Try it: https://regex101.com/?regex=%5E%23%5C%2Fcharacter%5C%2F%28%5B%5E%2F%5D%2B%29%28%5C%2Fbuild%28%3F%3A%5C%2Fchoices%5C%2F%28%5B%5E%2F%5D%2A%29%7C%5C%2F%28gear%29%29%3F%29%3F%24&testString=%23%2Fcharacter%2Fabc%2Fbuild%2Fgear
+  // A feature's choice: https://regex101.com/?regex=%5E%23%5C%2Fcharacter%5C%2F%28%5B%5E%2F%5D%2B%29%28%5C%2Fbuild%28%3F%3A%5C%2Fchoices%5C%2F%28%5B%5E%2F%5D%2A%29%7C%5C%2F%28gear%29%29%3F%29%3F%24&testString=%23%2Fcharacter%2Fabc%2Fbuild%2Fchoices%2FFighting%2520Style
+  const CHARACTER_ROUTE = /^#\/character\/([^/]+)(\/build(?:\/choices\/([^/]*)|\/(gear))?)?$/;
   let missing = $state(false);
   let building = $state(false);
   /** The feature whose choice the Build screen opens at, or null for its first step. */
   let choiceOf = $state<string | null>(null);
+  /** A Build step the address names other than Choices ("gear"), or null. */
+  let stepOf = $state<'gear' | null>(null);
 
   async function route() {
     const match = CHARACTER_ROUTE.exec(location.hash);
     const id = match?.[1];
     building = Boolean(match?.[2]);
     choiceOf = match?.[3] === undefined ? null : decodeURIComponent(match[3]);
+    stepOf = match?.[4] === 'gear' ? 'gear' : null;
     if (!id) {
       if (session.current) await session.close();
       missing = false;
@@ -74,7 +80,7 @@
 {#if session.current}
   <!-- The play view brings its own top bar and uses the whole width; the language sits in its menu. -->
   {#if building}
-    <BuildView {session} open={session.current} choice={choiceOf} {toggleLanguage} {t} />
+    <BuildView {session} open={session.current} choice={choiceOf} at={stepOf} {toggleLanguage} {t} />
   {:else}
     <CharacterView {session} open={session.current} {toggleLanguage} {t} />
   {/if}

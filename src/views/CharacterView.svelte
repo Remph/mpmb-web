@@ -116,7 +116,7 @@
     </div>
     <div id="tab-panel" role="tabpanel" aria-labelledby={`tab-${shownTab}`}>
       {#if shownTab === 'combat'}
-        <CombatTab {fields} {disabled} {change} {t} />
+        <CombatTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
       {:else if shownTab === 'spells'}
         <SpellsTab {fields} {disabled} {change} {t} />
       {:else if shownTab === 'checks'}

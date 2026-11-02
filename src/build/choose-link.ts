@@ -30,3 +30,6 @@ export function choiceNamed(choices: Choice[], name: string): Choice | null {
 /** The address of the Build screen's Choices step at a feature's choice (App.svelte reads it). */
 export const choicesHref = (characterId: string, feature: string): string =>
   `#/character/${encodeURIComponent(characterId)}/build/choices/${encodeURIComponent(feature.replace(FEATURE_MARK, '').trim())}`;
+
+/** The address of the Build screen's "Armour & weapons" step (the Combat tab's "Change weapons"). */
+export const gearHref = (characterId: string): string => `#/character/${encodeURIComponent(characterId)}/build/gear`;

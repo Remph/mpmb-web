@@ -33,7 +33,9 @@
 
   const matches = (option: GearOption): boolean =>
     `${option.name} ${option.line}`.toLowerCase().includes(query.trim().toLowerCase());
-  const shown = $derived(groups.map((g) => ({ ...g, options: g.options.filter(matches) })).filter((g) => g.options.length));
+  const shown = $derived(
+    groups.map((g) => ({ ...g, options: g.options.filter(matches) })).filter((g) => g.options.length),
+  );
   const isCurrent = (name: string): boolean => name.toLowerCase() === current.trim().toLowerCase();
 
   function submit(event: SubmitEvent) {
@@ -69,9 +71,9 @@
                 type="button"
                 class:on={isCurrent(option.name)}
                 aria-pressed={isCurrent(option.name)}
-                onclick={() => ontake(option.name, bonus)}
+                onclick={() => ontake(option.name, option.magic ? bonus : 0)}
               >
-                <b>{magic && bonus ? `+${bonus} ` : ''}{option.name}</b>
+                <b>{magic && option.magic && bonus ? `+${bonus} ` : ''}{option.name}</b>
                 <small
                   >{option.line}{#if option.untrained}{option.line ? ' · ' : ''}<span class="warn"
                       >{t.gearUntrained}</span
