@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { openSheet, referenceSheet } from '../../test/characters.ts';
 import { ScriptedHost } from '../../test/hosts.ts';
-import { checkboxField, readSpells } from '../play/spells.ts';
+import { checkboxField, freeRow, readSpells } from '../play/spells.ts';
 import { viewsOf } from '../worker/views.ts';
 import type { Engine } from './engine.ts';
 import { SPELLS_READ_SCRIPT, answerSpellDialogs, applySpellPicks, readSpellsInfo } from './spells.ts';
@@ -196,6 +196,49 @@ describe('bonus spells, prepared spells and the spell sheet, through the same di
     expect(info.excluded).toEqual(['staff of the magi']);
     expect(info.options).toEqual(options);
     expect(sourceTitles(wizard)).toEqual(['wizard', 'magic initiate_-_wizard', 'tiefling']);
+  });
+});
+
+describe("MPMB's own spell row menu (Shift and a click on a row's first column)", () => {
+  const wizardRows = (engine: Engine) =>
+    readSpells(viewsOf(engine.doc))
+      .filter((s) => s.key === 'wizard')
+      .flatMap((s) => s.levels.flatMap((l) => l.spells));
+
+  it('moves a spell down a row, as the menu does in Acrobat', () => {
+    const host = new ScriptedHost({ menus: [['Move row down']] });
+    const wizard = openSheet(referenceSheet('wizard10-evoker'), host);
+    const [first, second] = wizardRows(wizard).filter((sp) => sp.mark.prepared !== null);
+    if (!first || !second) throw new Error('The wizard has spells to move');
+    wizard.click(checkboxField(first), 0, true);
+    expect(host.asked.at(-1)).toMatchObject({ kind: 'menu' });
+    const after = wizardRows(wizard).map((sp) => sp.key);
+    expect(after.indexOf(second.key)).toBeLessThan(after.indexOf(first.key));
+  });
+
+  it('clears a row, and a plain click still ticks the spell as prepared', () => {
+    const host = new ScriptedHost({ menus: [['Clear row']] });
+    const wizard = openSheet(referenceSheet('wizard10-evoker'), host);
+    const spell = wizardRows(wizard).find((sp) => sp.mark.prepared === false);
+    if (!spell) throw new Error('The wizard has a spell to prepare');
+    wizard.click(checkboxField(spell));
+    expect(wizardRows(wizard).find((sp) => sp.key === spell.key)?.mark.prepared).toBe(true);
+    expect(host.asked.filter((a) => a.kind === 'menu')).toHaveLength(0);
+    wizard.click(checkboxField(spell), 0, true);
+    expect(wizardRows(wizard).map((sp) => sp.key)).not.toContain(spell.key);
+  });
+
+  it("adds a spell in the first free row through MPMB's Spell menu", () => {
+    const host = new ScriptedHost({ menus: [['Spell', 'with a Checkbox', 'Wizard spells', 'All spells', 'Sleep']] });
+    const wizard = openSheet(referenceSheet('wizard10-evoker'), host);
+    const all = () => readSpells(viewsOf(wizard.doc)).flatMap((s) => s.levels.flatMap((l) => l.spells));
+    expect(all().map((sp) => sp.key)).not.toContain('sleep');
+    const box = freeRow(viewsOf(wizard.doc));
+    if (!box) throw new Error('The wizard has a free row');
+    wizard.click(box, 0, true);
+    const sleep = all().find((sp) => sp.key === 'sleep');
+    expect(sleep).toMatchObject({ fullName: 'Sleep', mark: { prepared: false } });
+    expect(checkboxField(sleep!)).toBe(box);
   });
 });
 

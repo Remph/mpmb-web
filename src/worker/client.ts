@@ -89,8 +89,8 @@ export class EngineClient {
     return this.send({ type: 'edit', field, text });
   }
 
-  click(field: string, widget = 0): Promise<Done> {
-    return this.send({ type: 'click', field, widget });
+  click(field: string, widget = 0, shift = false): Promise<Done> {
+    return this.send({ type: 'click', field, widget, shift });
   }
 
   bookmark(path: string[]): Promise<Done> {

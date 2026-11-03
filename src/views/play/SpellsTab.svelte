@@ -10,7 +10,15 @@
   import type { Texts } from '../../i18n.ts';
   import Modal from '../../popups/Modal.svelte';
   import { ABILITIES, isOn, readSpellSlotUse } from '../../play/read.ts';
-  import { checkboxField, isReady, preparedCount, readSpells, spellText } from '../../play/spells.ts';
+  import {
+    checkboxField,
+    freeRow,
+    isReady,
+    preparedCount,
+    readSpells,
+    spellPages,
+    spellText,
+  } from '../../play/spells.ts';
   import type { Spell, SpellSource } from '../../play/spells.ts';
   import type { Step } from '../../session.svelte.ts';
   import type { FieldViews } from '../../worker/views.ts';
@@ -108,6 +116,14 @@
   };
   /** MPMB's own click on the box toggles it, as in Acrobat (checkbox ↔ checkedbox, once ↔ once_used). */
   const tap = (spell: Spell): void => change([{ click: checkboxField(spell) }]);
+
+  /**
+   * MPMB's row menu (M7): Shift and a click on a row's first column, as in Acrobat. On a spell's row it
+   * moves, clears or inserts rows; on the first free row it adds a spell, an empty line or a header.
+   */
+  const rowMenu = (box: string): void => change([{ click: box, shift: true }]);
+  const hasPages = $derived(spellPages(fields).length > 0);
+  const freeBox = $derived(freeRow(fields));
 
   let details: Entry | null = $state(null);
   /** The spell as it is now, so a tap in the pop-up shows its new state. */
@@ -262,8 +278,40 @@
   <p class="panel hint">{t.noReadySpells}</p>
 {/each}
 
+{#if hasPages}
+  <section class="panel rows" aria-labelledby="spell-rows-title">
+    <div>
+      <h2 id="spell-rows-title">{t.spellsRows}</h2>
+      <p class="hint">{freeBox ? t.spellsRowsLine : t.spellsNoFreeRow}</p>
+    </div>
+    <button
+      type="button"
+      aria-haspopup="menu"
+      disabled={disabled || !freeBox}
+      onclick={() => freeBox && rowMenu(freeBox)}>{t.spellsAddRow}</button
+    >
+  </section>
+{/if}
+
+{#snippet rowActions()}
+  {#if shown}
+    {@const box = checkboxField(shown)}
+    <button
+      type="button"
+      aria-haspopup="menu"
+      title={t.spellRowOptionsLine}
+      {disabled}
+      onclick={() => {
+        // The pop-up closes first: MPMB's menu opens in its place, and the row may be gone afterwards.
+        details = null;
+        rowMenu(box);
+      }}>{t.spellRowOptions}</button
+    >
+  {/if}
+{/snippet}
+
 {#if shown && details && text}
-  <Modal title={shown.fullName} onescape={() => (details = null)} closeLabel={t.close}>
+  <Modal title={shown.fullName} onescape={() => (details = null)} closeLabel={t.close} actions={rowActions}>
     <p class="kind">{[text.kind || levelName(details.level), details.source.title].join(' · ')}</p>
     {#if markState(shown) || shown.mark.free !== null}
       <div class="state">
@@ -584,6 +632,18 @@
     border-color: var(--line);
     color: var(--ink-muted);
     text-decoration: line-through;
+  }
+
+  .rows {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .rows > div {
+    flex: 1 1 20rem;
   }
 
   /* The pop-up. */

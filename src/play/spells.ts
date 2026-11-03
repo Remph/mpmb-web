@@ -280,3 +280,18 @@ function isShownField(fields: FieldViews, name: string): boolean {
 
 /** For a tick the player makes: MPMB's toggle on the check box ("checkbox" ↔ "checkedbox", once-box ↔ "_used"). */
 export const checkboxField = (spell: Spell): string => `${spell.page}spells.checkbox.${spell.row}`;
+
+/**
+ * Where "Add a row" opens MPMB's row menu: the check box of the first empty row after the last row in
+ * use, across the spell sheet pages. MPMB's menu then writes a spell, a caption or a divider there, as a
+ * Shift+click on that row's first column does in Acrobat. null when every row is in use (MPMB's own
+ * "Insert empty rows" on a spell's row still works then).
+ */
+export function freeRow(fields: FieldViews): string | null {
+  const rows = spellPages(fields).flatMap(({ prefix, template }) =>
+    Array.from({ length: ROWS[template] }, (_, row) => ({ prefix, row })),
+  );
+  const lastUsed = rows.findLastIndex(({ prefix, row }) => valueOf(fields, `${prefix}spells.remember.${row}`) !== '');
+  const free = rows[lastUsed + 1];
+  return free ? `${free.prefix}spells.checkbox.${free.row}` : null;
+}

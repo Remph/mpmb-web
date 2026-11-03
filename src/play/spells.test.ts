@@ -1,8 +1,9 @@
 /* eslint-disable ts-patterns/no-magic-numbers -- spell levels, rows and counts are the test data */
 import { describe, expect, it } from 'vitest';
 import { openSheet, referenceSheet } from '../../test/characters.ts';
+import { valueOf } from './read.ts';
 import { viewsOf } from '../worker/views.ts';
-import { isReady, preparedCount, readSpells, spellMark, spellPages, spellText } from './spells.ts';
+import { freeRow, isReady, preparedCount, readSpells, spellMark, spellPages, spellText } from './spells.ts';
 import type { SpellSource } from './spells.ts';
 
 // What the reference characters' spell sheet pages show in Acrobat.
@@ -162,5 +163,21 @@ describe('spell sheet', () => {
   it('shows nothing for a character without spell pages', () => {
     const blank = viewsOf(openSheet().doc);
     expect(readSpells(blank)).toEqual([]);
+    expect(freeRow(blank)).toBeNull();
+  });
+
+  it('finds the first empty row after the last one in use, on the last page', () => {
+    const remember = (views: typeof wizard, box: string): string => valueOf(views, box.replace('checkbox', 'remember'));
+    const before = (box: string): string => box.replace(/\.(\d+)$/, (_, n: string) => `.${Number(n) - 1}`);
+    for (const [views, page] of [
+      [wizard, 'P7.SSmore.'],
+      [paladin, 'P6.SSfront.'],
+    ] as const) {
+      const box = freeRow(views);
+      expect(box).toMatch(new RegExp(`^${page.replaceAll('.', '\\.')}spells\\.checkbox\\.\\d+$`));
+      if (!box) continue;
+      expect(remember(views, box)).toBe('');
+      expect(remember(views, before(box))).not.toBe('');
+    }
   });
 });

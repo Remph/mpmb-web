@@ -173,7 +173,7 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
     return open(sheet);
   },
   edit: ({ field, text }) => opened().edit(field, text),
-  click: ({ field, widget }) => opened().click(field, widget),
+  click: ({ field, widget, shift }) => opened().click(field, widget, shift),
   bookmark: ({ path }) => opened().clickBookmark(path),
   save: () => diffCharacter(blankSheet(), opened().snapshot()),
   builder: () => readBuilderInfo(opened().evaluate(BUILDER_INFO_SCRIPT)),

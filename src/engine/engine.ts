@@ -437,8 +437,8 @@ export class Engine {
     return ok;
   }
 
-  click(name: string, widget = 0): void {
-    this.doc.click(name, widget);
+  click(name: string, widget = 0, shift = false): void {
+    this.doc.click(name, widget, shift);
     this.runTimers();
   }
 
