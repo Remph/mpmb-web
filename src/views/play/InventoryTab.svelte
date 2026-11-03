@@ -336,9 +336,16 @@
 {#if fields[HOLDINGS]}
   <section class="panel" aria-labelledby="holdings-title">
     <h2 id="holdings-title">{t.otherHoldings}</h2>
+    <!-- Named by the heading, the hint as its description: otherwise a screen reader names the box by the hint. -->
     <label class="holdings">
-      <span class="muted">{t.otherHoldingsHint}</span>
-      <textarea rows={holdingsRows} value={holdings} {disabled} onchange={saveHoldings}></textarea>
+      <span class="muted" id="holdings-hint">{t.otherHoldingsHint}</span>
+      <textarea
+        rows={holdingsRows}
+        value={holdings}
+        {disabled}
+        aria-labelledby="holdings-title"
+        aria-describedby="holdings-hint"
+        onchange={saveHoldings}></textarea>
     </label>
   </section>
 {/if}
