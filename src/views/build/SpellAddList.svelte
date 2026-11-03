@@ -30,7 +30,7 @@
 
   let { source, spells, draft, start, mode, full, disabled, ontoggle, oninfo, line, t }: Props = $props();
 
-  const filters = $derived(filtersOf(source, spells, mode));
+  const filters = $derived(filtersOf(source, spells, mode, draft));
   const key = (f: AddFilter): string => (f.part === 'cantrips' ? 'c' : String(f.level));
   let chosenFilter = $state<string | null>(null);
   /**
@@ -44,7 +44,7 @@
       filters[0] ?? { part: 'cantrips' as const },
   );
   let query = $state('');
-  const entries = $derived(addList(source, filter, query, spells));
+  const entries = $derived(addList(source, filter, query, spells, draft));
   const chosen = (part: SpellListPart, k: string): boolean => draft[part].includes(k);
 
   const label = (f: AddFilter): string =>

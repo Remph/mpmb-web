@@ -28,6 +28,7 @@
     switched,
     textParts,
     toggled,
+    withBook,
   } from '../../build/spells.ts';
   import type { AddFilter, SheetDraft, SpellDraft, SpellListPart } from '../../build/spells.ts';
   import type { SpellInfo, SpellPicks, SpellSheetPicks, SpellSource, SpellsInfo } from '../../engine/spells.ts';
@@ -172,7 +173,7 @@
     if (!source || !draft || disabled || busy) return;
     // MPMB's prepared spells dialog has only as many rows as the character may prepare.
     if (part === 'prepared' && preparedFull && !draft.prepared.includes(key)) return;
-    drafts[source.key] = { ...draft, [part]: toggled(draft[part], key) };
+    drafts[source.key] = withBook(source, { ...draft, [part]: toggled(draft[part], key) });
   }
 
   function setBonus(index: number, key: string) {
@@ -395,7 +396,7 @@
         <button
           type="button"
           class="source"
-          aria-pressed={s.key === source.key}
+          aria-pressed={!onSheet && s.key === source.key}
           onclick={() => {
             chosenKey = s.key;
             adding = null;

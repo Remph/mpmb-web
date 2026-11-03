@@ -59,6 +59,8 @@ export interface SpellBonus {
   /** The spell key chosen, or empty. */
   chosen: string;
   list: string[];
+  /** A row above the feature's own number (raised in Acrobat's dialog, kept in spCast.extraBo). */
+  extra: boolean;
 }
 
 /** One of MPMB's spell sources (a CurrentSpells entry): a class, a feat, a species, a magic item. */
@@ -178,7 +180,7 @@ export const SPELLS_READ_SCRIPT = `(function () {
     var cast = CurrentSpells[dia.curCast] || {};
     var bonus = [];
     for (var b = 0; b < dia.nmbrBo + (Number(dia.offsetBo) || 0) && b < 20; b++) {
-      bonus.push({ name: String(dia.namesBo[b] || ""), chosen: dia.selectBo[b] || "", list: keysOf(dia.listBo[b]) });
+      bonus.push({ name: String(dia.namesBo[b] || ""), chosen: dia.selectBo[b] || "", list: keysOf(dia.listBo[b]), extra: b >= dia.nmbrBo });
     }
     var spells = part(dia.showSp, dia.nmbrSp, dia.offsetSp, (dia.selectSp || []).concat(cast.selectSpSB || []), dia.listSp);
     out.sources.push({
