@@ -9,6 +9,7 @@ import {
   hasProficiencies,
   openSkillPicks,
   readLangTools,
+  moreProficiencies,
   readProficiencies,
   readSkillSources,
   skillChoices,
@@ -158,5 +159,15 @@ describe('proficiencies for the play view', () => {
     const engine = openSheet();
     engine.click('Proficiency Armor Light');
     expect(readProficiencies(viewsOf(engine.doc)).armour).toEqual(['light']);
+  });
+
+  it('the overflow text as one entry each, split at MPMB\'s "; " and at line breaks', () => {
+    const p = readProficiencies(viewsOf(openSheet().doc));
+    expect(moreProficiencies({ ...p, more: "Orc (language); Smith's Tools (tool)\rGiant" })).toEqual([
+      'Orc (language)',
+      "Smith's Tools (tool)",
+      'Giant',
+    ]);
+    expect(moreProficiencies({ ...p, more: '' })).toEqual([]);
   });
 });
