@@ -5,7 +5,7 @@ import { describe, expect, test } from 'vitest';
 import { CHARACTER_FORMAT, FORMAT_VERSION } from '../engine/sheet-data.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
 import { SHEET_ID } from '../engine/sheet-id.ts';
-import { BackupError, backupFileName, makeBackup, planRestore, readBackup } from './backup.ts';
+import { BackupError, backupFileName, filledPdfName, makeBackup, planRestore, readBackup } from './backup.ts';
 import { CharacterStore, describeCharacter } from './characters.ts';
 import type { StoredCharacter } from './characters.ts';
 
@@ -141,6 +141,11 @@ describe('backups', () => {
     expect(backupFileName([anna], now)).toBe('mpmb-web-zoe-anneliese-co-2026-10-29.json');
     expect(backupFileName([anna, anna], now)).toBe('mpmb-web-backup-2026-10-29.json');
     expect(backupFileName([character('', '2026-10-01T00:00:00Z', 'x')], now)).toBe('mpmb-web-backup-2026-10-29.json');
+  });
+
+  test('a filled MPMB PDF is named after the character and the day', () => {
+    expect(filledPdfName('Zoë Ånneliese & Co.', now)).toBe('zoe-anneliese-co-mpmb-2026-10-29.pdf');
+    expect(filledPdfName('', now)).toBe('character-mpmb-2026-10-29.pdf');
   });
 
   test('restoring adds new characters and replaces those with the same id, warning when older', () => {

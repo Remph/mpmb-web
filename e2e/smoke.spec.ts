@@ -1,5 +1,6 @@
 // A smoke test of the built app in a real browser: the start page, new characters built from scratch
-// (class, armour, a weapon; a wizard's spells), the play view showing what MPMB worked out, and the print sheet. It catches
+// (class, armour, a weapon; a wizard's spells), the play view showing what MPMB worked out, the print sheet
+// and filling MPMB's PDF. It catches
 // what unit tests can't: the worker, the page's headers, the pop-ups and the routes working together.
 import { expect, test } from '@playwright/test';
 
@@ -75,6 +76,28 @@ test('a new character gets a class, armour and a weapon, and the play view shows
   await expect(sheet.locator('.attacks')).toContainText('Longsword');
   await page.evaluate("window.dispatchEvent(new Event('afterprint'))");
   await expect(sheet).toHaveCount(0);
+
+  // Fill MPMB PDF (M10): a file that isn't a PDF gets a plain answer. With MPMB_BLANK_PDF (a blank
+  // Colorful A4 v24.2.0; the repo doesn't hold MPMB's PDF) the fighter goes into it and downloads.
+  await page.getByRole('button', { name: /Sheet menu/ }).click();
+  await page.getByRole('button', { name: /^Fill MPMB PDF/ }).click();
+  const fillWindow = page.getByRole('dialog', { name: 'Fill MPMB PDF' });
+  await expect(fillWindow.getByRole('link', { name: "MPMB's website" })).toBeVisible();
+  const pdfInput = fillWindow.locator('input[type="file"]');
+  await pdfInput.setInputFiles({ name: 'notes.pdf', mimeType: 'application/pdf', buffer: Buffer.from('not a PDF') });
+  await expect(fillWindow.getByRole('alert')).toContainText('not a readable PDF');
+  const blankPdf = process.env.MPMB_BLANK_PDF;
+  if (blankPdf) {
+    const download = page.waitForEvent('download', { timeout: STARTUP });
+    await pdfInput.setInputFiles(blankPdf);
+    expect((await download).suggestedFilename()).toMatch(/-mpmb-\d{4}-\d\d-\d\d\.pdf$/);
+    await expect(fillWindow).toContainText('is in your downloads');
+  }
+  await fillWindow
+    .getByRole('button', { name: /^(Cancel|Close)$/ })
+    .last()
+    .click();
+  await expect(fillWindow).toHaveCount(0);
 
   expect(errors).toEqual([]);
 });

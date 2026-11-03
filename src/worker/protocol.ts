@@ -14,6 +14,11 @@ export type Command =
   | { type: 'open'; character: CharacterData | null }
   /** Opens a character from a filled MPMB PDF (Colorful A4 v24.2.0). */
   | { type: 'importPdf'; bytes: ArrayBuffer }
+  /**
+   * The open character written into the player's own copy of the sheet (a blank Colorful A4 v24.2.0 is
+   * best); returns the filled PDF's bytes.
+   */
+  | { type: 'exportPdf'; bytes: ArrayBuffer }
   | { type: 'edit'; field: string; text: string }
   /**
    * `shift`: with Shift held, as for MPMB's spell row menu. `newRow`: a spell level's "+ Row" on this

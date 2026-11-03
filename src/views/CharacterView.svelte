@@ -26,6 +26,7 @@
   import { printableParts } from '../play/print.ts';
   import type { PrintPart } from '../play/print.ts';
   import PrintWindow from './print/PrintWindow.svelte';
+  import FillPdfWindow from './print/FillPdfWindow.svelte';
 
   interface Props {
     session: Session;
@@ -77,6 +78,7 @@
     /warlock/i.test(open.meta.classes) ? `${t.shortRestText} ${t.shortRestPactMagic}` : t.shortRestText;
 
   let printWindow = $state(false);
+  let fillPdfWindow = $state(false);
   /** The parts and the pencil choice from the print window; null until it was used (Ctrl+P prints every part). */
   let printParts = $state<PrintPart[] | null>(null);
   let printBlank = $state(true);
@@ -184,8 +186,16 @@
         menuOpen = false;
         printWindow = true;
       }}
+      onfillpdf={() => {
+        menuOpen = false;
+        fillPdfWindow = true;
+      }}
       {t}
     />
+  {/if}
+
+  {#if fillPdfWindow}
+    <FillPdfWindow {session} name={open.meta.name} onclose={() => (fillPdfWindow = false)} {t} />
   {/if}
 
   {#if printWindow}

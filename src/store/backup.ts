@@ -68,6 +68,12 @@ const NAME_LENGTH = 40;
 /** "2026-10-29" from an ISO date. */
 const DAY_LENGTH = 10;
 
+/** "anna-mpmb-2026-11-03.pdf": a character filled into the player's MPMB sheet (M10). */
+export function filledPdfName(name: string, now = new Date()): string {
+  const day = now.toISOString().slice(0, DAY_LENGTH);
+  return `${fileSafe(name).slice(0, NAME_LENGTH) || 'character'}-mpmb-${day}.pdf`;
+}
+
 /** "mpmb-web-anna-2026-10-29.json" for one character, "mpmb-web-backup-2026-10-29.json" for more. */
 export function backupFileName(characters: StoredCharacter[], now = new Date()): string {
   const day = now.toISOString().slice(0, DAY_LENGTH);
