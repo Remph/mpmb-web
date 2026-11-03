@@ -4,7 +4,7 @@
 -->
 <script lang="ts">
   import { choicesHref } from '../../build/choose-link.ts';
-  import { hasProficiencies, readProficiencies } from '../../build/proficiencies.ts';
+  import { hasProficiencies, moreProficiencies, readProficiencies } from '../../build/proficiencies.ts';
   import type { Texts } from '../../i18n.ts';
   import { readDefenses, readFeatures, textRuns } from '../../play/read.ts';
   import type { FieldViews } from '../../worker/views.ts';
@@ -28,7 +28,8 @@
       },
       { label: t.profTools, items: profs.tools },
       { label: t.profLanguages, items: profs.languages },
-      { label: t.profMore, items: profs.more ? [profs.more] : [] },
+      // Languages and tools past the sheet's rows (MPMB's overflow page), one chip each.
+      { label: t.profMore, items: moreProficiencies(profs) },
     ].filter((row) => row.items.length),
   );
   /** Senses, resistances, MPMB's labelled lines (immunities …), then the rest: one card each. */

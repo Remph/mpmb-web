@@ -251,6 +251,19 @@ export function readProficiencies(fields: FieldViews): Proficiencies {
   };
 }
 
+/**
+ * The entries of MPMB's "MoreProficiencies" text, one each: MPMB joins them with "; " (AddLangTool), and a
+ * player typing in Acrobat may use line breaks instead.
+ */
+export const moreProficiencies = (p: Proficiencies): string[] =>
+  p.more
+    // Splits at ";" and at line breaks: "Orc (language); Smith's Tools (tool)" gives two entries,
+    // "Thieves' Cant (language)" stays one. Try it:
+    // https://regex101.com/?regex=%3B%7C%5Cr%7C%5Cn&testString=Orc%20(language)%3B%20Smith%27s%20Tools%20(tool)
+    .split(/;|\r|\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
 /** True when the play view has anything to show. */
 export const hasProficiencies = (p: Proficiencies): boolean =>
   [p.armour, p.weapons, p.tools, p.languages].some((list) => list.length > 0) ||

@@ -1,12 +1,13 @@
 <!--
   Magic items, gear with amounts to count down (potions, arrows), coins and the carried weight. A tap on
   an item's weight sets its weight and where it is carried (MPMB's location column), M6.5 fix round.
+  At the end the sheet's "Other holdings" box (page 3 of the PDF), M8.
 -->
 <script lang="ts">
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import type { Step } from '../../session.svelte.ts';
-  import { goldTotal, readInventory } from '../../play/read.ts';
+  import { goldTotal, readInventory, valueOf } from '../../play/read.ts';
   import type { GearItem, GearList } from '../../play/read.ts';
   import type { FieldViews } from '../../worker/views.ts';
   import Modal from '../../popups/Modal.svelte';
@@ -54,6 +55,18 @@
       .sort((a, b) => Number(a.location !== '') - Number(b.location !== '')),
   );
   const free = $derived(inventory.freeRow[list]);
+
+  /** Page 3's free text box. Acrobat's line breaks ("\r") become the browser's. */
+  const HOLDINGS = 'Extra.Other Holdings';
+  const holdings = $derived(valueOf(fields, HOLDINGS).replace(/\r/g, '\n'));
+  /** Tall enough for what is there plus a line to type on. */
+  const holdingsRows = $derived(Math.max(2, holdings.split('\n').length + 1));
+
+  /** Saved when the box loses focus, so typing doesn't run MPMB's scripts on every key. */
+  function saveHoldings(event: Event) {
+    const value = (event.currentTarget as HTMLTextAreaElement).value;
+    if (value.trim() !== holdings.trim()) change([{ edit: HOLDINGS, text: value }]);
+  }
 
   /** A name is one line on the sheet; a pasted line break becomes a space. */
   function rename(field: string, event: Event) {
@@ -320,6 +333,23 @@
   {/if}
 </section>
 
+{#if fields[HOLDINGS]}
+  <section class="panel" aria-labelledby="holdings-title">
+    <h2 id="holdings-title">{t.otherHoldings}</h2>
+    <!-- Named by the heading, the hint as its description: otherwise a screen reader names the box by the hint. -->
+    <label class="holdings">
+      <span class="muted" id="holdings-hint">{t.otherHoldingsHint}</span>
+      <textarea
+        rows={holdingsRows}
+        value={holdings}
+        {disabled}
+        aria-labelledby="holdings-title"
+        aria-describedby="holdings-hint"
+        onchange={saveHoldings}></textarea>
+    </label>
+  </section>
+{/if}
+
 <style>
   .columns {
     display: grid;
@@ -352,6 +382,32 @@
   .muted {
     color: var(--ink-muted);
     font-size: 0.875rem;
+  }
+
+  .holdings {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  /* As the Profile tab's boxes: a soft field that turns white while typing. */
+  .holdings textarea {
+    width: 100%;
+    min-height: 44px;
+    padding: 0.5rem;
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    background: var(--paper);
+    color: var(--ink);
+    font: inherit;
+    font-size: 1rem;
+    resize: vertical;
+  }
+
+  .holdings textarea:focus {
+    border-color: var(--accent);
+    outline: none;
+    background: var(--surface);
   }
 
   ul {

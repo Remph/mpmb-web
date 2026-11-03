@@ -362,6 +362,9 @@ export const ui = {
     lifestyle: 'Lebensstil: {name}',
     lifestyleCost: 'Lebensstil: {name} ({cost} pro Tag)',
     goldTotal: 'Zusammen ≈ {total} GM',
+    otherHoldings: 'Weiterer Besitz',
+    otherHoldingsHint:
+      'Grundbesitz, ein Schiff, ein Anteil an einem Geschäft: was dir gehört, du aber nicht bei dir trägst.',
     carried: '{carried} von {capacity}',
     noItems: 'Nichts eingetragen.',
     features: 'Merkmale',
@@ -1146,6 +1149,8 @@ export const ui = {
     lifestyle: 'Lifestyle: {name}',
     lifestyleCost: 'Lifestyle: {name} ({cost} a day)',
     goldTotal: 'Total ≈ {total} gp',
+    otherHoldings: 'Other holdings',
+    otherHoldingsHint: "Property, a ship, a share in a business: what you own but don't carry.",
     carried: '{carried} of {capacity}',
     noItems: 'Nothing listed.',
     features: 'Features',
