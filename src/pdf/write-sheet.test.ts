@@ -4,7 +4,7 @@
 // sheet runs too when MPMB_BLANK_PDF names a blank Colorful A4 v24.2.0 PDF: the app doesn't ship MPMB's
 // PDF, so neither does the repo. Then both reference characters must come back field for field.
 import fs from 'node:fs';
-import { PDFDocument, PDFName, PDFString } from '@cantoo/pdf-lib';
+import { PDFDict, PDFDocument, PDFName, PDFString } from '@cantoo/pdf-lib';
 import { describe, expect, test } from 'vitest';
 import { REFERENCE_CHARACTERS, referenceSheet } from '../../test/characters.ts';
 import type { SheetSnapshot } from '../engine/types.ts';
@@ -33,8 +33,11 @@ async function makeSheet(): Promise<Uint8Array> {
     doc.context.obj({ Type: 'Template', MediaBox: [0, 0, 200, 200], Annots: [widget] }),
   );
   doc.catalog.set(PDFName.of('Names'), doc.context.obj({ Templates: { Names: [PDFString.of('Spells'), template] } }));
-  doc.getInfoDict().set(PDFName.of('SheetType'), PDFString.of('Test'));
-  doc.getInfoDict().set(PDFName.of('SheetVersion'), PDFString.of('1'));
+  // MPMB keeps its sheet type and version in the document info; setTitle makes the info dictionary.
+  doc.setTitle('Test sheet');
+  const info = doc.context.lookup(doc.context.trailerInfo.Info, PDFDict);
+  info.set(PDFName.of('SheetType'), PDFString.of('Test'));
+  info.set(PDFName.of('SheetVersion'), PDFString.of('1'));
   return doc.save({ useObjectStreams: false });
 }
 
