@@ -1,4 +1,7 @@
-<!-- Magic items, gear with amounts to count down (potions, arrows), coins and the carried weight. -->
+<!--
+  Magic items, gear with amounts to count down (potions, arrows), coins and the carried weight. A tap on
+  an item's weight sets its weight and where it is carried (MPMB's location column), M6.5 fix round.
+-->
 <script lang="ts">
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
@@ -6,6 +9,7 @@
   import { goldTotal, readInventory } from '../../play/read.ts';
   import type { GearItem, GearList } from '../../play/read.ts';
   import type { FieldViews } from '../../worker/views.ts';
+  import Modal from '../../popups/Modal.svelte';
   import Stepper from './Stepper.svelte';
 
   interface Props {
@@ -104,6 +108,30 @@
     input.value = '';
   }
 
+  /** The item whose weight and place are open, by its name field (the row may move while it is open). */
+  let detailsOf = $state<string | null>(null);
+  const details = $derived(inventory.gear.filter((item) => item.nameField === detailsOf)[0] ?? null);
+  /** The places already used, offered while typing one. */
+  const places = $derived([...new Set(inventory.gear.map((item) => item.location).filter(Boolean))]);
+
+  /** MPMB's weight field takes a number; a decimal comma is read as a point. */
+  function setWeight(item: GearItem, event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const text = input.value.trim().replace(',', '.');
+    if (text === item.weightValue) return;
+    // Not a number: show the stored weight again, so the field never shows what wasn't saved.
+    if (text !== '' && !Number.isFinite(Number(text))) {
+      input.value = item.weightValue;
+      return;
+    }
+    change([{ edit: item.weightField, text }]);
+  }
+
+  function setLocation(item: GearItem, event: Event) {
+    const text = (event.currentTarget as HTMLInputElement).value.trim();
+    if (text !== item.location) change([{ edit: item.locationField, text }]);
+  }
+
   /** A coin field takes what the player types; MPMB's own scripts check it. */
   function setCoins(field: string, event: Event) {
     change([{ edit: field, text: (event.currentTarget as HTMLInputElement).value.trim() }]);
@@ -177,9 +205,17 @@
                   {t}
                 />
               {/if}
-              <!-- MPMB weighs one of a thing; the sheet multiplies it by the amount. -->
-              <span class="weight"
-                >{item.weight && item.amount !== null ? fill(t.weightEach, { weight: item.weight }) : item.weight}</span
+              <!-- MPMB weighs one of a thing; the sheet multiplies it by the amount. A tap sets it and the place. -->
+              <button
+                type="button"
+                class="weight"
+                aria-haspopup="dialog"
+                aria-label={fill(t.itemDetailsOf, { name: item.name })}
+                {disabled}
+                onclick={() => (detailsOf = item.nameField)}
+                >{#if item.weight}{item.amount !== null
+                    ? fill(t.weightEach, { weight: item.weight })
+                    : item.weight}{:else}<span class="none">{t.itemNoWeight}</span>{/if}</button
               >
               <button
                 type="button"
@@ -221,6 +257,39 @@
     {/if}
   </section>
 </div>
+
+{#if details}
+  <Modal title={details.name} onescape={() => (detailsOf = null)} closeLabel={t.close}>
+    <label class="detail">
+      <span>{inventory.unit ? fill(t.itemWeightUnit, { unit: inventory.unit }) : t.itemWeight}</span>
+      <input
+        type="text"
+        inputmode="decimal"
+        value={details.weightValue}
+        {disabled}
+        onchange={(event) => setWeight(details, event)}
+      />
+    </label>
+    <label class="detail">
+      <span>{t.itemLocation}</span>
+      <input
+        type="text"
+        list="gear-places"
+        value={details.location}
+        placeholder={t.itemLocationExample}
+        {disabled}
+        onchange={(event) => setLocation(details, event)}
+      />
+      <datalist id="gear-places">
+        {#each places as place (place)}<option value={place}></option>{/each}
+      </datalist>
+    </label>
+    <p class="hint">{t.itemLocationHint}</p>
+    {#snippet actions()}
+      <button type="button" class="primary" onclick={() => (detailsOf = null)}>{t.itemDone}</button>
+    {/snippet}
+  </Modal>
+{/if}
 
 <section class="panel" aria-labelledby="coins-title">
   <h2 id="coins-title">{t.coins}</h2>
@@ -430,10 +499,55 @@
 
   .weight {
     flex: 0 0 auto;
-    min-width: 5.5rem;
+    /* Wide enough for "0.25 kg each" with the padding, so the steppers line up row by row. */
+    min-width: 7rem;
+    min-height: 44px;
+    padding: 0 0.375rem;
+    border: 0;
+    border-radius: 0.5rem;
+    background: transparent;
     color: var(--ink-muted);
+    font: inherit;
     font-size: 0.875rem;
     text-align: right;
+  }
+
+  .weight:hover:not(:disabled) {
+    background: var(--hover);
+  }
+
+  /* On a touch screen there is no hover: a dashed underline says it can be tapped, as on the steppers. */
+  .weight:not(:disabled) {
+    text-decoration: underline dashed var(--ink-muted);
+    text-underline-offset: 0.25rem;
+  }
+
+  .weight .none {
+    opacity: 0.6;
+  }
+
+  .detail {
+    display: grid;
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+  }
+
+  .detail input {
+    min-height: 44px;
+    padding: 0 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    background: var(--paper);
+    color: var(--ink);
+    font: inherit;
+    font-weight: 400;
+  }
+
+  .hint {
+    margin: 0;
+    color: var(--ink-muted);
+    font-size: 0.875rem;
   }
 
   .more {

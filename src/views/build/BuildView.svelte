@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
   import { setCount } from '../../build/modifiers.ts';
+  import { ARMOUR_FIELD, weaponField, weaponRows } from '../../build/gear.ts';
   import { openSkillPicks, readLangTools, readSkillSources, skillChoices } from '../../build/proficiencies.ts';
   import type { BuilderInfo } from '../../engine/builder.ts';
   import { counted, fill } from '../../i18n.ts';
@@ -18,6 +19,7 @@
   import BackgroundStep from './BackgroundStep.svelte';
   import ClassStep from './ClassStep.svelte';
   import FeatsStep from './FeatsStep.svelte';
+  import GearStep from './GearStep.svelte';
   import ChoicesStep from './ChoicesStep.svelte';
   import ModifiersStep from './ModifiersStep.svelte';
   import SkillsStep from './SkillsStep.svelte';
@@ -31,15 +33,18 @@
     open: OpenCharacter;
     /** A feature's name from the play view: the screen opens on the Choices step, at that feature's choice. */
     choice: string | null;
+    /** Another step the address names: the Combat tab's "Change weapons" opens "Armour & weapons". */
+    at: BuildStep | null;
     toggleLanguage: () => void;
     t: Texts;
   }
 
-  let { session, open, choice, toggleLanguage, t }: Props = $props();
+  let { session, open, choice, at, toggleLanguage, t }: Props = $props();
 
   let step = $state<BuildStep>('class');
   $effect(() => {
     if (choice !== null) step = 'choices';
+    else if (at !== null) step = at;
   });
   let menuOpen = $state(false);
   let levelUpOpen = $state(false);
@@ -102,6 +107,7 @@
           .map((row) => row.name)
           .join(', ') || t.buildNone,
     feats: filled(Array.from({ length: 9 }, (_, i) => `Feat Name ${i + 1}`)).join(', ') || t.buildNone,
+    gear: filled([ARMOUR_FIELD, ...weaponRows(fields).map(weaponField)]).join(' · ') || t.buildNone,
     choices: !info?.choices.length
       ? t.buildNone
       : openChoices
@@ -118,6 +124,7 @@
     abilities: t.buildAbilities,
     skills: t.buildSkillsStep,
     feats: t.buildFeats,
+    gear: t.buildGearStep,
     choices: t.buildChoices,
     modifiers: t.buildModifiers,
   });
@@ -174,6 +181,8 @@
       <SkillsStep {info} {fields} {disabled} {change} {t} />
     {:else if step === 'feats'}
       <FeatsStep {info} {fields} {disabled} {change} {t} />
+    {:else if step === 'gear'}
+      <GearStep {info} {fields} {disabled} {change} {t} />
     {:else if step === 'choices'}
       <ChoicesStep {info} wanted={choice} {disabled} {pick} {t} />
     {:else}

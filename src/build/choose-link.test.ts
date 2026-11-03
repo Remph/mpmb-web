@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Choice } from '../engine/choices.ts';
-import { choiceNamed, choicesHref, pointsToChooseFeature } from './choose-link.ts';
+import { choiceNamed, choicesHref, gearHref, pointsToChooseFeature } from './choose-link.ts';
 
 const choice = (name: string, kind: Choice['kind'] = 'class'): Choice => ({
   id: name,
@@ -41,5 +41,6 @@ describe('links from feature texts to the Choices step', () => {
 
   it("makes the Choices step's address without the feature mark", () => {
     expect(choicesHref('a b', '◆ Fighting Style')).toBe('#/character/a%20b/build/choices/Fighting%20Style');
+    expect(gearHref('a b')).toBe('#/character/a%20b/build/gear');
   });
 });

@@ -5,6 +5,8 @@
 import { CHOICES_SCRIPT, choicesOf } from './choices.ts';
 import type { Choice, RawChoices } from './choices.ts';
 import type { DialogReply, DialogView } from './host.ts';
+import { GEAR_SCRIPT } from './gear.ts';
+import type { GearInfo } from './gear.ts';
 import { ORIGINS_SCRIPT } from './origins.ts';
 import type { OriginsInfo } from './origins.ts';
 import { SCORES_SCRIPT } from './scores.ts';
@@ -63,6 +65,8 @@ export interface BuilderInfo {
    * The "Skills & languages" step offers them.
    */
   tools: string[];
+  /** What MPMB's armour and attack drop-downs offer, for the "Armour & weapons" step (gear.ts). */
+  gear: GearInfo;
 }
 
 /** MPMB's tool names with each word capitalised, as the sheet shows them ("Cook's Utensils"). ES5. */
@@ -131,6 +135,7 @@ export const BUILDER_INFO_SCRIPT = `(function () {
   info.scores = JSON.parse(${SCORES_SCRIPT});
   info.choices = JSON.parse(${CHOICES_SCRIPT});
   info.tools = JSON.parse(${TOOLS_SCRIPT});
+  info.gear = JSON.parse(${GEAR_SCRIPT});
   return JSON.stringify(info);
 })()`;
 

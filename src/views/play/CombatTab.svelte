@@ -1,5 +1,6 @@
 <!-- The middle column's first tab: what a turn needs. Attacks, spell slots, limited features, actions. -->
 <script lang="ts">
+  import { gearHref } from '../../build/choose-link.ts';
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import type { Step } from '../../session.svelte.ts';
@@ -20,12 +21,14 @@
 
   interface Props {
     fields: FieldViews;
+    /** For the "Change weapons" link to the Build screen's "Armour & weapons" step. */
+    characterId: string;
     disabled: boolean;
     change: (steps: Step[]) => void;
     t: Texts;
   }
 
-  let { fields, disabled, change, t }: Props = $props();
+  let { fields, characterId, disabled, change, t }: Props = $props();
 
   const attacks = $derived(readAttacks(fields));
   const perAction = $derived(attacksPerAction(fields));
@@ -72,6 +75,7 @@
   <div class="head">
     <h2 id="attacks-title">{t.attacks}</h2>
     {#if Number(perAction) > 1}<span class="muted">{fill(t.attacksPerAction, { count: perAction })}</span>{/if}
+    <a class="change" href={gearHref(characterId)}>{t.combatChangeWeapons}</a>
   </div>
   {#each attacks as attack (attack.row)}
     <div class="attack">
@@ -186,9 +190,28 @@
 
   .head {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     justify-content: space-between;
     gap: 0.5rem;
+  }
+
+  /* A quiet way to the Build step: the tab's main actions are the uses below. */
+  .change {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-left: auto;
+    padding: 0 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .change:hover {
+    background: var(--accent-soft);
   }
 
   h2 {

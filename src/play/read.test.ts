@@ -248,6 +248,22 @@ describe('play view extras', () => {
     });
     // Row 3 is the first empty one on page 2; page 3's list is empty.
     expect(inventory.freeRow).toEqual({ gear: 3, extra: 1 });
+    expect(inventory.unit).toBe('kg');
+  });
+
+  it("sets an item's weight and place in MPMB's own columns, and the carried weight follows", () => {
+    const engine = openSheet(referenceSheet('paladin8-warlock2'));
+    const stones = readInventory(viewsOf(engine.doc)).gear.filter((g) => g.name === 'Sending Stones')[0]!;
+    expect(stones).toMatchObject({ weightField: 'Adventuring Gear Weight 24', weightValue: '1' });
+    engine.edit(stones.weightField, '2.5');
+    engine.edit(stones.locationField, 'Backpack');
+    const after = readInventory(viewsOf(engine.doc));
+    expect(after.gear.filter((g) => g.name === 'Sending Stones')[0]).toMatchObject({
+      weight: '2.5 kg',
+      location: 'Backpack',
+    });
+    // 5.45 kg before, the stones 1.5 kg heavier.
+    expect(after.carried).toBe('6.95 kg');
   });
 
   it('adds up the coins in gold pieces', () => {

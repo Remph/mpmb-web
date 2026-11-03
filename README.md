@@ -28,7 +28,10 @@ pnpm test           # unit tests (Vitest)
 pnpm check          # type checks
 pnpm build          # static build in dist/
 pnpm format:check   # Prettier
+pnpm e2e            # browser smoke test (Playwright, Firefox; builds first)
 ```
+
+The smoke test needs Firefox for Playwright once: `pnpm exec playwright install firefox`.
 
 ### Where things are
 

@@ -6,6 +6,7 @@
 // a fresh worker (EngineClient does that) instead of reusing this global scope.
 import { addOnsOf } from '../engine/add-ons.ts';
 import { BUILDER_INFO_SCRIPT, answerUnits, readBuilderInfo } from '../engine/builder.ts';
+import { displaySettings, refreshFormats } from '../engine/display-settings.ts';
 import type { UnitSystem } from '../engine/builder.ts';
 import { Engine } from '../engine/engine.ts';
 import type { AlertReply, DialogReply, DialogView, Host, MenuItem } from '../engine/host.ts';
@@ -209,7 +210,10 @@ function switchUnits(sheet: Engine, system: UnitSystem): void {
 async function run(id: number, command: Command): Promise<void> {
   try {
     const handler = COMMANDS[command.type] as (c: Command) => unknown;
+    // Any command may switch units (the app's own switch, MPMB's bookmark in the sheet menu, an import).
+    const settings = engine ? displaySettings(engine) : null;
     const result = await handler(command);
+    if (engine && settings !== null) refreshFormats(engine, settings);
     sendFields();
     sendMenu();
     const stats = engine?.stats;

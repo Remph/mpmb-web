@@ -116,7 +116,7 @@
     </div>
     <div id="tab-panel" role="tabpanel" aria-labelledby={`tab-${shownTab}`}>
       {#if shownTab === 'combat'}
-        <CombatTab {fields} {disabled} {change} {t} />
+        <CombatTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
       {:else if shownTab === 'spells'}
         <SpellsTab {fields} {disabled} {change} {t} />
       {:else if shownTab === 'checks'}
@@ -128,7 +128,7 @@
       {:else if shownTab === 'profile'}
         <ProfileTab {fields} {disabled} {change} {t} />
       {:else}
-        <NotesTab {fields} {disabled} {change} {t} />
+        <NotesTab {fields} {disabled} {change} pick={(field, answer) => session.pick(field, answer)} {t} />
       {/if}
     </div>
   </div>
