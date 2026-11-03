@@ -95,12 +95,15 @@ const HEX = 16;
 
 /**
  * A string literal in either quote with backslash escapes. Matches `"a \"b\""` and `'c'`; not `"open`.
- * Try it: https://regex101.com/?regex=%22(%3F%3A%5B%5E%22%5C%5C%5D%7C%5C%5C%5B%5Cs%5CS%5D)*%22%7C%27(%3F%3A%5B%5E%27%5C%5C%5D%7C%5C%5C%5B%5Cs%5CS%5D)*%27&testString=%22a%20%5C%22b%5C%22%22%20%27c%27
+ * Written as runs of plain characters between escapes ("unrolled"): a regex that steps one character at a
+ * time overflows Firefox's regex stack on a script of about 8 MB ("too much recursion"); this one reads
+ * 16 MB, and parseScriptFiles catches what is still too large.
+ * Try it: https://regex101.com/?regex=%22%5B%5E%22%5C%5C%5D%2A%28%3F%3A%5C%5C%5B%5Cs%5CS%5D%5B%5E%22%5C%5C%5D%2A%29%2A%22%7C%27%5B%5E%27%5C%5C%5D%2A%28%3F%3A%5C%5C%5B%5Cs%5CS%5D%5B%5E%27%5C%5C%5D%2A%29%2A%27&testString=%22a%20%5C%22b%5C%22%22%20%27c%27%20
  */
-const STRING = String.raw`"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*'`;
+const STRING = String.raw`"[^"\\]*(?:\\[\s\S][^"\\]*)*"|'[^'\\]*(?:\\[\s\S][^'\\]*)*'`;
 /**
  * One `'key':"code"` pair and the comma after it (the last has none). Matches `'2026/11/03 - a.js':"x", `.
- * Try it: https://regex101.com/?regex=%5Cs*(%27(%3F%3A%5B%5E%27%5C%5C%5D%7C%5C%5C.)*%27)%5Cs*%3A%5Cs*(%22(%3F%3A%5B%5E%22%5C%5C%5D%7C%5C%5C.)*%22)%5Cs*(%3F%3A%2C%7C%24)&testString=%272026%2F11%2F03%20-%20a.js%27%3A%22x%22%2C%20
+ * Try it: https://regex101.com/?regex=%5Cs%2A%28%27%5B%5E%27%5C%5C%5D%2A%28%3F%3A%5C%5C.%5B%5E%27%5C%5C%5D%2A%29%2A%27%29%5Cs%2A%3A%5Cs%2A%28%22%5B%5E%22%5C%5C%5D%2A%28%3F%3A%5C%5C.%5B%5E%22%5C%5C%5D%2A%29%2A%22%29%5Cs%2A%28%3F%3A%2C%7C%24%29&testString=%272026%2F11%2F03%20-%20a.js%27%3A%22x%22%2C%20
  */
 const PAIR = new RegExp(String.raw`\s*(${STRING})\s*:\s*(${STRING})\s*(?:,|$)`, 'g');
 /**
@@ -128,14 +131,19 @@ function unquote(literal: string): string {
  * The files in a saved sheet's `User_Imported_Files.Stringified`: MPMB stores them with Acrobat's
  * `toSource()`, `({'2026/11/03 - a.js':"code", ...})`, quotes either way, `\xHH` and `\uHHHH` escapes.
  * Read as data, never run: the code belongs to another character and runs only in a sheet's worker.
- * Returns no files for anything that isn't exactly this shape.
+ * Returns no files for anything that isn't exactly this shape, or that is too large to read.
  */
 export function parseScriptFiles(stringified: string): ScriptFile[] {
   const body = WRAPPED.exec(stringified)?.[1];
   if (body === undefined) return [];
-  const pairs = Array.from(body.matchAll(PAIR));
-  // Every character must belong to a pair, or this isn't a list of files.
-  const read = pairs.reduce((sum, m) => sum + m[0].length, 0);
-  if (read !== body.length && body.trim() !== '') return [];
-  return pairs.map((m) => ({ key: unquote(m[1] ?? "''"), text: unquote(m[2] ?? "''") }));
+  try {
+    const pairs = Array.from(body.matchAll(PAIR));
+    // Every character must belong to a pair, or this isn't a list of files.
+    const read = pairs.reduce((sum, m) => sum + m[0].length, 0);
+    if (read !== body.length && body.trim() !== '') return [];
+    return pairs.map((m) => ({ key: unquote(m[1] ?? "''"), text: unquote(m[2] ?? "''") }));
+  } catch {
+    // A file of tens of megabytes still overflows the regex stack ("too much recursion" in Firefox).
+    return [];
+  }
 }

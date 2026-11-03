@@ -100,11 +100,17 @@
   }
 
   onMount(async () => {
-    const [files, theirs] = await Promise.all([session.scriptFiles(), session.otherScripts()]);
-    rows = (files?.files ?? []).map((file) => ({ ...file, removed: false, newer: null }));
-    manual = files?.manual ?? '';
-    others = theirs;
-    loaded = true;
+    // The open character's scripts and the others' separately: a failed read of the others still shows
+    // this character's (session.otherScripts already skips a character it can't read).
+    try {
+      const [files, theirs] = await Promise.all([session.scriptFiles(), session.otherScripts().catch(() => [])]);
+      rows = (files?.files ?? []).map((file) => ({ ...file, removed: false, newer: null }));
+      manual = files?.manual ?? '';
+      others = theirs;
+    } finally {
+      // Never stuck on "Reading the scripts …": what was read shows, and files can still be added.
+      loaded = true;
+    }
   });
 
   /**

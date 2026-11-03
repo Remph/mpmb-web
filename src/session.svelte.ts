@@ -414,7 +414,8 @@ export class Session {
     const open = this.current;
     if (!store || !open) return [];
     const others = this.characters.filter((meta) => meta.id !== open.meta.id && meta.addOns.files.length > 0);
-    const stored = await Promise.all(others.map((meta) => store.get(meta.id)));
+    // One character that can't be read (or holds a script too large to parse) leaves out only its scripts.
+    const stored = await Promise.all(others.map((meta) => store.get(meta.id).catch(() => undefined)));
     const all = stored.flatMap((character) =>
       character
         ? parseScriptFiles(String(character.data.fields[SCRIPT_FILES_FIELD]?.value ?? '')).map((file) => ({

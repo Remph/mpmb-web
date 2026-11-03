@@ -51,6 +51,15 @@ describe('scripts in a saved sheet', () => {
     ]);
   });
 
+  test('reads a script of 9 MB (one that stepped character by character overflowed Firefox at 8 MB)', () => {
+    const line = 'RaceList["x"] = { name : "a \\"b\\" c", trait : "é" };\r\n';
+    const code = line.repeat(Math.ceil((9 * 1024 * 1024) / line.length));
+    // JSON's escapes are a subset of toSource's.
+    const files = parseScriptFiles(`({'2026/11/03 - big.js':${JSON.stringify(code)}})`);
+    expect(files.map((file) => file.key)).toEqual(['2026/11/03 - big.js']);
+    expect(files[0]?.text === code).toBe(true);
+  });
+
   test('no files in an empty list, an empty field or anything else', () => {
     expect(parseScriptFiles('({})')).toEqual([]);
     expect(parseScriptFiles('')).toEqual([]);
