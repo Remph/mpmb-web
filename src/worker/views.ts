@@ -16,6 +16,12 @@ export interface FieldView {
   widgets: Widget[];
   /** The tooltip. */
   userName?: string;
+  /**
+   * Acrobat's submitName, only where MPMB marks a choice there ("Soldier (background)_#_Gaming Set_#_1-1",
+   * SetProf for languages and tools). Other fields keep large toSource data in it, which the page
+   * doesn't need.
+   */
+  submitName?: string;
   options?: (string | [string, string])[];
   maxLen?: number;
   /** Colours and fonts the scripts set (Acrobat colour arrays). */
@@ -35,6 +41,7 @@ function viewOf(state: FieldState): FieldView {
   };
   if (state.formatted !== undefined) view.text = state.formatted;
   if (def.userName !== undefined) view.userName = def.userName;
+  if (def.submitName?.includes('_#_')) view.submitName = def.submitName;
   if (def.options !== undefined) view.options = def.options;
   if (def.maxLen !== undefined) view.maxLen = def.maxLen;
   // A deep copy: the engine keeps changing its state objects, the view must not change with them.

@@ -58,7 +58,25 @@ export interface BuilderInfo {
   scores: ScoresInfo;
   /** What the class features, species and feats let the player choose, from MPMB's menus (choices.ts). */
   choices: Choice[];
+  /**
+   * MPMB's tools (ToolsList, add-on scripts included), as MPMB writes them on the sheet: "Thieves' Tools".
+   * The "Skills & languages" step offers them.
+   */
+  tools: string[];
 }
+
+/** MPMB's tool names with each word capitalised, as the sheet shows them ("Cook's Utensils"). ES5. */
+const TOOLS_SCRIPT = `(function () {
+  var out = [];
+  for (var key in ToolsList) {
+    var name = String((ToolsList[key] && ToolsList[key].name) || key);
+    // The first letter of each word: "cook's utensils" becomes "Cook's Utensils" (not "Cook'S"). Try it:
+    // https://regex101.com/?regex=(%5E%7C%5Cs)(%5CS)&flags=g&testString=cook%27s%20utensils
+    name = name.replace(/(^|\\s)(\\S)/g, function (all, space, first) { return space + first.toUpperCase(); });
+    if (out.indexOf(name) === -1) out.push(name);
+  }
+  return JSON.stringify(out);
+})()`;
 
 /**
  * Runs in the sheet and returns the classes part of BuilderInfo as JSON. ES5 only: it runs next to MPMB's own scripts, in the
@@ -106,12 +124,13 @@ const CLASSES_SCRIPT = `(function () {
   return JSON.stringify(out);
 })()`;
 
-/** The three readings in one, so the Build screen gets them from one moment of the sheet. */
+/** The readings in one, so the Build screen gets them from one moment of the sheet. */
 export const BUILDER_INFO_SCRIPT = `(function () {
   var info = JSON.parse(${CLASSES_SCRIPT});
   info.origins = JSON.parse(${ORIGINS_SCRIPT});
   info.scores = JSON.parse(${SCORES_SCRIPT});
   info.choices = JSON.parse(${CHOICES_SCRIPT});
+  info.tools = JSON.parse(${TOOLS_SCRIPT});
   return JSON.stringify(info);
 })()`;
 

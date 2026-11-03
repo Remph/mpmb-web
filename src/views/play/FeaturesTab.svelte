@@ -1,6 +1,10 @@
-<!-- Senses and defenses, then MPMB's feature texts: class, species, feats, background. -->
+<!--
+  Senses and defenses, the proficiencies (M6.5: armour, weapons, tools, languages), then MPMB's feature
+  texts: class, species, feats, background.
+-->
 <script lang="ts">
   import { choicesHref } from '../../build/choose-link.ts';
+  import { hasProficiencies, readProficiencies } from '../../build/proficiencies.ts';
   import type { Texts } from '../../i18n.ts';
   import { readDefenses, readFeatures, textRuns } from '../../play/read.ts';
   import type { FieldViews } from '../../worker/views.ts';
@@ -10,6 +14,23 @@
   const choose = $derived({ href: (feature: string) => choicesHref(characterId, feature), label: t.featuresChoose });
   const features = $derived(readFeatures(fields));
   const defenses = $derived(readDefenses(fields));
+  const profs = $derived(readProficiencies(fields));
+  /** The proficiency card's rows, the empty ones left out. MPMB's own texts (other weapons) as written. */
+  const profRows = $derived(
+    [
+      {
+        label: t.profArmour,
+        items: [...profs.armour.map((k) => t[`prof_${k}`]), ...(profs.otherArmour ? [profs.otherArmour] : [])],
+      },
+      {
+        label: t.profWeapons,
+        items: [...profs.weapons.map((k) => t[`prof_${k}`]), ...(profs.otherWeapons ? [profs.otherWeapons] : [])],
+      },
+      { label: t.profTools, items: profs.tools },
+      { label: t.profLanguages, items: profs.languages },
+      { label: t.profMore, items: profs.more ? [profs.more] : [] },
+    ].filter((row) => row.items.length),
+  );
   /** Senses, resistances, MPMB's labelled lines (immunities …), then the rest: one card each. */
   const cards = $derived(
     [
@@ -48,6 +69,20 @@
       </section>
     {/each}
   </div>
+{/if}
+
+{#if hasProficiencies(profs)}
+  <section class="panel profs" aria-labelledby="profs-title">
+    <h2 id="profs-title">{t.proficiencies}</h2>
+    {#each profRows as row (row.label)}
+      <div class="prof">
+        <span class="label">{row.label}</span>
+        <ul>
+          {#each row.items as item, j (j)}<li>{item}</li>{/each}
+        </ul>
+      </div>
+    {/each}
+  </section>
 {/if}
 
 {#each features as block, i (i)}
@@ -105,6 +140,50 @@
 
   .card li.resistance {
     background: var(--hp-soft);
+  }
+
+  .profs h2 {
+    font-size: 0.8125rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 0.25rem;
+  }
+
+  /* One row per kind: its name on the left, the chips beside it. */
+  .prof {
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    gap: 0.25rem 0.75rem;
+    align-items: center;
+    padding: 0.375rem 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .prof:first-of-type {
+    border-top: 0;
+  }
+
+  .prof .label {
+    color: var(--ink-muted);
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+
+  .prof ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .prof li {
+    padding: 0.125rem 0.625rem;
+    border-radius: 1rem;
+    background: var(--accent-soft);
+    font-weight: 700;
   }
 
   .card li.sentence {
