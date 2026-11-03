@@ -123,6 +123,37 @@ describe('runDialog', () => {
     expect(quiet.closed).toBe(0);
   });
 
+  test('the OK button runs its own "ok" handler before validate and commit, as in Acrobat', () => {
+    // MPMB's spell dialogs keep the player's picks in their "ok" handler and have no commit.
+    const calls: string[] = [];
+    const spec: DialogSpec = {
+      description,
+      ok: (d: DialogApi) => calls.push(`ok ${String(d.store().name)}`),
+      validate: () => calls.push('validate'),
+      commit: () => calls.push('commit'),
+    };
+    expect(runDialog(spec, hostOf([{ type: 'close', result: 'ok', state: { name: 'Anna' } }]), tools)).toBe('ok');
+    expect(calls).toEqual(['ok Anna', 'validate', 'commit']);
+  });
+
+  test('the Other button runs its "other" handler, which may end the dialog with its own result', () => {
+    const calls: string[] = [];
+    const ending: DialogSpec = { description, other: (d: DialogApi) => (calls.push('other'), d.end('book')) };
+    expect(runDialog(ending, hostOf([{ type: 'close', result: 'other', state: {} }]), tools)).toBe('book');
+    expect(calls).toEqual(['other']);
+    // Without a handler, or one that doesn't end it, the dialog ends with "other"; commit doesn't run.
+    const plainOther: DialogSpec = { description, commit: () => calls.push('commit') };
+    expect(runDialog(plainOther, hostOf([{ type: 'close', result: 'other', state: {} }]), tools)).toBe('other');
+    expect(calls).toEqual(['other']);
+  });
+
+  test('a cancel handler runs, and the dialog still ends with "cancel"', () => {
+    const calls: string[] = [];
+    const spec: DialogSpec = { description, cancel: () => calls.push('cancel'), commit: () => calls.push('commit') };
+    expect(runDialog(spec, hostOf([{ type: 'close', result: 'cancel', state: {} }]), tools)).toBe('cancel');
+    expect(calls).toEqual(['cancel']);
+  });
+
   test('a host that cannot wait for the user gets "cancel"', () => {
     expect(runDialog({ description }, hostOf([null]), tools)).toBe('cancel');
   });

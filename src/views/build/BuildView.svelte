@@ -11,6 +11,8 @@
   import { counted, fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import { ABILITIES, shown, valueOf } from '../../play/read.ts';
+  import { readSpells } from '../../play/spells.ts';
+  import { unsentFor } from '../../build/spell-drafts.svelte.ts';
   import type { OpenCharacter, Session, Step } from '../../session.svelte.ts';
   import Notes from '../Notes.svelte';
   import SheetMenu from '../play/SheetMenu.svelte';
@@ -24,6 +26,7 @@
   import ModifiersStep from './ModifiersStep.svelte';
   import SkillsStep from './SkillsStep.svelte';
   import SpeciesStep from './SpeciesStep.svelte';
+  import SpellsStep from './SpellsStep.svelte';
   import LevelUp from './LevelUp.svelte';
   import { BUILD_STEPS } from './steps.ts';
   import type { BuildStep } from './steps.ts';
@@ -113,10 +116,22 @@
       : openChoices
         ? fill(t.buildChoicesOpen, { n: String(openChoices) })
         : t.buildChoicesDone,
+    // The sources on the spell sheet ("Wizard · Magic Initiate"); the step itself reads MPMB's dialogs.
+    // A trailing " Spells" goes: https://regex101.com/?regex=%5Cs%2BSpells%24&testString=Wizard%20Spells
+    spells:
+      readSpells(fields)
+        .map((source) => source.title.replace(/\s+Spells$/, ''))
+        .join(' · ') || t.buildNone,
     modifiers: modifiersSet ? fill(t.buildModSetCount, { n: String(modifiersSet) }) : t.buildNone,
   });
   /** Shown as a badge on the step, like the mock-up: what still waits for the player. */
-  const badges = $derived<Partial<Record<BuildStep, number>>>({ skills: skillsOpen, choices: openChoices });
+  /** Spells step picks not on the spell sheet yet: the player left the step before "Update spell sheet". */
+  const unsent = $derived(unsentFor(open.meta.id, open.meta.updated)?.changes ?? 0);
+  const badges = $derived<Partial<Record<BuildStep, number>>>({
+    skills: skillsOpen,
+    choices: openChoices,
+    spells: unsent,
+  });
   const stepTitles = $derived<Record<BuildStep, string>>({
     class: t.buildClassTitle,
     species: t.buildSpecies,
@@ -126,6 +141,7 @@
     feats: t.buildFeats,
     gear: t.buildGearStep,
     choices: t.buildChoices,
+    spells: t.buildSpellsStep,
     modifiers: t.buildModifiers,
   });
 </script>
@@ -185,6 +201,16 @@
       <GearStep {info} {fields} {disabled} {change} {t} />
     {:else if step === 'choices'}
       <ChoicesStep {info} wanted={choice} {disabled} {pick} {t} />
+    {:else if step === 'spells'}
+      <SpellsStep
+        load={() => session.spellsInfo()}
+        apply={(picks, sheet) => session.setSpells(picks, sheet)}
+        {fields}
+        characterId={open.meta.id}
+        updated={open.meta.updated}
+        {disabled}
+        {t}
+      />
     {:else}
       <ModifiersStep {fields} {disabled} {change} {t} />
     {/if}

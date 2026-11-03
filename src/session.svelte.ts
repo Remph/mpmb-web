@@ -4,6 +4,7 @@
 import type { AddOns } from './engine/add-ons.ts';
 import type { BuilderInfo, UnitSystem } from './engine/builder.ts';
 import type { ScoreChange } from './engine/scores.ts';
+import type { SpellPicks, SpellSheetPicks, SpellsInfo } from './engine/spells.ts';
 import type { CharacterData } from './engine/sheet-data.ts';
 import { SHEET_ID } from './engine/sheet-id.ts';
 import { FF } from './engine/types.ts';
@@ -33,8 +34,12 @@ export interface OpenCharacter {
   status: 'opening' | 'working' | 'saving' | 'saved' | 'error';
 }
 
-/** One change the play view makes on the sheet: type into a field, or click a check box. */
-export type Step = { edit: string; text: string } | { click: string };
+/**
+ * One change the play view makes on the sheet: type into a field, or click a check box or button
+ * (`shift`: with Shift held, which opens a spell row's own menu in MPMB; `newRow`: a spell level's "+ Row"
+ * there, see newSpellRow in engine/spells.ts).
+ */
+export type Step = { edit: string; text: string } | { click: string; shift?: boolean; newRow?: boolean };
 
 /**
  * The fields as they will be once the worker made these steps. The page shows them at once, so the
@@ -47,7 +52,7 @@ export function expected(fields: FieldViews, steps: Step[]): FieldViews {
     const name = 'edit' in step ? step.edit : step.click;
     const view = next[name];
     // A push button (MPMB's row menus) only runs its script; the worker reports what that changed.
-    if (!view || ('click' in step && view.flags & FF.pushButton)) return;
+    if (!view || ('click' in step && (view.flags & FF.pushButton || step.shift || step.newRow))) return;
     // A click toggles a check box between "Off" and the value its widget has when on.
     const on = view.widgets[0]?.on ?? 'Yes';
     const value = 'edit' in step ? step.text : view.value === 'Off' || view.value === '' ? on : 'Off';
@@ -330,6 +335,14 @@ export class Session {
     return this.inLine(() => this.client.pick(field, answer));
   }
 
+  /**
+   * The Spells step's picks through MPMB's spell dialogs, then MPMB makes the spell sheet pages again. In line
+   * after the changes before it, like setScores.
+   */
+  setSpells(picks: SpellPicks[], sheet: SpellSheetPicks | null): Promise<void> {
+    return this.inLine(() => this.client.setSpells(picks, sheet));
+  }
+
   /** Runs a worker command after the work before it, then shows and saves what it changed. */
   private inLine(job: () => Promise<unknown>): Promise<void> {
     const open = this.current;
@@ -359,6 +372,19 @@ export class Session {
     if (!open || this.current !== open || open.status === 'error') return null;
     try {
       return await this.client.builder();
+    } catch (err) {
+      this.note('error', this.explain(err));
+      return null;
+    }
+  }
+
+  /** What MPMB's spell dialogs offer and hold, for the Spells step; null like builderInfo. */
+  async spellsInfo(): Promise<SpellsInfo | null> {
+    const open = this.current;
+    await this.running;
+    if (!open || this.current !== open || open.status === 'error') return null;
+    try {
+      return await this.client.spells();
     } catch (err) {
       this.note('error', this.explain(err));
       return null;
@@ -402,7 +428,9 @@ export class Session {
         await steps.reduce<Promise<unknown>>(
           (previous, step) =>
             previous.then(() =>
-              'edit' in step ? this.client.edit(step.edit, step.text) : this.client.click(step.click),
+              'edit' in step
+                ? this.client.edit(step.edit, step.text)
+                : this.client.click(step.click, 0, step.shift, step.newRow),
             ),
           Promise.resolve(),
         );

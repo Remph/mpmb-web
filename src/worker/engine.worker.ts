@@ -18,6 +18,8 @@ import { allowTimer } from '../engine/startup.ts';
 import type { Bookmark, SheetSnapshot } from '../engine/types.ts';
 import { offers } from '../engine/choices.ts';
 import { answerScores } from '../engine/scores.ts';
+import { SPELLS_READ_SCRIPT, applySpellPicks, newSpellRow, readSpellsInfo } from '../engine/spells.ts';
+import type { RowMenus } from '../engine/spells.ts';
 import { answerWelcome } from '../engine/welcome.ts';
 import { readSheetPdf } from '../pdf/read-sheet.ts';
 import { waitForAnswer } from './channel.ts';
@@ -80,8 +82,19 @@ let answerItself: ((view: DialogView) => DialogReply | null) | null = null;
  */
 let menuAnswer: string | null = null;
 let menuPicked = false;
+/**
+ * For a spell level's "+ Row" (newSpellRow): the next menu goes to the player, but MPMB gets "nothing"
+ * back; the player's pick is kept here and applied once MPMB has inserted the new row.
+ */
+let menuPeek: { picked: string | null } | null = null;
 
 function popUpMenu(items: MenuItem[]): string | null {
+  const peek = menuPeek;
+  if (peek) {
+    menuPeek = null;
+    peek.picked = ask({ kind: 'menu', items }) as string | null;
+    return null;
+  }
   const answer = menuAnswer;
   if (answer === null) return ask({ kind: 'menu', items }) as string | null;
   menuAnswer = null;
@@ -172,13 +185,16 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
     return open(sheet);
   },
   edit: ({ field, text }) => opened().edit(field, text),
-  click: ({ field, widget }) => opened().click(field, widget),
+  click: ({ field, widget, shift, newRow }) =>
+    newRow ? newSpellRow(opened(), field, true, ROW_MENUS) : opened().click(field, widget, shift),
   bookmark: ({ path }) => opened().clickBookmark(path),
   save: () => diffCharacter(blankSheet(), opened().snapshot()),
   builder: () => readBuilderInfo(opened().evaluate(BUILDER_INFO_SCRIPT)),
   units: ({ system }) => switchUnits(opened(), system),
   scores: ({ changes }) => answered(answerScores(changes), () => opened().click('Ability Scores Button')),
   pick: ({ field, answer }) => pick(opened(), field, answer),
+  spells: () => readSpellsInfo(opened().evaluate(SPELLS_READ_SCRIPT)),
+  setSpells: ({ picks, sheet }) => applySpellPicks(opened(), picks, answered, sheet),
 };
 
 function pick(sheet: Engine, field: string, answer: string): boolean {
@@ -191,6 +207,28 @@ function pick(sheet: Engine, field: string, answer: string): boolean {
   }
   return menuPicked;
 }
+
+/** The app's answers and the player's withheld pick for newSpellRow (a spell level's "+ Row"). */
+const ROW_MENUS: RowMenus = {
+  answered: (answer, job) => {
+    menuAnswer = answer;
+    try {
+      job();
+    } finally {
+      menuAnswer = null;
+    }
+  },
+  peeked: (job) => {
+    const peek = { picked: null as string | null };
+    menuPeek = peek;
+    try {
+      job();
+    } finally {
+      menuPeek = null;
+    }
+    return peek.picked;
+  },
+};
 
 /** Runs MPMB's script with the app answering its dialog (the answer gives null for any other pop-up). */
 function answered(answer: (view: DialogView) => DialogReply | null, job: () => void): void {

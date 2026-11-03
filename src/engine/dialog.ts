@@ -32,6 +32,8 @@ export interface DialogApi {
   selectEntryInList?(id: string, entry: string): void;
 }
 
+const CLOSING_IDS = ['ok', 'cancel', 'other'];
+
 /** A safety net: a dialog that never closes (a page that keeps sending events) gives up. */
 const MAX_ROUNDS = 1000;
 
@@ -140,6 +142,13 @@ export function runDialog(spec: DialogSpec, host: Host, tools: RealmTools): stri
     if (reply.type === 'event') {
       call(reply.id);
       return ended;
+    }
+    // Acrobat's closing buttons are elements too (ids "ok", "cancel", "other"): their own handler runs
+    // first. MPMB's spell dialogs keep the player's picks in "ok" and have no commit; "other" handlers
+    // end the dialog with a result of their own ("book", "next").
+    if (CLOSING_IDS.includes(reply.result)) {
+      call(reply.result);
+      if (ended !== undefined) return ended;
     }
     if (reply.result !== 'ok') return reply.result;
     // OK runs validate (false keeps the dialog open), then commit.

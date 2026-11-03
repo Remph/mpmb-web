@@ -33,3 +33,7 @@ export const choicesHref = (characterId: string, feature: string): string =>
 
 /** The address of the Build screen's "Armour & weapons" step (the Combat tab's "Change weapons"). */
 export const gearHref = (characterId: string): string => `#/character/${encodeURIComponent(characterId)}/build/gear`;
+
+/** The address of the Build screen's "Spells" step (the Spells tab's "Choose spells"). */
+export const spellsHref = (characterId: string): string =>
+  `#/character/${encodeURIComponent(characterId)}/build/spells`;

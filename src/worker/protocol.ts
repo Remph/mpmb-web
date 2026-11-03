@@ -2,6 +2,7 @@
 import type { AddOns } from '../engine/add-ons.ts';
 import type { UnitSystem } from '../engine/builder.ts';
 import type { ScoreChange } from '../engine/scores.ts';
+import type { SpellPicks, SpellSheetPicks } from '../engine/spells.ts';
 import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem, Unavailable } from '../engine/host.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
 import type { FieldViews } from './views.ts';
@@ -13,7 +14,11 @@ export type Command =
   /** Opens a character from a filled MPMB PDF (Colorful A4 v24.2.0). */
   | { type: 'importPdf'; bytes: ArrayBuffer }
   | { type: 'edit'; field: string; text: string }
-  | { type: 'click'; field: string; widget?: number }
+  /**
+   * `shift`: with Shift held, as for MPMB's spell row menu. `newRow`: a spell level's "+ Row" on this
+   * row's check box, MPMB's menu on a new row inserted there (newSpellRow in engine/spells.ts).
+   */
+  | { type: 'click'; field: string; widget?: number; shift?: boolean; newRow?: boolean }
   | { type: 'bookmark'; path: string[] }
   /** The open character as differences from the blank sheet, to save. */
   | { type: 'save' }
@@ -28,7 +33,14 @@ export type Command =
    * answers the menu with this item's cReturn, as the player's pick. Returns false (and picks nothing)
    * when the menu doesn't offer it.
    */
-  | { type: 'pick'; field: string; answer: string };
+  | { type: 'pick'; field: string; answer: string }
+  /** What MPMB's spell dialogs offer and hold (SpellsInfo), read without showing them. */
+  | { type: 'spells' }
+  /**
+   * The Spells step's picks into MPMB's spell dialogs, then MPMB's "(Re)generate a Spell Sheet" with the app
+   * pressing OK in those dialogs.
+   */
+  | { type: 'setSpells'; picks: SpellPicks[]; sheet: SpellSheetPicks | null };
 
 /** The page's first message: the shared memory for answers, when the page is cross-origin isolated. */
 export interface Setup {

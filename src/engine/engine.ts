@@ -24,6 +24,7 @@ import type { Host, MenuItem } from './host.ts';
 import { ALERT_ANSWER, ALERT_BUTTONS } from './host.ts';
 import { realmTools } from './realm.ts';
 import type { Realm, RealmTools } from './realm.ts';
+import { installAcrobatReplace } from './acrobat-replace.ts';
 import { installToSource } from './to-source.ts';
 import type { RealmConstructors } from './to-source.ts';
 import type { SheetSnapshot } from './types.ts';
@@ -139,6 +140,7 @@ export class Engine {
     engine.install();
     const realm = engine.tools.realm;
     installToSource(realm.global as unknown as RealmConstructors);
+    installAcrobatReplace(realm.global as unknown as RealmConstructors);
     [...options.scripts]
       .sort((a, b) => (a.name < b.name ? -1 : Number(a.name > b.name)))
       .forEach((s) => {
@@ -437,8 +439,8 @@ export class Engine {
     return ok;
   }
 
-  click(name: string, widget = 0): void {
-    this.doc.click(name, widget);
+  click(name: string, widget = 0, shift = false): void {
+    this.doc.click(name, widget, shift);
     this.runTimers();
   }
 

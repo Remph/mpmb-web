@@ -2,14 +2,24 @@
   The Spells tab (M4.6, layout "by level" that Nick picked on 2026-10-31): the spells on MPMB's spell sheet
   pages, one block per spell level with that level's slots in its heading, so finding a spell and ticking
   the slot happen in one place. The mark in front of a spell ticks it prepared, as a click on the PDF's
-  box does; choosing which spells are on the sheet stays in MPMB's Spells menu.
+  box does; "Choose spells" opens the Build screen's Spells step (M7).
 -->
 <script lang="ts">
+  import { spellsHref } from '../../build/choose-link.ts';
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import Modal from '../../popups/Modal.svelte';
   import { ABILITIES, isOn, readSpellSlotUse } from '../../play/read.ts';
-  import { checkboxField, isReady, preparedCount, readSpells, spellText } from '../../play/spells.ts';
+  import {
+    checkboxField,
+    freeRow,
+    isReady,
+    preparedCount,
+    readSpells,
+    rowAfter,
+    spellPages,
+    spellText,
+  } from '../../play/spells.ts';
   import type { Spell, SpellSource } from '../../play/spells.ts';
   import type { Step } from '../../session.svelte.ts';
   import type { FieldViews } from '../../worker/views.ts';
@@ -17,12 +27,14 @@
 
   interface Props {
     fields: FieldViews;
+    /** For the link to the Build screen's Spells step. */
+    characterId: string;
     disabled: boolean;
     change: (steps: Step[]) => void;
     t: Texts;
   }
 
-  let { fields, disabled, change, t }: Props = $props();
+  let { fields, characterId, disabled, change, t }: Props = $props();
 
   const sources = $derived(readSpells(fields));
   const slots = $derived(readSpellSlotUse(fields));
@@ -56,6 +68,7 @@
             .map((spell): Entry => ({ spell, source, level })),
         ),
         slots: slots.find((s) => s.level === level),
+        addRow: addRowSteps(level),
       }))
       .filter((block) => block.entries.length > 0),
   );
@@ -105,6 +118,40 @@
   };
   /** MPMB's own click on the box toggles it, as in Acrobat (checkbox ↔ checkedbox, once ↔ once_used). */
   const tap = (spell: Spell): void => change([{ click: checkboxField(spell) }]);
+
+  /**
+   * MPMB's row menu (M7): Shift and a click on a row's first column, as in Acrobat. On a spell's row it
+   * moves, clears or inserts rows; on the first free row it adds a spell, an empty line or a header.
+   */
+  const rowMenu = (box: string): void => change([{ click: box, shift: true }]);
+  /** The pop-up closes first: MPMB's menu opens in its place, and the row may be gone afterwards. */
+  function editRow(spell: Spell): void {
+    const box = checkboxField(spell);
+    details = null;
+    rowMenu(box);
+  }
+  const hasPages = $derived(spellPages(fields).length > 0);
+
+  /**
+   * A level's "+ Row": MPMB's row menu on the row under the class's last spell of that level (another
+   * source's when the class has none), so a spell added there lands in that level. Where that row is in
+   * use (the next level's divider), the worker lets MPMB insert an empty row there once the player has
+   * picked (newSpellRow in engine/spells.ts).
+   */
+  function addRowSteps(level: number): Step[] | null {
+    const lastOf = (source: SpellSource | undefined): Spell | undefined =>
+      source?.levels.find((l) => l.level === level)?.spells.at(-1);
+    const anchor =
+      lastOf(main) ??
+      sources
+        .map(lastOf)
+        .filter((s) => s !== undefined)
+        .at(-1);
+    const after = anchor ? rowAfter(fields, anchor) : null;
+    if (!after) return null;
+    return [{ click: after.box, shift: true, ...(after.used ? { newRow: true } : {}) }];
+  }
+  const freeBox = $derived(freeRow(fields));
 
   let details: Entry | null = $state(null);
   /** The spell as it is now, so a tap in the pop-up shows its new state. */
@@ -206,7 +253,10 @@
       {/if}
     {/each}
   </div>
-  <p class="hint">{t.spellsHowTo}</p>
+  <div class="how">
+    <p class="hint">{t.spellsHowTo}</p>
+    <a class="change" href={spellsHref(characterId)}>{t.spellsChoose}</a>
+  </div>
 </section>
 
 {#each levels as block (block.level)}
@@ -251,13 +301,52 @@
         </li>
       {/each}
     </ul>
+    {#if block.addRow}
+      {@const addRow = block.addRow}
+      <button
+        type="button"
+        class="add-row"
+        aria-haspopup="menu"
+        aria-label={fill(t.spellsAddRowLabel, { level: levelName(block.level) })}
+        {disabled}
+        onclick={() => change(addRow)}>{t.spellsAddRowHere}</button
+      >
+    {/if}
   </section>
 {:else}
   <p class="panel hint">{t.noReadySpells}</p>
 {/each}
 
+{#if hasPages}
+  <section class="panel rows" aria-labelledby="spell-rows-title">
+    <div>
+      <h2 id="spell-rows-title">{t.spellsRows}</h2>
+      <p class="hint">{freeBox ? t.spellsRowsLine : t.spellsNoFreeRow}</p>
+    </div>
+    <button
+      type="button"
+      aria-haspopup="menu"
+      disabled={disabled || !freeBox}
+      onclick={() => freeBox && rowMenu(freeBox)}>{t.spellsAddRow}</button
+    >
+  </section>
+{/if}
+
+{#snippet rowActions()}
+  {#if shown}
+    {@const spell = shown}
+    <button
+      type="button"
+      aria-haspopup="menu"
+      aria-describedby="spell-row-hint"
+      {disabled}
+      onclick={() => editRow(spell)}>{t.spellRowOptions}</button
+    >
+  {/if}
+{/snippet}
+
 {#if shown && details && text}
-  <Modal title={shown.fullName} onescape={() => (details = null)} closeLabel={t.close}>
+  <Modal title={shown.fullName} onescape={() => (details = null)} closeLabel={t.close} actions={rowActions}>
     <p class="kind">{[text.kind || levelName(details.level), details.source.title].join(' · ')}</p>
     {#if markState(shown) || shown.mark.free !== null}
       <div class="state">
@@ -305,6 +394,8 @@
       </ul>
     {/if}
     {#if t.locale !== 'en'}<p class="note">{t.spellTextLanguage}</p>{/if}
+    <!-- What "Edit row" below does, in words a touch screen shows too (no hover title). -->
+    <p class="note row-hint" id="spell-row-hint">{t.spellRowOptionsLine}</p>
   </Modal>
 {/if}
 
@@ -380,6 +471,30 @@
 
   .hint {
     margin: 0.25rem 0 0;
+  }
+
+  .how {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .change {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-left: auto;
+    padding: 0 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .change:hover {
+    background: var(--accent-soft);
   }
 
   /* More prepared than the class allows: MPMB lets it happen, the player should see it. */
@@ -556,6 +671,28 @@
     text-decoration: line-through;
   }
 
+  /* Quiet, under the level's list: the spells are the point of the block, not adding rows. */
+  .add-row {
+    display: block;
+    margin: 0.25rem 0 0 auto;
+    padding: 0 0.75rem;
+    color: var(--accent);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .rows {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .rows > div {
+    flex: 1 1 20rem;
+  }
+
   /* The pop-up. */
   .kind {
     margin: 0 0 0.5rem;
@@ -594,6 +731,9 @@
     margin: 0 0 0.5rem;
     color: var(--ink-muted);
     font-size: 0.875rem;
+  }
+  .row-hint {
+    margin-top: 0.75rem;
   }
 
   .changes {

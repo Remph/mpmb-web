@@ -43,25 +43,25 @@
 
   // The address says what is on screen, so a reload opens the same screen: "#/character/<id>", its
   // Build screen "…/build", the Build screen's Choices step at one feature's choice,
-  // "…/build/choices/<feature name>" (from the play view's features), or its "Armour & weapons" step,
-  // "…/build/gear" (from the Combat tab). "#/" and "" are the list. "#/character/abc/build/gear" passes,
-  // "#/character/abc/build/spells" doesn't.
-  // Try it: https://regex101.com/?regex=%5E%23%5C%2Fcharacter%5C%2F%28%5B%5E%2F%5D%2B%29%28%5C%2Fbuild%28%3F%3A%5C%2Fchoices%5C%2F%28%5B%5E%2F%5D%2A%29%7C%5C%2F%28gear%29%29%3F%29%3F%24&testString=%23%2Fcharacter%2Fabc%2Fbuild%2Fgear
-  // A feature's choice: https://regex101.com/?regex=%5E%23%5C%2Fcharacter%5C%2F%28%5B%5E%2F%5D%2B%29%28%5C%2Fbuild%28%3F%3A%5C%2Fchoices%5C%2F%28%5B%5E%2F%5D%2A%29%7C%5C%2F%28gear%29%29%3F%29%3F%24&testString=%23%2Fcharacter%2Fabc%2Fbuild%2Fchoices%2FFighting%2520Style
-  const CHARACTER_ROUTE = /^#\/character\/([^/]+)(\/build(?:\/choices\/([^/]*)|\/(gear))?)?$/;
+  // "…/build/choices/<feature name>" (from the play view's features), its "Armour & weapons" step,
+  // "…/build/gear" (from the Combat tab), or its "Spells" step, "…/build/spells" (from the Spells tab).
+  // "#/" and "" are the list. "#/character/abc/build/spells" passes, "#/character/abc/build/notes" doesn't.
+  // Try it: https://regex101.com/?regex=%5E%23%5C%2Fcharacter%5C%2F%28%5B%5E%2F%5D%2B%29%28%5C%2Fbuild%28%3F%3A%5C%2Fchoices%5C%2F%28%5B%5E%2F%5D%2A%29%7C%5C%2F%28gear%7Cspells%29%29%3F%29%3F%24&testString=%23%2Fcharacter%2Fabc%2Fbuild%2Fspells
+  // A feature's choice: https://regex101.com/?regex=%5E%23%5C%2Fcharacter%5C%2F%28%5B%5E%2F%5D%2B%29%28%5C%2Fbuild%28%3F%3A%5C%2Fchoices%5C%2F%28%5B%5E%2F%5D%2A%29%7C%5C%2F%28gear%7Cspells%29%29%3F%29%3F%24&testString=%23%2Fcharacter%2Fabc%2Fbuild%2Fchoices%2FFighting%2520Style
+  const CHARACTER_ROUTE = /^#\/character\/([^/]+)(\/build(?:\/choices\/([^/]*)|\/(gear|spells))?)?$/;
   let missing = $state(false);
   let building = $state(false);
   /** The feature whose choice the Build screen opens at, or null for its first step. */
   let choiceOf = $state<string | null>(null);
-  /** A Build step the address names other than Choices ("gear"), or null. */
-  let stepOf = $state<'gear' | null>(null);
+  /** A Build step the address names other than Choices ("gear", "spells"), or null. */
+  let stepOf = $state<'gear' | 'spells' | null>(null);
 
   async function route() {
     const match = CHARACTER_ROUTE.exec(location.hash);
     const id = match?.[1];
     building = Boolean(match?.[2]);
     choiceOf = match?.[3] === undefined ? null : decodeURIComponent(match[3]);
-    stepOf = match?.[4] === 'gear' ? 'gear' : null;
+    stepOf = match?.[4] === 'gear' || match?.[4] === 'spells' ? match[4] : null;
     if (!id) {
       if (session.current) await session.close();
       missing = false;

@@ -504,18 +504,20 @@ export class SheetDocument implements FieldOwner {
 
   /**
    * A click on a button: MouseDown, a check box or radio button changes state, then MouseUp. MPMB's
-   * MouseUp scripts read the new state (`isBoxChecked`), so the change comes first.
+   * MouseUp scripts read the new state (`isBoxChecked`), so the change comes first. `shift`: a click with
+   * Shift held, which some of MPMB's buttons answer with a menu (a spell row's line menu).
    */
-  click(name: string, widget = 0): void {
+  click(name: string, widget = 0, shift = false): void {
     const state = this.stateFor(name);
-    this.runEvent(state, 'D');
+    const keys = shift ? { shift: true } : {};
+    this.runEvent(state, 'D', keys);
     if (state.def.type === 'Btn' && !(state.def.flags & FF.pushButton)) {
       const on = state.def.widgets[widget]?.on ?? 'Yes';
       const isRadio = (state.def.flags & FF.radio) !== 0;
       const next = state.value === on && !isRadio ? 'Off' : on;
       this.store(state, next, null);
     }
-    this.runEvent(state, 'A');
+    this.runEvent(state, 'A', keys);
   }
 
   // ---- resetForm ----

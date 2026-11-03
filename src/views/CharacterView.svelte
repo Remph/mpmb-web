@@ -118,7 +118,7 @@
       {#if shownTab === 'combat'}
         <CombatTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
       {:else if shownTab === 'spells'}
-        <SpellsTab {fields} {disabled} {change} {t} />
+        <SpellsTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
       {:else if shownTab === 'checks'}
         <Checks {fields} {disabled} {change} {t} />
       {:else if shownTab === 'inventory'}
