@@ -23,9 +23,10 @@
   import Vitals from './play/Vitals.svelte';
   import { flushSync } from 'svelte';
   import PrintSheet from './print/PrintSheet.svelte';
-  import type { PrintLayout, PrintPart } from './print/PrintSheet.svelte';
+  import type { PrintLayout } from './print/PrintSheet.svelte';
+  import { printableParts } from '../play/print.ts';
+  import type { PrintPart } from '../play/print.ts';
   import PrintWindow from './print/PrintWindow.svelte';
-  import { readNotesPages } from '../play/notes.ts';
 
   interface Props {
     session: Session;
@@ -77,18 +78,13 @@
     /warlock/i.test(open.meta.classes) ? `${t.shortRestText} ${t.shortRestPactMagic}` : t.shortRestText;
 
   /** Every part the character has something for, in print order. */
-  const printable = $derived<PrintPart[]>(
-    (['main', 'features', 'spells', 'inventory', 'profile', 'notes'] as const).filter(
-      (part) =>
-        (part !== 'spells' || hasSpells) &&
-        (part !== 'notes' || readNotesPages(open.fields).some((page) => page.left.trim() || page.right.trim())),
-    ),
-  );
   let printWindow = $state(false);
   let printParts = $state<PrintPart[] | null>(null);
   let printBlank = $state(true);
   /** Only while the browser prints: the print sheet reads every part, too much to redo on each tap. */
   let printing = $state(false);
+  /** Read only while the print window is open or the browser prints: it reads every part of the sheet. */
+  const printable = $derived(printWindow || printing ? printableParts(open.fields) : []);
   // Mock-ups only: ?layout=large shows the second layout.
   const printLayout: PrintLayout = new URLSearchParams(location.search).get('layout') === 'large' ? 'large' : 'compact';
 
@@ -122,90 +118,89 @@
 <svelte:window bind:innerWidth={width} onbeforeprint={beforePrint} onafterprint={() => (printing = false)} />
 
 <div class="screen-only">
+  <TopBar {open} back={{ href: '#/', label: t.backToList }} {t}>
+    <button type="button" {disabled} onclick={() => rest('short')}>{t.shortRest}</button>
+    <button type="button" {disabled} onclick={() => rest('long')}>{t.longRest}</button>
+    <button type="button" onclick={() => (menuOpen = true)}>☰ {t.sheetMenu}</button>
+  </TopBar>
 
-<TopBar {open} back={{ href: '#/', label: t.backToList }} {t}>
-  <button type="button" {disabled} onclick={() => rest('short')}>{t.shortRest}</button>
-  <button type="button" {disabled} onclick={() => rest('long')}>{t.longRest}</button>
-  <button type="button" onclick={() => (menuOpen = true)}>☰ {t.sheetMenu}</button>
-</TopBar>
+  <div class="notes"><Notes notes={session.notes} /></div>
 
-<div class="notes"><Notes notes={session.notes} /></div>
-
-<div class="play">
-  <div class="side left">
-    <Vitals {fields} {disabled} {change} {t} />
-  </div>
-
-  <div class="middle">
-    <div class="tabs" role="tablist">
-      {#each tabs as [key, label] (key)}
-        <button
-          type="button"
-          role="tab"
-          id={`tab-${key}`}
-          aria-selected={shownTab === key}
-          aria-controls="tab-panel"
-          onclick={() => (tab = key)}>{label}</button
-        >
-      {/each}
+  <div class="play">
+    <div class="side left">
+      <Vitals {fields} {disabled} {change} {t} />
     </div>
-    <div id="tab-panel" role="tabpanel" aria-labelledby={`tab-${shownTab}`}>
-      {#if shownTab === 'combat'}
-        <CombatTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
-      {:else if shownTab === 'spells'}
-        <SpellsTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
-      {:else if shownTab === 'checks'}
+
+    <div class="middle">
+      <div class="tabs" role="tablist">
+        {#each tabs as [key, label] (key)}
+          <button
+            type="button"
+            role="tab"
+            id={`tab-${key}`}
+            aria-selected={shownTab === key}
+            aria-controls="tab-panel"
+            onclick={() => (tab = key)}>{label}</button
+          >
+        {/each}
+      </div>
+      <div id="tab-panel" role="tabpanel" aria-labelledby={`tab-${shownTab}`}>
+        {#if shownTab === 'combat'}
+          <CombatTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
+        {:else if shownTab === 'spells'}
+          <SpellsTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
+        {:else if shownTab === 'checks'}
+          <Checks {fields} {disabled} {change} {t} />
+        {:else if shownTab === 'inventory'}
+          <InventoryTab {fields} {disabled} {change} {t} />
+        {:else if shownTab === 'features'}
+          <FeaturesTab {fields} characterId={open.meta.id} {t} />
+        {:else if shownTab === 'profile'}
+          <ProfileTab
+            {fields}
+            images={open.images}
+            {disabled}
+            {change}
+            setImage={(slot, file) => session.setImage(slot, file)}
+            {t}
+          />
+        {:else}
+          <NotesTab {fields} {disabled} {change} pick={(field, answer) => session.pick(field, answer)} {t} />
+        {/if}
+      </div>
+    </div>
+
+    {#if wide}
+      <div class="side right">
         <Checks {fields} {disabled} {change} {t} />
-      {:else if shownTab === 'inventory'}
-        <InventoryTab {fields} {disabled} {change} {t} />
-      {:else if shownTab === 'features'}
-        <FeaturesTab {fields} characterId={open.meta.id} {t} />
-      {:else if shownTab === 'profile'}
-        <ProfileTab
-          {fields}
-          images={open.images}
-          {disabled}
-          {change}
-          setImage={(slot, file) => session.setImage(slot, file)}
-          {t}
-        />
-      {:else}
-        <NotesTab {fields} {disabled} {change} pick={(field, answer) => session.pick(field, answer)} {t} />
-      {/if}
-    </div>
+      </div>
+    {/if}
   </div>
 
-  {#if wide}
-    <div class="side right">
-      <Checks {fields} {disabled} {change} {t} />
-    </div>
+  {#if menuOpen}
+    <SheetMenu
+      {session}
+      {open}
+      onclose={() => (menuOpen = false)}
+      {toggleLanguage}
+      onprint={() => {
+        menuOpen = false;
+        printWindow = true;
+      }}
+      {t}
+    />
   {/if}
-</div>
 
-{#if menuOpen}
-  <SheetMenu
-    {session}
-    {open}
-    onclose={() => (menuOpen = false)}
-    {toggleLanguage}
-    onprint={() => {
-      menuOpen = false;
-      printWindow = true;
-    }}
-    {t}
-  />
-{/if}
-
-{#if printWindow}
-  <PrintWindow
-    available={printable}
-    parts={printParts ?? printable}
-    blank={printBlank}
-    onprint={print}
-    onclose={() => (printWindow = false)}
-    {t}
-  />
-{/if}
+  {#if printWindow}
+    <PrintWindow
+      available={printable}
+      parts={printParts ?? printable}
+      blank={printBlank}
+      onprint={print}
+      onclose={() => (printWindow = false)}
+      {t}
+    />
+  {/if}
 </div>
 
 {#if printing}

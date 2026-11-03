@@ -6,7 +6,7 @@
 <script lang="ts">
   import type { Texts } from '../../i18n.ts';
   import Modal from '../../popups/Modal.svelte';
-  import type { PrintPart } from './PrintSheet.svelte';
+  import type { PrintPart } from '../../play/print.ts';
 
   interface Props {
     /** The parts this character has something for (no Spells part for a fighter). */
@@ -35,7 +35,9 @@
   });
 
   function toggle(part: PrintPart) {
-    picked = picked.includes(part) ? picked.filter((p) => p !== part) : available.filter((p) => p === part || picked.includes(p));
+    picked = picked.includes(part)
+      ? picked.filter((p) => p !== part)
+      : available.filter((p) => p === part || picked.includes(p));
   }
 </script>
 

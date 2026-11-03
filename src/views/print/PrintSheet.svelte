@@ -11,7 +11,8 @@
   import type { SheetImages } from '../../engine/types.ts';
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
-  import { readNotesPages } from '../../play/notes.ts';
+  import { filledNotesPages, marks, poolLeft } from '../../play/print.ts';
+  import type { PrintPart } from '../../play/print.ts';
   import {
     attacksPerAction,
     isOn,
@@ -37,7 +38,6 @@
   import type { FieldViews } from '../../worker/views.ts';
   import RichText from '../play/RichText.svelte';
 
-  export type PrintPart = 'main' | 'features' | 'spells' | 'inventory' | 'profile' | 'notes';
   export type PrintLayout = 'compact' | 'large';
 
   interface Props {
@@ -78,7 +78,7 @@
   const features = $derived(readFeatures(fields));
   const inventory = $derived(readInventory(fields));
   const spells = $derived(readSpells(fields));
-  const notes = $derived(readNotesPages(fields).filter((page) => page.left.trim() || page.right.trim()));
+  const notes = $derived(filledNotesPages(fields));
   const inspiration = $derived(isOn(fields, 'Inspiration'));
 
   const profRows = $derived(
@@ -103,9 +103,7 @@
     ].filter((row) => row.items.length),
   );
 
-  /** Circles to tick: the used ones filled unless the sheet is printed blank. */
-  const circles = (total: number, used: number): boolean[] =>
-    Array.from({ length: total }, (_, i) => !blank && i < used);
+  const circles = (total: number, used: number): boolean[] => marks(total, used, blank);
 
   function recoveryText(recovery: string): string {
     const kind = recoveryKind(recovery);
@@ -135,12 +133,16 @@
   /** "V, S, M" with MPMB's marks for the table's flags: concentration and ritual. */
   const flags = (spell: Spell): string => [spell.concentration ? 'C' : '', spell.ritual ? 'R' : ''].join('');
   const shortNumber = (n: number | null): string => (n === null ? '' : String(n));
-  const coinLabel = $derived({ pp: t.coinPpShort, gp: t.coinGpShort, ep: t.coinEpShort, sp: t.coinSpShort, cp: t.coinCpShort });
+  const coinLabel = $derived({
+    pp: t.coinPpShort,
+    gp: t.coinGpShort,
+    ep: t.coinEpShort,
+    sp: t.coinSpShort,
+    cp: t.coinCpShort,
+  });
   const hpCurrent = $derived(blank ? '' : shortNumber(hp.current ?? hp.max));
   const hpTemp = $derived(blank ? '' : shortNumber(hp.temp));
   const deathSaveBoxes = [0, 1, 2];
-  const remainingNumber = (max: number | null, used: number): string =>
-    blank || max === null ? '' : String(Math.max(0, max - used));
 </script>
 
 <div class="print-sheet {layout}" aria-hidden="true">
@@ -153,18 +155,42 @@
           <p>{subline.join(' · ')}</p>
         </div>
         <dl class="level">
-          {#if level}<div><dt>{t.printLevel}</dt><dd>{level}</dd></div>{/if}
-          {#if xp}<div><dt>XP</dt><dd>{xp}</dd></div>{/if}
+          {#if level}<div>
+              <dt>{t.printLevel}</dt>
+              <dd>{level}</dd>
+            </div>{/if}
+          {#if xp}<div>
+              <dt>XP</dt>
+              <dd>{xp}</dd>
+            </div>{/if}
         </dl>
       </header>
 
       <dl class="numbers">
-        <div><dt>{t.acLabel}</dt><dd>{numbers.armorClass}</dd></div>
-        <div><dt>{t.initiative}</dt><dd>{numbers.initiative}</dd></div>
-        <div><dt>{t.speed}</dt><dd>{numbers.speed}</dd></div>
-        <div><dt>{t.proficiency}</dt><dd>{numbers.proficiency}</dd></div>
-        {#each numbers.spellSaveDcs as dc, i (i)}<div><dt>{t.spellSaveDc}</dt><dd>{dc}</dd></div>{/each}
-        <div><dt>{t.passivePerception}</dt><dd>{numbers.passivePerception}</dd></div>
+        <div>
+          <dt>{t.acLabel}</dt>
+          <dd>{numbers.armorClass}</dd>
+        </div>
+        <div>
+          <dt>{t.initiative}</dt>
+          <dd>{numbers.initiative}</dd>
+        </div>
+        <div>
+          <dt>{t.speed}</dt>
+          <dd>{numbers.speed}</dd>
+        </div>
+        <div>
+          <dt>{t.proficiency}</dt>
+          <dd>{numbers.proficiency}</dd>
+        </div>
+        {#each numbers.spellSaveDcs as dc, i (i)}<div>
+            <dt>{t.spellSaveDc}</dt>
+            <dd>{dc}</dd>
+          </div>{/each}
+        <div>
+          <dt>{t.passivePerception}</dt>
+          <dd>{numbers.passivePerception}</dd>
+        </div>
         <div class="tick">
           <dt>{t.heroicInspiration}</dt>
           <dd><span class="box" class:on={!blank && inspiration}></span></dd>
@@ -207,7 +233,10 @@
             <h2>{t.sensesDefenses}</h2>
             <dl class="rows">
               {#each defenseRows as row (row.label)}
-                <div><dt>{row.label}</dt><dd>{row.items.join(', ')}</dd></div>
+                <div>
+                  <dt>{row.label}</dt>
+                  <dd>{row.items.join(', ')}</dd>
+                </div>
               {/each}
               {#each defenses.other as entry, i (i)}
                 <div class="sentence">
@@ -225,7 +254,10 @@
             <h2>{t.proficiencies}</h2>
             <dl class="rows">
               {#each profRows as row (row.label)}
-                <div><dt>{row.label}</dt><dd>{row.items.join(', ')}</dd></div>
+                <div>
+                  <dt>{row.label}</dt>
+                  <dd>{row.items.join(', ')}</dd>
+                </div>
               {/each}
             </dl>
           {/if}
@@ -235,9 +267,18 @@
           <div class="hp">
             <h2>{t.hpTitle}</h2>
             <dl>
-              <div><dt>{t.printMaxHp}</dt><dd class="big">{shortNumber(hp.max)}</dd></div>
-              <div class="write"><dt>{t.hpCurrent}</dt><dd>{hpCurrent}</dd></div>
-              <div class="write"><dt>{t.printTempHp}</dt><dd>{hpTemp}</dd></div>
+              <div>
+                <dt>{t.printMaxHp}</dt>
+                <dd class="big">{shortNumber(hp.max)}</dd>
+              </div>
+              <div class="write">
+                <dt>{t.hpCurrent}</dt>
+                <dd>{hpCurrent}</dd>
+              </div>
+              <div class="write">
+                <dt>{t.printTempHp}</dt>
+                <dd>{hpTemp}</dd>
+              </div>
             </dl>
             <div class="hp-more">
               <div>
@@ -245,7 +286,8 @@
                 {#each hp.hitDice as dice (dice.row)}
                   <span class="dice"
                     >{dice.die}
-                    {#each circles(dice.total, dice.used) as on, i (i)}<span class="circle" class:on></span>{/each}</span
+                    {#each circles(dice.total, dice.used) as on, i (i)}<span class="circle" class:on
+                      ></span>{/each}</span
                   >
                 {/each}
               </div>
@@ -306,7 +348,7 @@
                   <span class="name">{feature.name} <small>{recoveryText(feature.recovery)}</small></span>
                   {#if feature.pool || feature.max === null || feature.max > MAX_DOTS}
                     <span class="pool"
-                      ><span class="line">{remainingNumber(feature.max, feature.used)}</span> / {feature.maxText}</span
+                      ><span class="line">{poolLeft(feature.max, feature.used, blank)}</span> / {feature.maxText}</span
                     >
                   {:else}
                     <span
@@ -389,8 +431,8 @@
                 {#each lvl.spells as spell (spell.row)}
                   <tr>
                     <td class="mark">
-                      {#if spell.mark.prepared !== null}<span class="box" class:on={spell.mark.prepared}></span
-                        >{:else if spell.mark.always}<span class="always">★</span>{/if}
+                      {#if spell.mark.prepared !== null}<span class="box" class:on={spell.mark.prepared}
+                        ></span>{:else if spell.mark.always}<span class="always">★</span>{/if}
                     </td>
                     <td class="name">{spell.fullName || spell.name} <small>{flags(spell)}</small></td>
                     <td>{spell.time}</td>
@@ -414,11 +456,18 @@
       <h2 class="part-title">{t.tabInventory} <small>{name}</small></h2>
       <dl class="coins">
         {#each inventory.coins as coin (coin.key)}
-          <div><dt>{coinLabel[coin.key]}</dt><dd>{coin.amount}</dd></div>
+          <div>
+            <dt>{coinLabel[coin.key]}</dt>
+            <dd>{coin.amount}</dd>
+          </div>
         {/each}
         {#if inventory.carried}<div class="wide">
             <dt>{t.printCarried}</dt>
-            <dd>{inventory.capacity ? fill(t.carried, { carried: inventory.carried, capacity: inventory.capacity }) : inventory.carried}</dd>
+            <dd>
+              {inventory.capacity
+                ? fill(t.carried, { carried: inventory.carried, capacity: inventory.capacity })
+                : inventory.carried}
+            </dd>
           </div>{/if}
       </dl>
       {#if inventory.magicItems.length}
@@ -462,14 +511,21 @@
         {#if images.portrait}<img class="portrait-large" src={images.portrait.src} alt="" />{/if}
         <dl class="rows facts">
           {#each FACTS as [field, label] (field)}
-            {#if text(field)}<div><dt>{label}</dt><dd>{text(field)}</dd></div>{/if}
+            {#if text(field)}<div>
+                <dt>{label}</dt>
+                <dd>{text(field)}</dd>
+              </div>{/if}
           {/each}
         </dl>
       </div>
-      {#if text('Background_Appearance')}<h3>{t.appearance}</h3><p class="pre">{text('Background_Appearance')}</p>{/if}
+      {#if text('Background_Appearance')}<h3>{t.appearance}</h3>
+        <p class="pre">{text('Background_Appearance')}</p>{/if}
       <div class="pairs">
         {#each PERSONALITY as [field, label] (field)}
-          {#if text(field)}<div><h3>{label}</h3><p class="pre">{text(field)}</p></div>{/if}
+          {#if text(field)}<div>
+              <h3>{label}</h3>
+              <p class="pre">{text(field)}</p>
+            </div>{/if}
         {/each}
       </div>
       <div class="pairs">
@@ -483,7 +539,8 @@
           </div>{/if}
       </div>
       {#if images.symbol}<img class="symbol" src={images.symbol.src} alt="" />{/if}
-      {#if text('Background_History')}<h3>{t.backstory}</h3><p class="pre flow">{text('Background_History')}</p>{/if}
+      {#if text('Background_History')}<h3>{t.backstory}</h3>
+        <p class="pre flow">{text('Background_History')}</p>{/if}
     </section>
   {/if}
 
@@ -734,7 +791,9 @@
   }
 
   .prof.double {
-    box-shadow: 0 0 0 0.6mm #fff, 0 0 0 0.9mm var(--p-ink);
+    box-shadow:
+      0 0 0 0.6mm #fff,
+      0 0 0 0.9mm var(--p-ink);
   }
 
   /* Main page: two columns. */
