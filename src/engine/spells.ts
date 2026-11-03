@@ -11,6 +11,7 @@
 // - writes: puts the picks into CurrentSpells, where MPMB's dialogs load them from, and runs MPMB's
 //   "(Re)generate a Spell Sheet" with the app pressing OK in each spell dialog (answerSpellDialogs). MPMB's
 //   own dialog code then loads, checks and stores the picks, and makes the pages as in Acrobat.
+import { valueOf } from '../play/read.ts';
 import { checkboxField, readSpells } from '../play/spells.ts';
 import { viewsOf } from '../worker/views.ts';
 import type { Engine } from './engine.ts';
@@ -398,4 +399,50 @@ export function applySpellPicks(
       ),
     )
     .forEach((spell) => engine.click(checkboxField(spell)));
+}
+
+/** MPMB's cReturn for "Insert empty rows" > "1 empty row" in a spell row's menu. */
+export const INSERT_ONE_ROW = 'insert#1#';
+/** MPMB's cReturn for "Delete row" in a spell row's menu (moves the rows below it up). */
+export const DELETE_ROW = 'delete';
+
+/** Row menu picks that only make sense on a row that is already there (newSpellRow skips them). */
+const NOT_ON_A_NEW_ROW = ['move up', 'move down', 'clear', DELETE_ROW];
+
+/** How newSpellRow gets menus answered: by the app (`answered`), or by the player without MPMB seeing it. */
+export interface RowMenus {
+  /** Runs the job with the first menu it opens answered by the app with this cReturn. */
+  answered: (answer: string, job: () => void) => void;
+  /** Runs the job with its first menu shown to the player; MPMB gets "nothing". Returns the player's pick. */
+  peeked: (job: () => void) => string | null;
+}
+
+/**
+ * A level's "+ Row" (M7): MPMB's row menu on a new row at `box`, the check box of the row under the
+ * level's last spell. When that row is in use (`used`: the next level's divider), the new row needs MPMB's
+ * own "Insert empty rows" first, and that can't be undone cleanly: MPMB's "Delete row" renumbers the
+ * dividers and leaves one that was pushed over a page break on the old page. So the player picks first,
+ * from MPMB's menu for that same row as it is now (same row number, so the same entries and limits);
+ * MPMB gets "nothing" back and changes nothing. Only after a pick does MPMB insert the empty row (answered
+ * by the app) and apply the pick there. Closing the menu leaves the sheet exactly as it was.
+ */
+export function newSpellRow(engine: Engine, box: string, used: boolean, menus: RowMenus): void {
+  if (!used) {
+    engine.click(box, 0, true);
+    return;
+  }
+  const picked = menus.peeked(() => engine.click(box, 0, true));
+  // Moving, clearing or deleting a row that isn't there yet is the same as not adding it.
+  if (!picked || NOT_ON_A_NEW_ROW.includes(picked)) return;
+  // "Insert empty rows" asked for the new rows themselves: MPMB inserts them here, and that is all.
+  if (picked.startsWith('insert#')) {
+    menus.answered(picked, () => engine.click(box, 0, true));
+    return;
+  }
+  menus.answered(INSERT_ONE_ROW, () => engine.click(box, 0, true));
+  menus.answered(picked, () => engine.click(box, 0, true));
+  // Should the empty row's menu not offer the pick after all, take the row out again rather than leave a
+  // line the tab can't show (MPMB's "Delete row" is not a clean undo, see above, but better than a gap).
+  const remember = box.replace('spells.checkbox.', 'spells.remember.');
+  if (valueOf(viewsOf(engine.doc), remember) === '') menus.answered(DELETE_ROW, () => engine.click(box, 0, true));
 }

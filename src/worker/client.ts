@@ -89,8 +89,8 @@ export class EngineClient {
     return this.send({ type: 'edit', field, text });
   }
 
-  click(field: string, widget = 0, shift = false, answer?: string): Promise<Done> {
-    return this.send({ type: 'click', field, widget, shift, ...(answer === undefined ? {} : { answer }) });
+  click(field: string, widget = 0, shift = false, newRow = false): Promise<Done> {
+    return this.send({ type: 'click', field, widget, shift, ...(newRow ? { newRow } : {}) });
   }
 
   bookmark(path: string[]): Promise<Done> {

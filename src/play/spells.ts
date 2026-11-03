@@ -307,9 +307,9 @@ export function freeRow(fields: FieldViews): string | null {
 }
 
 /**
- * Where a level's "Add a row" opens MPMB's row menu: the row right after the spell (after its options,
- * Arcane Hand's hands), and whether that row is in use, so that MPMB first inserts an empty row there
- * (its own "Insert empty rows", which moves the rest down). null after the last row of the last page.
+ * Where a level's "+ Row" opens MPMB's row menu: the row right after the spell (after its options,
+ * Arcane Hand's hands), and whether that row is in use, so that MPMB inserts an empty row there first
+ * (newSpellRow in engine/spells.ts). null after the last row of the last page.
  */
 export function rowAfter(fields: FieldViews, spell: Spell): { box: string; used: boolean } | null {
   const last = spell.options.at(-1) ?? spell;
@@ -317,6 +317,3 @@ export function rowAfter(fields: FieldViews, spell: Spell): { box: string; used:
   const next = rows[rows.findIndex((r) => r.prefix === last.page && r.row === last.row) + 1];
   return next ? { box: box(next), used: next.used } : null;
 }
-
-/** MPMB's cReturn for "Insert empty rows" > "1 empty row" in a spell row's menu. */
-export const INSERT_ONE_ROW = 'insert#1#';

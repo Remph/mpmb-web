@@ -15,10 +15,10 @@ export type Command =
   | { type: 'importPdf'; bytes: ArrayBuffer }
   | { type: 'edit'; field: string; text: string }
   /**
-   * `shift`: with Shift held, as for MPMB's spell row menu. `answer`: the app picks this in the first menu
-   * the click opens (MPMB's cReturn), as `pick` does; later menus go to the player.
+   * `shift`: with Shift held, as for MPMB's spell row menu. `newRow`: a spell level's "+ Row" on this
+   * row's check box, MPMB's menu on a new row inserted there (newSpellRow in engine/spells.ts).
    */
-  | { type: 'click'; field: string; widget?: number; shift?: boolean; answer?: string }
+  | { type: 'click'; field: string; widget?: number; shift?: boolean; newRow?: boolean }
   | { type: 'bookmark'; path: string[] }
   /** The open character as differences from the blank sheet, to save. */
   | { type: 'save' }

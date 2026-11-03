@@ -3,13 +3,15 @@
 // without changing the sheet, and picks that go through those dialogs onto the spell sheet pages.
 import { describe, expect, it } from 'vitest';
 import { openSheet, referenceSheet } from '../../test/characters.ts';
+import { compareSheets, show } from '../../test/compare.ts';
 import { ScriptedHost } from '../../test/hosts.ts';
 import { draftOf, toPrepare } from '../build/spells.ts';
-import { INSERT_ONE_ROW, checkboxField, freeRow, readSpells, rowAfter } from '../play/spells.ts';
+import { checkboxField, freeRow, readSpells, rowAfter } from '../play/spells.ts';
 import { viewsOf } from '../worker/views.ts';
+import { valueOf } from '../play/read.ts';
 import type { Engine } from './engine.ts';
-import { SPELLS_READ_SCRIPT, answerSpellDialogs, applySpellPicks, readSpellsInfo } from './spells.ts';
-import type { SpellPicks } from './spells.ts';
+import { SPELLS_READ_SCRIPT, answerSpellDialogs, applySpellPicks, newSpellRow, readSpellsInfo } from './spells.ts';
+import type { RowMenus, SpellPicks } from './spells.ts';
 import type { DialogView, Host } from './host.ts';
 
 const read = (engine: Engine) => readSpellsInfo(engine.evaluate(SPELLS_READ_SCRIPT));
@@ -246,39 +248,114 @@ describe("MPMB's own spell row menu (Shift and a click on a row's first column)"
   });
 });
 
-describe('a level\'s "Add a row" (MPMB\'s Insert empty rows, then its Spell menu)', () => {
-  it("adds a spell right after the class's last spell of that level, moving the rest down", () => {
-    // The first menu gets the app's own answer, as the worker's click with `answer` gives it; the next is the player's.
-    const scripted = new ScriptedHost({ menus: [['Spell', 'with a Checkbox', 'Wizard spells', '1st-level', 'Sleep']] });
-    let appAnswers = true;
+describe('a level\'s "+ Row" (MPMB\'s Insert empty rows, then its row menu)', () => {
+  /** The wizard, with the player's menus scripted and the app's own answers given as the worker gives them. */
+  function wizardWith(playerMenus: (string[] | null)[]) {
+    const scripted = new ScriptedHost({ menus: playerMenus });
+    let appAnswer: string | null = null;
+    // As the worker's ROW_MENUS: the app's own answer, or the player's pick kept back from MPMB.
+    let peek: { picked: string | null } | null = null;
     const host: Host = {
       alert: scripted.alert.bind(scripted),
       dialog: scripted.dialog.bind(scripted),
       popUpMenu: (items) => {
-        if (!appAnswers) return scripted.popUpMenu(items);
-        appAnswers = false;
-        return INSERT_ONE_ROW;
+        if (peek) {
+          peek.picked = scripted.popUpMenu(items);
+          peek = null;
+          return null;
+        }
+        const answer = appAnswer;
+        appAnswer = null;
+        return answer ?? scripted.popUpMenu(items);
       },
     };
-    const wizard = openSheet(referenceSheet('wizard10-evoker'), host);
-    const level1 = () =>
-      readSpells(viewsOf(wizard.doc))
+    const engine = openSheet(referenceSheet('wizard10-evoker'), host);
+    const menus: RowMenus = {
+      answered: (answer, job) => {
+        appAnswer = answer;
+        try {
+          job();
+        } finally {
+          appAnswer = null;
+        }
+      },
+      peeked: (job) => {
+        const mine = { picked: null as string | null };
+        peek = mine;
+        try {
+          job();
+        } finally {
+          peek = null;
+        }
+        return mine.picked;
+      },
+    };
+    const level = (n: number) =>
+      readSpells(viewsOf(engine.doc))
         .find((s) => s.key === 'wizard')
-        ?.levels.find((l) => l.level === 1)?.spells ?? [];
-    const before = level1().map((sp) => sp.key);
-    const lastSpell = level1().at(-1);
+        ?.levels.find((l) => l.level === n)?.spells ?? [];
+    return { engine, scripted, menus, level };
+  }
+
+  it("adds a spell right after the class's last spell of that level, moving the rest down", () => {
+    const { engine, menus, level } = wizardWith([['Spell', 'with a Checkbox', 'Wizard spells', '1st-level', 'Sleep']]);
+    const before = level(1).map((sp) => sp.key);
+    const lastSpell = level(1).at(-1);
     if (!lastSpell) throw new Error('The wizard has level 1 spells');
-    const after = rowAfter(viewsOf(wizard.doc), lastSpell);
+    const after = rowAfter(viewsOf(engine.doc), lastSpell);
     // The next row is the level 2 divider, so MPMB inserts an empty row first.
     expect(after?.used).toBe(true);
     if (!after) return;
-    const levels = () => readSpells(viewsOf(wizard.doc)).find((s) => s.key === 'wizard')?.levels.length;
-    const levelCount = levels();
-    wizard.click(after.box, 0, true);
-    expect(appAnswers).toBe(false);
-    wizard.click(after.box, 0, true);
-    expect(level1().map((sp) => sp.key)).toEqual([...before, 'sleep']);
-    expect(levels()).toBe(levelCount);
+    const levelTwo = level(2).map((sp) => sp.key);
+    newSpellRow(engine, after.box, after.used, menus);
+    expect(level(1).map((sp) => sp.key)).toEqual([...before, 'sleep']);
+    expect(level(2).map((sp) => sp.key)).toEqual(levelTwo);
+  });
+
+  it.each([1, 2, 3, 4, 5])('leaves the sheet as it was when the player closes the menu (level %i)', (n) => {
+    const { engine, scripted, menus, level } = wizardWith([null]);
+    const lastSpell = level(n).at(-1);
+    if (!lastSpell) throw new Error(`The wizard has level ${n} spells`);
+    const after = rowAfter(viewsOf(engine.doc), lastSpell);
+    if (!after) throw new Error('There is a row after it');
+    const before = engine.snapshot();
+    newSpellRow(engine, after.box, after.used, menus);
+    // The player's menu was shown (and closed), and every field is as before.
+    expect(scripted.asked.filter((a) => a.kind === 'menu')).toHaveLength(1);
+    expect(
+      show(
+        compareSheets(before, engine.snapshot(), ['value', 'submitName', 'userName', 'display', 'missing', 'extra']),
+      ),
+    ).toBe('');
+  });
+  it.each([['Move row up'], ['Clear row'], ['Delete row [slow]']])(
+    'leaves the sheet as it was when the player picks "%s" for the new row',
+    (pick) => {
+      const { engine, menus, level } = wizardWith([[pick]]);
+      const lastSpell = level(1).at(-1);
+      const after = lastSpell && rowAfter(viewsOf(engine.doc), lastSpell);
+      if (!after) throw new Error('There is a row after the last level 1 spell');
+      const before = engine.snapshot();
+      newSpellRow(engine, after.box, after.used, menus);
+      expect(show(compareSheets(before, engine.snapshot(), ['value', 'display']))).toBe('');
+    },
+  );
+
+  it('inserts just the empty rows the player asks for', () => {
+    const { engine, menus, level } = wizardWith([['Insert empty rows [slow]', '2 empty rows']]);
+    const lastSpell = level(1).at(-1);
+    const after = lastSpell && rowAfter(viewsOf(engine.doc), lastSpell);
+    if (!after) throw new Error('There is a row after the last level 1 spell');
+    const row = (n: number) => after.box.replace(/\d+$/, (d) => String(Number(d) + n)).replace('checkbox', 'remember');
+    // The level 2 divider moves down two rows (MPMB renumbers its field suffix, the last part).
+    const divider = valueOf(viewsOf(engine.doc), row(0)).split('##').slice(0, 2).join('##');
+    newSpellRow(engine, after.box, after.used, menus);
+    const views = viewsOf(engine.doc);
+    expect([valueOf(views, row(0)), valueOf(views, row(1)), valueOf(views, row(2))]).toEqual([
+      '',
+      '',
+      expect.stringMatching(new RegExp(`^${divider}##`)),
+    ]);
   });
 });
 

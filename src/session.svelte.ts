@@ -36,10 +36,10 @@ export interface OpenCharacter {
 
 /**
  * One change the play view makes on the sheet: type into a field, or click a check box or button
- * (`shift`: with Shift held, which opens a spell row's own menu in MPMB; `answer`: the app picks this in
- * the first menu the click opens, MPMB's cReturn).
+ * (`shift`: with Shift held, which opens a spell row's own menu in MPMB; `newRow`: a spell level's "+ Row"
+ * there, see newSpellRow in engine/spells.ts).
  */
-export type Step = { edit: string; text: string } | { click: string; shift?: boolean; answer?: string };
+export type Step = { edit: string; text: string } | { click: string; shift?: boolean; newRow?: boolean };
 
 /**
  * The fields as they will be once the worker made these steps. The page shows them at once, so the
@@ -52,7 +52,7 @@ export function expected(fields: FieldViews, steps: Step[]): FieldViews {
     const name = 'edit' in step ? step.edit : step.click;
     const view = next[name];
     // A push button (MPMB's row menus) only runs its script; the worker reports what that changed.
-    if (!view || ('click' in step && (view.flags & FF.pushButton || step.shift))) return;
+    if (!view || ('click' in step && (view.flags & FF.pushButton || step.shift || step.newRow))) return;
     // A click toggles a check box between "Off" and the value its widget has when on.
     const on = view.widgets[0]?.on ?? 'Yes';
     const value = 'edit' in step ? step.text : view.value === 'Off' || view.value === '' ? on : 'Off';
@@ -430,7 +430,7 @@ export class Session {
             previous.then(() =>
               'edit' in step
                 ? this.client.edit(step.edit, step.text)
-                : this.client.click(step.click, 0, step.shift, step.answer),
+                : this.client.click(step.click, 0, step.shift, step.newRow),
             ),
           Promise.resolve(),
         );

@@ -11,7 +11,6 @@
   import Modal from '../../popups/Modal.svelte';
   import { ABILITIES, isOn, readSpellSlotUse } from '../../play/read.ts';
   import {
-    INSERT_ONE_ROW,
     checkboxField,
     freeRow,
     isReady,
@@ -136,8 +135,8 @@
   /**
    * A level's "+ Row": MPMB's row menu on the row under the class's last spell of that level (another
    * source's when the class has none), so a spell added there lands in that level. Where that row is in
-   * use (the next level's divider), MPMB first inserts an empty row there, its own "Insert empty rows",
-   * which the app picks in the player's place.
+   * use (the next level's divider), the worker lets MPMB insert an empty row there once the player has
+   * picked (newSpellRow in engine/spells.ts).
    */
   function addRowSteps(level: number): Step[] | null {
     const lastOf = (source: SpellSource | undefined): Spell | undefined =>
@@ -150,8 +149,7 @@
         .at(-1);
     const after = anchor ? rowAfter(fields, anchor) : null;
     if (!after) return null;
-    const open: Step = { click: after.box, shift: true };
-    return after.used ? [{ ...open, answer: INSERT_ONE_ROW }, open] : [open];
+    return [{ click: after.box, shift: true, ...(after.used ? { newRow: true } : {}) }];
   }
   const freeBox = $derived(freeRow(fields));
 
@@ -337,8 +335,12 @@
 {#snippet rowActions()}
   {#if shown}
     {@const spell = shown}
-    <button type="button" aria-haspopup="menu" title={t.spellRowOptionsLine} {disabled} onclick={() => editRow(spell)}
-      >{t.spellRowOptions}</button
+    <button
+      type="button"
+      aria-haspopup="menu"
+      aria-describedby="spell-row-hint"
+      {disabled}
+      onclick={() => editRow(spell)}>{t.spellRowOptions}</button
     >
   {/if}
 {/snippet}
@@ -392,6 +394,8 @@
       </ul>
     {/if}
     {#if t.locale !== 'en'}<p class="note">{t.spellTextLanguage}</p>{/if}
+    <!-- What "Edit row" below does, in words a touch screen shows too (no hover title). -->
+    <p class="note row-hint" id="spell-row-hint">{t.spellRowOptionsLine}</p>
   </Modal>
 {/if}
 
@@ -727,6 +731,9 @@
     margin: 0 0 0.5rem;
     color: var(--ink-muted);
     font-size: 0.875rem;
+  }
+  .row-hint {
+    margin-top: 0.75rem;
   }
 
   .changes {
