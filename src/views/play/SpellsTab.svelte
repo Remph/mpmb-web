@@ -122,6 +122,12 @@
    * moves, clears or inserts rows; on the first free row it adds a spell, an empty line or a header.
    */
   const rowMenu = (box: string): void => change([{ click: box, shift: true }]);
+  /** The pop-up closes first: MPMB's menu opens in its place, and the row may be gone afterwards. */
+  function editRow(spell: Spell): void {
+    const box = checkboxField(spell);
+    details = null;
+    rowMenu(box);
+  }
   const hasPages = $derived(spellPages(fields).length > 0);
   const freeBox = $derived(freeRow(fields));
 
@@ -295,17 +301,9 @@
 
 {#snippet rowActions()}
   {#if shown}
-    {@const box = checkboxField(shown)}
-    <button
-      type="button"
-      aria-haspopup="menu"
-      title={t.spellRowOptionsLine}
-      {disabled}
-      onclick={() => {
-        // The pop-up closes first: MPMB's menu opens in its place, and the row may be gone afterwards.
-        details = null;
-        rowMenu(box);
-      }}>{t.spellRowOptions}</button
+    {@const spell = shown}
+    <button type="button" aria-haspopup="menu" title={t.spellRowOptionsLine} {disabled} onclick={() => editRow(spell)}
+      >{t.spellRowOptions}</button
     >
   {/if}
 {/snippet}
