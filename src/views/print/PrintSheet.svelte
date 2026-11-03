@@ -2,8 +2,8 @@
   The app's own print layout (M10): the character on A4 paper, in the app's look, not the PDF's. It is in
   the page all the time but only shows when printing (`@media print` in app.css hides everything else), so
   the browser's own print dialog does the paging, the paper size and "Save as PDF".
-  Two layouts: "compact" puts what a turn needs on the first page and the long texts in two columns;
-  "large" is one column in bigger type, each part on new pages. With `blank`, what changes during play
+  The compact layout the owner picked (2026-11-03): what a turn needs on the first page, the long texts in two
+  columns, the short parts sharing a sheet. With `blank`, what changes during play
   (current hit points, used uses and slots) is left empty for a pencil.
 -->
 <script lang="ts">
@@ -11,6 +11,7 @@
   import type { SheetImages } from '../../engine/types.ts';
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
+  import { DEFAULT_NOTES_TITLE } from '../../play/notes.ts';
   import { filledNotesPages, marks, poolLeft } from '../../play/print.ts';
   import type { PrintPart } from '../../play/print.ts';
   import {
@@ -38,18 +39,15 @@
   import type { FieldViews } from '../../worker/views.ts';
   import RichText from '../play/RichText.svelte';
 
-  export type PrintLayout = 'compact' | 'large';
-
   interface Props {
     fields: FieldViews;
     images: SheetImages;
     parts: PrintPart[];
-    layout: PrintLayout;
     blank: boolean;
     t: Texts;
   }
 
-  let { fields, images, parts, layout, blank, t }: Props = $props();
+  let { fields, images, parts, blank, t }: Props = $props();
   const has = (part: PrintPart): boolean => parts.includes(part);
 
   const name = $derived(valueOf(fields, 'PC Name') || t.unnamed);
@@ -132,6 +130,8 @@
 
   /** "V, S, M" with MPMB's marks for the table's flags: concentration and ritual. */
   const flags = (spell: Spell): string => [spell.concentration ? 'C' : '', spell.ritual ? 'R' : ''].join('');
+  /** Which rest gives a free cast back, as the Spells tab says it. */
+  const REST = { long: 'restLong', short: 'restShort', day: 'restDay' } as const;
   const shortNumber = (n: number | null): string => (n === null ? '' : String(n));
   const coinLabel = $derived({
     pp: t.coinPpShort,
@@ -145,7 +145,7 @@
   const deathSaveBoxes = [0, 1, 2];
 </script>
 
-<div class="print-sheet {layout}" aria-hidden="true">
+<div class="print-sheet" aria-hidden="true">
   {#if has('main')}
     <section class="part main">
       <header class="who">
@@ -309,7 +309,7 @@
           </h2>
           <table class="attacks">
             <thead>
-              <tr><th>{t.itemName}</th><th>{t.gearToHit}</th><th>{t.gearDamage}</th><th>{t.description}</th></tr>
+              <tr><th>{t.printName}</th><th>{t.gearToHit}</th><th>{t.gearDamage}</th><th>{t.description}</th></tr>
             </thead>
             <tbody>
               {#each attacks as attack (attack.row)}
@@ -415,7 +415,7 @@
             <thead>
               <tr>
                 <th class="mark"></th>
-                <th>{t.itemName}</th>
+                <th>{t.printName}</th>
                 <th>{t.castingTime}</th>
                 <th>{t.spellRange}</th>
                 <th>{t.spellComponents}</th>
@@ -432,9 +432,25 @@
                   <tr>
                     <td class="mark">
                       {#if spell.mark.prepared !== null}<span class="box" class:on={spell.mark.prepared}
-                        ></span>{:else if spell.mark.always}<span class="always">★</span>{/if}
+                        ></span>{:else if spell.mark.always}<span class="always">★</span
+                        >{:else if spell.mark.free !== null}<span
+                          class="circle"
+                          class:on={!blank && spell.mark.freeUsed}
+                        ></span>{/if}
                     </td>
-                    <td class="name">{spell.fullName || spell.name} <small>{flags(spell)}</small></td>
+                    <td class="name">
+                      {spell.fullName || spell.name} <small>{flags(spell)}</small>
+                      {#if spell.mark.free !== null}<small class="note"
+                          >{fill(t.printFreeCast, { rest: t[REST[spell.mark.free]] })}</small
+                        >{/if}
+                      {#if spell.mark.atWill && lvl.level > 0}<small class="note">{t.spellAtWill}</small>{/if}
+                      {#if spell.mark.charges !== null}<small class="note"
+                          >{fill(t.spellCharges, { count: spell.mark.charges })}</small
+                        >{/if}
+                      {#if spell.options.length}<small class="note"
+                          >{spell.options.map((option) => option.fullName || option.name).join(', ')}</small
+                        >{/if}
+                    </td>
                     <td>{spell.time}</td>
                     <td>{spell.range}</td>
                     <td>{spell.components}</td>
@@ -547,7 +563,9 @@
   {#if has('notes')}
     {#each notes as page (page.prefix)}
       <section class="part notes">
-        <h2 class="part-title">{page.title && page.title !== 'Notes' ? page.title : t.notes} <small>{name}</small></h2>
+        <h2 class="part-title">
+          {page.title && page.title !== DEFAULT_NOTES_TITLE ? page.title : t.notes} <small>{name}</small>
+        </h2>
         <div class="flow">
           <RichText text={page.left} />
           <RichText text={page.right} />
@@ -584,10 +602,10 @@
     break-before: page;
   }
 
-  /* Compact: the short parts (gear, profile, notes) follow each other on the same sheet. */
-  .compact .part.inventory + .part,
-  .compact .part.profile + .part,
-  .compact .part.notes + .part.notes {
+  /* The short parts (gear, profile, notes) follow each other on the same sheet. */
+  .part.inventory + .part,
+  .part.profile + .part,
+  .part.notes + .part.notes {
     break-before: auto;
     margin-top: 7mm;
   }
@@ -929,7 +947,7 @@
     border-bottom: 0.5pt solid var(--p-line);
   }
 
-  /* Long texts flow in two columns on the compact layout. */
+  /* Long texts flow in two columns. */
   .flow {
     columns: 2;
     column-gap: 6mm;
@@ -974,6 +992,11 @@
     text-align: center;
   }
 
+  /* A spell level moves to the next page whole when it fits there, so its heading never ends a page. */
+  .spell-table tbody {
+    break-inside: avoid;
+  }
+
   .spell-table .level-row th {
     padding-top: 1.5mm;
     color: var(--p-accent);
@@ -986,6 +1009,10 @@
 
   .spell-table td.name {
     font-size: 8.5pt;
+  }
+
+  .spell-table .note {
+    display: block;
   }
 
   .always {
@@ -1053,65 +1080,5 @@
     float: right;
     width: 25mm;
     margin: 0 0 2mm 4mm;
-  }
-
-  /* The large layout: one column, bigger type, each part on new pages. */
-  .large {
-    font-size: 11pt;
-    line-height: 1.4;
-  }
-
-  .large .columns {
-    display: block;
-  }
-
-  .large .col.play h2,
-  .large .hp {
-    break-inside: avoid;
-  }
-
-  .large .flow {
-    columns: 1;
-  }
-
-  .large h1 {
-    font-size: 22pt;
-  }
-
-  .large h2 {
-    margin-top: 5mm;
-    font-size: 12pt;
-  }
-
-  .large .big,
-  .large .numbers dd {
-    font-size: 15pt;
-  }
-
-  .large small,
-  .large .small,
-  .large .spell-table td,
-  .large dt,
-  .large .label {
-    font-size: 9.5pt;
-  }
-
-  .large .numbers {
-    flex-wrap: wrap;
-  }
-
-  .large .numbers div {
-    flex: 1 0 28mm;
-  }
-
-  .large .box,
-  .large .circle {
-    width: 4mm;
-    height: 4mm;
-  }
-
-  .large .skills {
-    columns: 2;
-    column-gap: 8mm;
   }
 </style>

@@ -23,7 +23,6 @@
   import Vitals from './play/Vitals.svelte';
   import { flushSync } from 'svelte';
   import PrintSheet from './print/PrintSheet.svelte';
-  import type { PrintLayout } from './print/PrintSheet.svelte';
   import { printableParts } from '../play/print.ts';
   import type { PrintPart } from '../play/print.ts';
   import PrintWindow from './print/PrintWindow.svelte';
@@ -85,8 +84,6 @@
   let printing = $state(false);
   /** Read only while the print window is open or the browser prints: it reads every part of the sheet. */
   const printable = $derived(printWindow || printing ? printableParts(open.fields) : []);
-  // Mock-ups only: ?layout=large shows the second layout.
-  const printLayout: PrintLayout = new URLSearchParams(location.search).get('layout') === 'large' ? 'large' : 'compact';
 
   function print(parts: PrintPart[], blank: boolean) {
     printParts = parts;
@@ -208,7 +205,6 @@
     fields={open.fields}
     images={open.images}
     parts={(printParts ?? printable).filter((part) => printable.includes(part))}
-    layout={printLayout}
     blank={printBlank}
     {t}
   />
