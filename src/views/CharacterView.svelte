@@ -21,6 +21,11 @@
   import TopBar from './TopBar.svelte';
   import { readSpells } from '../play/spells.ts';
   import Vitals from './play/Vitals.svelte';
+  import { flushSync } from 'svelte';
+  import PrintSheet from './print/PrintSheet.svelte';
+  import type { PrintLayout, PrintPart } from './print/PrintSheet.svelte';
+  import PrintWindow from './print/PrintWindow.svelte';
+  import { readNotesPages } from '../play/notes.ts';
 
   interface Props {
     session: Session;
@@ -71,6 +76,34 @@
   const shortRestText = (): string =>
     /warlock/i.test(open.meta.classes) ? `${t.shortRestText} ${t.shortRestPactMagic}` : t.shortRestText;
 
+  /** Every part the character has something for, in print order. */
+  const printable = $derived<PrintPart[]>(
+    (['main', 'features', 'spells', 'inventory', 'profile', 'notes'] as const).filter(
+      (part) =>
+        (part !== 'spells' || hasSpells) &&
+        (part !== 'notes' || readNotesPages(open.fields).some((page) => page.left.trim() || page.right.trim())),
+    ),
+  );
+  let printWindow = $state(false);
+  let printParts = $state<PrintPart[] | null>(null);
+  let printBlank = $state(true);
+  /** Only while the browser prints: the print sheet reads every part, too much to redo on each tap. */
+  let printing = $state(false);
+  // Mock-ups only: ?layout=large shows the second layout.
+  const printLayout: PrintLayout = new URLSearchParams(location.search).get('layout') === 'large' ? 'large' : 'compact';
+
+  function print(parts: PrintPart[], blank: boolean) {
+    printParts = parts;
+    printBlank = blank;
+    printWindow = false;
+    window.print();
+  }
+
+  // The browser's own Print (Ctrl+P) works too: the sheet is drawn just before the browser lays out the pages.
+  function beforePrint() {
+    flushSync(() => (printing = true));
+  }
+
   async function rest(kind: 'short' | 'long') {
     const long = kind === 'long';
     const answer = await session.popUps.choose({
@@ -86,7 +119,9 @@
   }
 </script>
 
-<svelte:window bind:innerWidth={width} />
+<svelte:window bind:innerWidth={width} onbeforeprint={beforePrint} onafterprint={() => (printing = false)} />
+
+<div class="screen-only">
 
 <TopBar {open} back={{ href: '#/', label: t.backToList }} {t}>
   <button type="button" {disabled} onclick={() => rest('short')}>{t.shortRest}</button>
@@ -148,7 +183,40 @@
 </div>
 
 {#if menuOpen}
-  <SheetMenu {session} {open} onclose={() => (menuOpen = false)} {toggleLanguage} {t} />
+  <SheetMenu
+    {session}
+    {open}
+    onclose={() => (menuOpen = false)}
+    {toggleLanguage}
+    onprint={() => {
+      menuOpen = false;
+      printWindow = true;
+    }}
+    {t}
+  />
+{/if}
+
+{#if printWindow}
+  <PrintWindow
+    available={printable}
+    parts={printParts ?? printable}
+    blank={printBlank}
+    onprint={print}
+    onclose={() => (printWindow = false)}
+    {t}
+  />
+{/if}
+</div>
+
+{#if printing}
+  <PrintSheet
+    fields={open.fields}
+    images={open.images}
+    parts={(printParts ?? printable).filter((part) => printable.includes(part))}
+    layout={printLayout}
+    blank={printBlank}
+    {t}
+  />
 {/if}
 
 <style>

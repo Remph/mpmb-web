@@ -149,3 +149,20 @@ summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* Paper (M10): the print sheet alone, on A4 with room for a printer's edge. */
+@page {
+  size: A4;
+  margin: 12mm 12mm 13mm;
+}
+
+@media print {
+  body {
+    min-height: 0;
+    background: #fff;
+  }
+
+  .screen-only {
+    display: none !important;
+  }
+}
