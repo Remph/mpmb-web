@@ -432,7 +432,8 @@ class SheetWriter {
     // A new copy of the template's widget for this field.
     const original = SPAWNED.exec(field)?.[3] ?? field;
     const template = this.terminals.get(original);
-    const templateWidget = template?.widgets.find((ref) => this.onTemplate.has(ref.toString())) ?? template?.widgets[0];
+    const templateWidget =
+      template?.widgets.filter((ref) => this.onTemplate.has(ref.toString()))[0] ?? template?.widgets[0];
     if (!templateWidget) throw new Error(`${field}: nothing to copy its widget from`);
     const copy = this.copyWidget(templateWidget, pages[page]?.ref);
     this.copiedFrom.set(copy.toString(), templateWidget.toString());
