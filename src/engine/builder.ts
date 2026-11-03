@@ -67,7 +67,26 @@ export interface BuilderInfo {
   tools: string[];
   /** What MPMB's armour and attack drop-downs offer, for the "Armour & weapons" step (gear.ts). */
   gear: GearInfo;
+  /**
+   * The names of the sources the lists use: MPMB's books and the sources add-on scripts bring, without
+   * those switched off in Source Selection. Build steps name them under their lists.
+   */
+  sources: string[];
 }
+
+/**
+ * The sources switched on, as SourceList names them. MPMB's catch-all "Homebrew" (group "default") holds
+ * no content of its own and is left out. ES5.
+ */
+const SOURCES_SCRIPT = `(function () {
+  var out = [];
+  for (var key in SourceList) {
+    var src = SourceList[key];
+    if (!src || src.group === 'default' || CurrentSources.globalExcl.indexOf(key) !== -1) continue;
+    out.push(String(src.name || key));
+  }
+  return JSON.stringify(out);
+})()`;
 
 /** MPMB's tool names with each word capitalised, as the sheet shows them ("Cook's Utensils"). ES5. */
 const TOOLS_SCRIPT = `(function () {
@@ -136,6 +155,7 @@ export const BUILDER_INFO_SCRIPT = `(function () {
   info.choices = JSON.parse(${CHOICES_SCRIPT});
   info.tools = JSON.parse(${TOOLS_SCRIPT});
   info.gear = JSON.parse(${GEAR_SCRIPT});
+  info.sources = JSON.parse(${SOURCES_SCRIPT});
   return JSON.stringify(info);
 })()`;
 

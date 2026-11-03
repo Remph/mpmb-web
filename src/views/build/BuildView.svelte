@@ -15,6 +15,7 @@
   import { unsentFor } from '../../build/spell-drafts.svelte.ts';
   import type { OpenCharacter, Session, Step } from '../../session.svelte.ts';
   import Notes from '../Notes.svelte';
+  import AddOnsWindow from '../play/AddOnsWindow.svelte';
   import SheetMenu from '../play/SheetMenu.svelte';
   import TopBar from '../TopBar.svelte';
   import AbilitiesStep from './AbilitiesStep.svelte';
@@ -28,6 +29,7 @@
   import SpeciesStep from './SpeciesStep.svelte';
   import SpellsStep from './SpellsStep.svelte';
   import LevelUp from './LevelUp.svelte';
+  import ListsLine from './ListsLine.svelte';
   import { BUILD_STEPS } from './steps.ts';
   import type { BuildStep } from './steps.ts';
 
@@ -50,6 +52,7 @@
     else if (at !== null) step = at;
   });
   let menuOpen = $state(false);
+  let scriptsOpen = $state(false);
   let levelUpOpen = $state(false);
   let info = $state<BuilderInfo | null>(null);
 
@@ -88,6 +91,10 @@
       levelUpOpen = true;
     }
   });
+
+  /** Steps that offer MPMB's lists (classes, species, spells …), which sources and add-on scripts fill. */
+  const LIST_STEPS: BuildStep[] = ['class', 'species', 'background', 'feats', 'gear', 'spells'];
+  const scripts = $derived(open.meta.addOns.files.length + (open.meta.addOns.manual ? 1 : 0));
 
   const openChoices = $derived(info?.choices.filter((c) => c.open).length ?? 0);
   const modifiersSet = $derived(setCount(fields));
@@ -214,11 +221,25 @@
     {:else}
       <ModifiersStep {fields} {disabled} {change} {t} />
     {/if}
+    {#if info && LIST_STEPS.includes(step)}
+      <ListsLine
+        sources={info.sources}
+        {scripts}
+        disabled={disabled || open.status === 'working'}
+        onscripts={() => (scriptsOpen = true)}
+        onsources={() => void session.runMenu(['Functions', 'Source Material'])}
+        {t}
+      />
+    {/if}
   </div>
 </div>
 
 {#if levelUpOpen && info}
   <LevelUp {info} {fields} {change} onclose={() => (levelUpOpen = false)} {t} />
+{/if}
+
+{#if scriptsOpen}
+  <AddOnsWindow {session} {open} onclose={() => (scriptsOpen = false)} {t} />
 {/if}
 
 {#if menuOpen}

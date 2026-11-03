@@ -121,6 +121,8 @@ export class Engine {
   private readonly now: () => number;
   private readonly allowTimer: (expr: string) => boolean;
   private readonly root: BookmarkNode;
+  /** The text behind each stream object `util.readFileIntoStream` gave the scripts. */
+  private readonly streams = new WeakMap<object, string>();
 
   private constructor({ sheet, host, realm, now, allowTimer }: EngineOptions) {
     this.tools = realmTools(realm);
@@ -359,6 +361,16 @@ export class Engine {
     return app;
   }
 
+  /**
+   * An Acrobat stream for a file's text. MPMB only hands it to `util.stringFromStream`, so the object
+   * itself carries nothing; the text stays here, out of the scripts' reach.
+   */
+  private stream(text: string): object {
+    const stream = this.tools.object({}) as object;
+    this.streams.set(stream, text);
+    return stream;
+  }
+
   private util(): Record<string, unknown> {
     const doc = this.doc;
     return this.tools.object({
@@ -371,12 +383,20 @@ export class Engine {
       },
       printx: (format: string, text: unknown) => String(text ?? ''),
       // Null is what Acrobat returns when the player cancels its file picker: MPMB then stops quietly.
-      readFileIntoStream: () => {
-        doc.missing('util.readFileIntoStream');
-        this.host.unavailable?.('openFile');
-        return null;
+      // A path (opening a known file without asking) is something a browser can't do.
+      readFileIntoStream: (path?: unknown) => {
+        if (path !== undefined) {
+          doc.missing('util.readFileIntoStream with a path');
+          return null;
+        }
+        const text = this.host.openFile?.() ?? null;
+        return text === null ? null : this.stream(text);
       },
-      stringFromStream: missing(doc, 'util.stringFromStream', ''),
+      stringFromStream: (stream: unknown) => {
+        const text = this.streams.get(stream as object);
+        if (text === undefined) doc.missing('util.stringFromStream');
+        return text ?? '';
+      },
       streamFromString: missing(doc, 'util.streamFromString', null),
       iconStreamFromIcon: missing(doc, 'util.iconStreamFromIcon', null),
       crackURL: (url: unknown) => this.tools.object({ cURL: String(url) }),

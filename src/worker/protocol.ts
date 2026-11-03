@@ -1,9 +1,9 @@
 // Messages between the page and the engine worker.
-import type { AddOns } from '../engine/add-ons.ts';
+import type { AddOns, ScriptChanges } from '../engine/add-ons.ts';
 import type { UnitSystem } from '../engine/builder.ts';
 import type { ScoreChange } from '../engine/scores.ts';
 import type { SpellPicks, SpellSheetPicks } from '../engine/spells.ts';
-import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem, Unavailable } from '../engine/host.ts';
+import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem } from '../engine/host.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
 import type { FieldViews } from './views.ts';
 
@@ -22,6 +22,14 @@ export type Command =
   | { type: 'bookmark'; path: string[] }
   /** The open character as differences from the blank sheet, to save. */
   | { type: 'save' }
+  /** The add-on scripts the open sheet carries now (the player may have added or removed some). */
+  | { type: 'addOns' }
+  /** The sheet's add-on scripts with their code (ScriptFiles), for the "Add-on scripts" window. */
+  | { type: 'scriptFiles' }
+  /** Removes and adds script files through MPMB's own files dialog, answered in the player's place. */
+  | { type: 'setScripts'; changes: ScriptChanges }
+  /** Opens MPMB's own dialog for pasted code. */
+  | { type: 'pasteScript' }
   /** What the Build screen offers and shows (BuilderInfo), read from MPMB's data. */
   | { type: 'builder' }
   /** Switches MPMB's unit system, answering its units dialog in the player's place. */
@@ -60,7 +68,9 @@ export type ToWorker = Setup | CommandMessage;
 export type Ask =
   | { kind: 'alert'; request: AlertRequest }
   | { kind: 'dialog'; view: DialogView; first: boolean }
-  | { kind: 'menu'; items: MenuItem[] };
+  | { kind: 'menu'; items: MenuItem[] }
+  /** Acrobat's file picker (Host.openFile); the answer is the file's text, or null. */
+  | { kind: 'file' };
 
 export type Answer = AlertReply | DialogReply | string | null;
 
@@ -99,8 +109,6 @@ export type FromWorker =
   /** A pop-up the page can only show, because the worker could not wait for an answer. */
   | { type: 'notice'; ask: Ask }
   | { type: 'launchURL'; url: string }
-  /** The scripts used something the app doesn't have yet (see Host.unavailable). */
-  | { type: 'unavailable'; feature: Unavailable }
   /** The dialog shown last has closed (see Host.dialogClosed). */
   | { type: 'dialogClosed' }
   | { type: 'fields'; changed: FieldViews; removed: string[] }

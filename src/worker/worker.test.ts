@@ -3,7 +3,7 @@
 // path through a real worker is test/browser/engine-check.html.
 import { describe, expect, test } from 'vitest';
 import { openSheet, referenceSheet } from '../../test/characters.ts';
-import { createChannel, sendAnswer, waitForAnswer } from './channel.ts';
+import { createChannel, fitsChannel, sendAnswer, waitForAnswer } from './channel.ts';
 import { changedViews, viewsOf } from './views.ts';
 
 describe('channel', () => {
@@ -18,6 +18,12 @@ describe('channel', () => {
 
   test('refuses an answer larger than the buffer', () => {
     expect(() => sendAnswer(createChannel(8), 'more than eight bytes')).toThrow('too large');
+  });
+
+  test('tells whether an answer fits, counting what JSON adds', () => {
+    expect(fitsChannel('abcdef', 8)).toBe(true);
+    // Six characters, but two quotes are escaped: "a\"b\"cd" is ten bytes.
+    expect(fitsChannel('a"b"cd', 8)).toBe(false);
   });
 });
 

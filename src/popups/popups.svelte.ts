@@ -30,7 +30,8 @@ export type Entry =
       /** Null while the worker works on the last reply; the next view brings a new one. */
       resolve: ((reply: DialogReply) => void) | null;
     }
-  | { id: number; kind: 'choice'; choice: Choice<string>; resolve: (value: string) => void };
+  | { id: number; kind: 'choice'; choice: Choice<string>; resolve: (value: string) => void }
+  | { id: number; kind: 'file'; resolve: (text: string | null) => void };
 
 /** The page's words for the question before a link that leaves MPMB's sites. */
 export interface LinkQuestion {
@@ -97,6 +98,11 @@ export class PopUpStack implements PopUps {
     if (top) this.remove(top.id);
   }
 
+  /** Acrobat's file picker, for MPMB's "Add file": the chosen file's text, or null. */
+  openFile(): Promise<string | null> {
+    return new Promise((resolve) => this.push({ kind: 'file', resolve }));
+  }
+
   /** Without shared memory, alerts can only be shown; the scripts went on with "OK". */
   notice(request: AlertRequest): void {
     void this.alert(request);
@@ -118,6 +124,10 @@ export class PopUpStack implements PopUps {
 
   answerChoice(id: number, value: string): void {
     this.settle(id, 'choice', (e) => e.resolve(value));
+  }
+
+  answerFile(id: number, text: string | null): void {
+    this.settle(id, 'file', (e) => e.resolve(text));
   }
 
   /**

@@ -39,6 +39,7 @@ const popUpsFrom = (host: ScriptedHost): PopUps => ({
   dialog: async (view, first) =>
     host.dialog(view, first) ?? ({ type: 'close', result: 'cancel', state: {} } satisfies DialogReply),
   menu: async (items: MenuItem[]) => host.popUpMenu(items),
+  openFile: async () => host.openFile(),
 });
 
 function act(client: EngineClient, action: Action): Promise<Done> {

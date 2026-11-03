@@ -1,6 +1,7 @@
 // The page's side of the engine worker: sends commands, keeps the latest view of every field, and
 // shows the pop-ups the scripts wait for (through the functions the UI passes in).
-import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem, Unavailable } from '../engine/host.ts';
+import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem } from '../engine/host.ts';
+import type { AddOns, ScriptChanges, ScriptFiles } from '../engine/add-ons.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
 import type { BuilderInfo, UnitSystem } from '../engine/builder.ts';
 import type { ScoreChange } from '../engine/scores.ts';
@@ -22,6 +23,8 @@ export interface PopUps {
   dialogClosed?(): void;
   /** Resolves with the chosen item's cReturn, or null. */
   menu(items: MenuItem[]): Promise<string | null>;
+  /** Lets the player pick a file; resolves with its text, or null when they cancel. */
+  openFile(): Promise<string | null>;
   /** Without shared memory alerts can only be shown, not answered. */
   notice?(request: AlertRequest): void;
   launchURL?(url: string): void;
@@ -60,8 +63,6 @@ export class EngineClient {
   /** MPMB's bookmarks (its menu) of the open sheet. */
   menu: MenuNode[] = [];
   onMenu: ((menu: MenuNode[]) => void) | null = null;
-  /** The scripts used something the app doesn't have yet; the page explains it in its own words. */
-  onUnavailable: ((feature: Unavailable) => void) | null = null;
   /** Whether pop-ups can be answered (the page is cross-origin isolated). */
   readonly answersPopUps = canWait();
 
@@ -126,6 +127,23 @@ export class EngineClient {
     return (await this.send({ type: 'save' })).result as CharacterData;
   }
 
+  async scriptFiles(): Promise<ScriptFiles> {
+    return (await this.send({ type: 'scriptFiles' })).result as ScriptFiles;
+  }
+
+  setScripts(changes: ScriptChanges): Promise<Done> {
+    return this.send({ type: 'setScripts', changes });
+  }
+
+  pasteScript(): Promise<Done> {
+    return this.send({ type: 'pasteScript' });
+  }
+
+  /** The add-on scripts the open sheet carries now. */
+  async addOns(): Promise<AddOns> {
+    return (await this.send({ type: 'addOns' })).result as AddOns;
+  }
+
   close(reason = 'The sheet was closed'): void {
     this.worker?.terminate();
     this.worker = null;
@@ -170,13 +188,18 @@ export class EngineClient {
     const handlers: { [K in FromWorker['type']]: (m: Extract<FromWorker, { type: K }>) => void | Promise<void> } = {
       ask: async ({ ask }) => {
         const answer = await this.answer(ask);
-        if (channel) sendAnswer(channel, answer);
+        if (!channel) return;
+        try {
+          sendAnswer(channel, answer);
+        } catch {
+          // Too large for the channel: the worker must still wake up, or the sheet sleeps forever.
+          sendAnswer(channel, null);
+        }
       },
       notice: ({ ask }) => {
         if (ask.kind === 'alert') this.popUps.notice?.(ask.request);
       },
       launchURL: ({ url }) => this.popUps.launchURL?.(url),
-      unavailable: ({ feature }) => this.onUnavailable?.(feature),
       dialogClosed: () => this.popUps.dialogClosed?.(),
       menu: ({ menu }) => {
         this.menu = menu;
@@ -199,6 +222,7 @@ export class EngineClient {
       alert: ({ request }) => this.popUps.alert(request),
       dialog: ({ view, first }) => this.popUps.dialog(view, first),
       menu: ({ items }) => this.popUps.menu(items),
+      file: () => this.popUps.openFile(),
     };
     try {
       return await (answers[ask.kind] as (a: Ask) => Promise<Answer>)(ask);

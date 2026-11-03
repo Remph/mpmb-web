@@ -1,7 +1,8 @@
 // What the app does with characters: import PDFs, keep them in the browser, open one, back up and
 // restore. The views call these methods and draw the state; the engine runs in the worker behind
 // EngineClient, and its pop-ups go to the PopUpStack.
-import type { AddOns } from './engine/add-ons.ts';
+import type { AddOns, ScriptChanges, ScriptFile, ScriptFiles } from './engine/add-ons.ts';
+import { parseScriptFiles, scriptName } from './build/add-ons.ts';
 import type { BuilderInfo, UnitSystem } from './engine/builder.ts';
 import type { ScoreChange } from './engine/scores.ts';
 import type { SpellPicks, SpellSheetPicks, SpellsInfo } from './engine/spells.ts';
@@ -18,6 +19,14 @@ import { EngineClient, EngineError } from './worker/client.ts';
 import { newEngineWorker } from './worker/start.ts';
 import type { FieldViews } from './worker/views.ts';
 import type { MenuNode } from './worker/protocol.ts';
+
+/** Where MPMB keeps the imported script files in a saved sheet (Acrobat's toSource of CurrentScriptFiles). */
+const SCRIPT_FILES_FIELD = 'User_Imported_Files.Stringified';
+
+/** A script file another character in this browser carries, with that character's name. */
+export interface OtherScript extends ScriptFile {
+  owner: string;
+}
 
 /** A line under the list: what an import or restore did. */
 export interface Note {
@@ -115,15 +124,6 @@ export class Session {
       open: this.t.openLink,
       cancel: this.t.cancel,
     });
-    // Shown over MPMB's dialog, which stays open: the player closes the note and carries on there.
-    this.client.onUnavailable = () => {
-      void this.popUps.choose({
-        title: this.t.openFileLaterTitle,
-        message: this.t.openFileLater,
-        buttons: [{ value: 'ok', label: this.t.ok, primary: true }],
-        cancel: 'ok',
-      });
-    };
   }
 
   private get t(): Texts {
@@ -391,6 +391,59 @@ export class Session {
     }
   }
 
+  /** The open sheet's add-on scripts with their code, for the "Add-on scripts" window; null like builderInfo. */
+  async scriptFiles(): Promise<ScriptFiles | null> {
+    const open = this.current;
+    await this.running;
+    if (!open || this.current !== open || open.status === 'error') return null;
+    try {
+      return await this.client.scriptFiles();
+    } catch (err) {
+      this.note('error', this.explain(err));
+      return null;
+    }
+  }
+
+  /**
+   * The script files the other characters in this browser carry, each script once (by its iFileName),
+   * the last changed character's version first. Read from their saved sheets as data; nothing of theirs
+   * runs until the player adds it here.
+   */
+  async otherScripts(): Promise<OtherScript[]> {
+    const store = this.store;
+    const open = this.current;
+    if (!store || !open) return [];
+    const others = this.characters.filter((meta) => meta.id !== open.meta.id && meta.addOns.files.length > 0);
+    // One character that can't be read (or holds a script too large to parse) leaves out only its scripts.
+    const stored = await Promise.all(others.map((meta) => store.get(meta.id).catch(() => undefined)));
+    const all = stored.flatMap((character) =>
+      character
+        ? parseScriptFiles(String(character.data.fields[SCRIPT_FILES_FIELD]?.value ?? '')).map((file) => ({
+            ...file,
+            owner: character.meta.name || this.t.unnamed,
+          }))
+        : [],
+    );
+    // Files without an iFileName can't be told apart from a version of another; they're kept by their key.
+    const seen = new Set<string>();
+    return all.filter((file) => {
+      const id = scriptName(file.text)?.toLowerCase() ?? file.key;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }
+
+  /** Removes and adds script files through MPMB's own files dialog (see the worker's setScripts). */
+  setScripts(changes: ScriptChanges): Promise<void> {
+    return this.work(() => this.client.setScripts(changes));
+  }
+
+  /** Opens MPMB's own dialog for pasted code, which the player fills in. */
+  pasteScript(): Promise<void> {
+    return this.work(() => this.client.pasteScript());
+  }
+
   /** One piece of work on the open sheet that isn't a play view change (a menu entry, the units); saved after. */
   private work(job: () => Promise<unknown>): Promise<void> {
     const open = this.current;
@@ -472,7 +525,9 @@ export class Session {
     }
     open.status = 'saving';
     const data = await this.client.save();
-    const meta = describeCharacter(data, open.meta.addOns, open.meta);
+    // Asked each time: "Add Extra Materials" in the Sheet menu adds and removes scripts in the open sheet.
+    const addOns = await this.client.addOns();
+    const meta = describeCharacter(data, addOns, open.meta);
     await this.save({ meta, data });
     this.dirty = false;
     open.meta = meta;

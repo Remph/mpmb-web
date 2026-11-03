@@ -13,6 +13,7 @@
   import type { OpenCharacter, Session } from '../../session.svelte.ts';
   import Modal from '../../popups/Modal.svelte';
   import MenuTree from '../MenuTree.svelte';
+  import AddOnsWindow from './AddOnsWindow.svelte';
 
   interface Props {
     session: Session;
@@ -56,6 +57,8 @@
   ]);
   const level = $derived(Number(valueOf(open.fields, 'Character Level')) || 0);
   const units = $derived<UnitSystem>(valueOf(open.fields, 'Unit System') === 'metric' ? 'metric' : 'imperial');
+  /** The "Add-on scripts" window, shown in this window's place. */
+  let scripts = $state(false);
   const buildHref = $derived(`#/character/${encodeURIComponent(open.meta.id)}/build`);
 
   /** A menu item runs MPMB's scripts, which may open their own pop-ups: this window steps aside. */
@@ -77,77 +80,87 @@
   }
 </script>
 
-<Modal title={t.sheetMenu} onescape={onclose} closeLabel={t.close} wide>
-  {#if !session.client.answersPopUps}
-    <p class="warning">{t.notIsolated}</p>
-  {/if}
+{#if scripts}
+  <AddOnsWindow {session} {open} {onclose} {t} />
+{:else}
+  <Modal title={t.sheetMenu} onescape={onclose} closeLabel={t.close} wide>
+    {#if !session.client.answersPopUps}
+      <p class="warning">{t.notIsolated}</p>
+    {/if}
 
-  <h3>{t.menuCharacter}</h3>
-  <div class="tiles">
-    <button type="button" class="tile main" onclick={() => build(false)}>
-      <b>{t.menuBuild}</b><small>{t.menuBuildLine}</small>
-    </button>
-    <button type="button" class="tile" disabled={busy || level === 0 || level >= MAX_LEVEL} onclick={() => build(true)}>
-      <b>{t.levelUp}</b><small
-        >{level >= MAX_LEVEL ? t.menuLevelMax : level ? fill(t.menuLevelNow, { level }) : t.menuLevelNone}</small
+    <h3>{t.menuCharacter}</h3>
+    <div class="tiles">
+      <button type="button" class="tile main" onclick={() => build(false)}>
+        <b>{t.menuBuild}</b><small>{t.menuBuildLine}</small>
+      </button>
+      <button
+        type="button"
+        class="tile"
+        disabled={busy || level === 0 || level >= MAX_LEVEL}
+        onclick={() => build(true)}
       >
-    </button>
-    <button type="button" class="tile" disabled={busy} onclick={() => run([MENU_ROOT, 'Add Extra Materials'])}>
-      <b>{t.addOnsTitle}</b>
-      <small class="names"
-        >{addOnNames.length
-          ? `${counted(t.addOnCountOne, t.addOnCount, addOnNames.length)}: ${addOnNames.join(', ')}`
-          : t.menuAddOnsNone}</small
-      >
-    </button>
-    <button type="button" class="tile" disabled={busy} onclick={() => run([MENU_ROOT, 'Source Material'])}>
-      <b>{t.menuSources}</b><small>{t.menuSourcesLine}</small>
-    </button>
-  </div>
-
-  <h3>{t.menuSettings}</h3>
-  <div class="settings">
-    <div class="setting">
-      <span id="units-label">{t.menuUnits}<small>{t.menuUnitsLine}</small></span>
-      <span class="seg" role="group" aria-labelledby="units-label">
-        <button type="button" aria-pressed={units === 'imperial'} disabled={busy} onclick={() => setUnits('imperial')}
-          >{t.menuImperial}</button
+        <b>{t.levelUp}</b><small
+          >{level >= MAX_LEVEL ? t.menuLevelMax : level ? fill(t.menuLevelNow, { level }) : t.menuLevelNone}</small
         >
-        <button type="button" aria-pressed={units === 'metric'} disabled={busy} onclick={() => setUnits('metric')}
-          >{t.menuMetric}</button
+      </button>
+      <button type="button" class="tile" disabled={busy} onclick={() => (scripts = true)}>
+        <b>{t.addOnsTitle}</b>
+        <small class="names"
+          >{addOnNames.length
+            ? `${counted(t.addOnCountOne, t.addOnCount, addOnNames.length)}: ${addOnNames.join(', ')}`
+            : t.menuAddOnsNone}</small
         >
-      </span>
+      </button>
+      <button type="button" class="tile" disabled={busy} onclick={() => run([MENU_ROOT, 'Source Material'])}>
+        <b>{t.menuSources}</b><small>{t.menuSourcesLine}</small>
+      </button>
     </div>
-    <div class="setting">
-      <span>{t.menuWeight}<small>{t.menuWeightLine}</small></span>
-      <button type="button" disabled={busy} onclick={() => run([MENU_ROOT, 'Weight'])}>{t.buildChange}</button>
-    </div>
-    <div class="setting">
-      <span>{t.menuSpells}<small>{t.menuSpellsLine}</small></span>
-      <button type="button" disabled={busy} onclick={() => run([MENU_ROOT, 'Spells Options'])}>{t.buildChange}</button>
-    </div>
-  </div>
 
-  <h3>{t.menuBrowser}</h3>
-  <div class="tiles">
-    <button type="button" class="tile" onclick={() => session.backUp([open.meta.id])}>
-      <b>{t.backUp}</b><small>{t.menuBackUpLine}</small>
-    </button>
-    <button type="button" class="tile" onclick={toggleLanguage}>
-      <b lang={t.switchLanguage === 'English' ? 'en' : 'de'}>{t.switchLanguage}</b><small>{t.menuLanguageLine}</small>
-    </button>
-    <button type="button" class="tile warn" disabled={busy} onclick={() => run([MENU_ROOT, 'Reset'])}>
-      <b>{t.menuReset}</b><small>{t.menuResetLine}</small>
-    </button>
-  </div>
-
-  <details class="full">
-    <summary>{t.menuFull}</summary>
-    <div class="menu" lang="en">
-      <MenuTree nodes={menu} path={[MENU_ROOT]} disabled={busy} {run} />
+    <h3>{t.menuSettings}</h3>
+    <div class="settings">
+      <div class="setting">
+        <span id="units-label">{t.menuUnits}<small>{t.menuUnitsLine}</small></span>
+        <span class="seg" role="group" aria-labelledby="units-label">
+          <button type="button" aria-pressed={units === 'imperial'} disabled={busy} onclick={() => setUnits('imperial')}
+            >{t.menuImperial}</button
+          >
+          <button type="button" aria-pressed={units === 'metric'} disabled={busy} onclick={() => setUnits('metric')}
+            >{t.menuMetric}</button
+          >
+        </span>
+      </div>
+      <div class="setting">
+        <span>{t.menuWeight}<small>{t.menuWeightLine}</small></span>
+        <button type="button" disabled={busy} onclick={() => run([MENU_ROOT, 'Weight'])}>{t.buildChange}</button>
+      </div>
+      <div class="setting">
+        <span>{t.menuSpells}<small>{t.menuSpellsLine}</small></span>
+        <button type="button" disabled={busy} onclick={() => run([MENU_ROOT, 'Spells Options'])}>{t.buildChange}</button
+        >
+      </div>
     </div>
-  </details>
-</Modal>
+
+    <h3>{t.menuBrowser}</h3>
+    <div class="tiles">
+      <button type="button" class="tile" onclick={() => session.backUp([open.meta.id])}>
+        <b>{t.backUp}</b><small>{t.menuBackUpLine}</small>
+      </button>
+      <button type="button" class="tile" onclick={toggleLanguage}>
+        <b lang={t.switchLanguage === 'English' ? 'en' : 'de'}>{t.switchLanguage}</b><small>{t.menuLanguageLine}</small>
+      </button>
+      <button type="button" class="tile warn" disabled={busy} onclick={() => run([MENU_ROOT, 'Reset'])}>
+        <b>{t.menuReset}</b><small>{t.menuResetLine}</small>
+      </button>
+    </div>
+
+    <details class="full">
+      <summary>{t.menuFull}</summary>
+      <div class="menu" lang="en">
+        <MenuTree nodes={menu} path={[MENU_ROOT]} disabled={busy} {run} />
+      </div>
+    </details>
+  </Modal>
+{/if}
 
 <style>
   h3 {

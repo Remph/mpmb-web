@@ -1,21 +1,13 @@
 // Hosts that play the user in tests: they answer alerts, dialogs and menus from a script of answers
 // and record what was asked.
-import type {
-  AlertReply,
-  AlertRequest,
-  DialogReply,
-  DialogView,
-  Host,
-  MenuItem,
-  Unavailable,
-} from '../src/engine/host.ts';
+import type { AlertReply, AlertRequest, DialogReply, DialogView, Host, MenuItem } from '../src/engine/host.ts';
 import { ALERT_ANSWER, ALERT_BUTTONS } from '../src/engine/host.ts';
 
 /** How much of a menu's item names `asked` keeps. */
 const MENU_TEXT = 200;
 
 export interface Asked {
-  kind: 'alert' | 'dialog' | 'menu';
+  kind: 'alert' | 'dialog' | 'menu' | 'file';
   /** Alert text, dialog name, or the menu's item names. */
   what: string;
 }
@@ -35,6 +27,8 @@ export interface ScriptedAnswers {
   dialogs?: Record<string, DialogAnswer | DialogAnswer[]>;
   /** Menu answers in order: the path of item names to pick (each a prefix of cName), or null for none. */
   menus?: (string[] | null)[];
+  /** The files the player picks in Acrobat's "Open" window, in order (their text), or null to cancel. */
+  files?: (string | null)[];
 }
 
 export class ScriptedHost implements Host {
@@ -43,6 +37,7 @@ export class ScriptedHost implements Host {
   private readonly dialogUses = new Map<string, number>();
   private open: { answer: DialogAnswer; step: number } | null = null;
   private menuIndex = 0;
+  private fileIndex = 0;
 
   constructor(answers: ScriptedAnswers = {}) {
     this.answers = answers;
@@ -94,10 +89,8 @@ export class ScriptedHost implements Host {
 
   launchURL(): void {}
 
-  /** The Acrobat features the scripts used that the app doesn't have yet, in order. */
-  readonly unavailableUsed: Unavailable[] = [];
-
-  unavailable(feature: Unavailable): void {
-    this.unavailableUsed.push(feature);
+  openFile(): string | null {
+    this.asked.push({ kind: 'file', what: 'Open' });
+    return this.answers.files?.[this.fileIndex++] ?? null;
   }
 }

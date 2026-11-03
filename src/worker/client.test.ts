@@ -3,6 +3,7 @@
 // happens to commands when a worker dies.
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { AlertReply } from '../engine/host.ts';
+import { CHANNEL_BYTES, waitForAnswer } from './channel.ts';
 import { EngineClient } from './client.ts';
 import type { PopUps, WorkerLike } from './client.ts';
 import type { FromWorker, ToWorker } from './protocol.ts';
@@ -29,10 +30,11 @@ class FakeWorker implements WorkerLike {
   }
 }
 
-const popUps = (alert: PopUps['alert']): PopUps => ({
+const popUps = (alert: PopUps['alert'], openFile: PopUps['openFile'] = () => Promise.resolve(null)): PopUps => ({
   alert,
   dialog: () => Promise.reject(new Error('no dialogs here')),
   menu: () => Promise.resolve(null),
+  openFile,
 });
 
 const workers = (): { all: FakeWorker[]; make: () => FakeWorker } => {
@@ -90,17 +92,35 @@ describe('engine client', () => {
     expect(all[0]?.terminated).toBe(true);
   });
 
-  test('something the app does not have yet reaches the page, which explains it', () => {
+  test('the worker asking for a file opens the page’s picker, and its answer goes back', async () => {
+    vi.stubGlobal('crossOriginIsolated', true);
     const { all, make } = workers();
+    const openFile = vi.fn(() => Promise.resolve('var iFileName = "a.js";'));
     const client = new EngineClient(
-      popUps(() => Promise.resolve({ answer: 1 })),
+      popUps(() => Promise.resolve({ answer: 1 }), openFile),
       make,
     );
-    const used: string[] = [];
-    client.onUnavailable = (feature) => used.push(feature);
     void client.open().catch(() => undefined);
-    all[0]?.emit({ type: 'unavailable', feature: 'openFile' });
-    expect(used).toEqual(['openFile']);
+    all[0]?.emit({ type: 'ask', ask: { kind: 'file' } });
+    await vi.waitFor(() => expect(new Int32Array(all[0]?.buffer ?? new SharedArrayBuffer(8))[0]).toBe(1));
+    expect(openFile).toHaveBeenCalledOnce();
+  });
+
+  test('an answer too large for the channel still wakes the worker, with "cancelled"', async () => {
+    vi.stubGlobal('crossOriginIsolated', true);
+    const { all, make } = workers();
+    const client = new EngineClient(
+      popUps(
+        () => Promise.resolve({ answer: 1 }),
+        () => Promise.resolve('x'.repeat(CHANNEL_BYTES)),
+      ),
+      make,
+    );
+    void client.open().catch(() => undefined);
+    all[0]?.emit({ type: 'ask', ask: { kind: 'file' } });
+    const buffer = all[0]?.buffer ?? new SharedArrayBuffer(8);
+    await vi.waitFor(() => expect(new Int32Array(buffer)[0]).toBe(1));
+    expect(waitForAnswer({ buffer })).toBeNull();
   });
 
   test('a worker that fails rejects the commands waiting for it', async () => {

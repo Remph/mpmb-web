@@ -144,17 +144,30 @@ describe('buttons', () => {
     expect(takeLog(engine)).toEqual(['alert 4, dialog ok Bea']);
   });
 
-  test('opening a file tells the host it is not there yet, and the script gets no file', () => {
-    const host = new ScriptedHost();
+  test('opening a file asks the host, and the script reads the chosen file from the stream', () => {
+    const host = new ScriptedHost({ files: ['var iFileName = "Ünïcode.js";', null] });
     const engine = Engine.load({
       sheet: sheet(),
       scripts: [{ name: 'Test', code: DOCUMENT_SCRIPT }],
       host,
       realm: vmRealm(),
     });
+    expect(engine.evaluate('util.stringFromStream(util.readFileIntoStream())')).toBe('var iFileName = "Ünïcode.js";');
     // MPMB's "Add file" (ImportUserScriptFile) stops when the stream is empty, as after a cancelled picker.
     expect(engine.evaluate('util.readFileIntoStream() === null')).toBe(true);
-    expect(host.unavailableUsed).toEqual(['openFile']);
+    expect(host.asked.map((a) => a.kind)).toEqual(['file', 'file']);
+  });
+
+  test('a file by its path is something a browser cannot open: no file, and the host is not asked', () => {
+    const host = new ScriptedHost({ files: ['code'] });
+    const engine = Engine.load({
+      sheet: sheet(),
+      scripts: [{ name: 'Test', code: DOCUMENT_SCRIPT }],
+      host,
+      realm: vmRealm(),
+    });
+    expect(engine.evaluate('util.readFileIntoStream("/C/scripts/a.js") === null')).toBe(true);
+    expect(host.asked).toEqual([]);
   });
 
   test('a dialog the user cancels does not commit', () => {
