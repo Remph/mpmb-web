@@ -1,7 +1,7 @@
 // The page's side of the engine worker: sends commands, keeps the latest view of every field, and
 // shows the pop-ups the scripts wait for (through the functions the UI passes in).
 import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem } from '../engine/host.ts';
-import type { AddOns } from '../engine/add-ons.ts';
+import type { AddOns, ScriptChanges, ScriptFiles } from '../engine/add-ons.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
 import type { BuilderInfo, UnitSystem } from '../engine/builder.ts';
 import type { ScoreChange } from '../engine/scores.ts';
@@ -125,6 +125,18 @@ export class EngineClient {
 
   async save(): Promise<CharacterData> {
     return (await this.send({ type: 'save' })).result as CharacterData;
+  }
+
+  async scriptFiles(): Promise<ScriptFiles> {
+    return (await this.send({ type: 'scriptFiles' })).result as ScriptFiles;
+  }
+
+  setScripts(changes: ScriptChanges): Promise<Done> {
+    return this.send({ type: 'setScripts', changes });
+  }
+
+  pasteScript(): Promise<Done> {
+    return this.send({ type: 'pasteScript' });
   }
 
   /** The add-on scripts the open sheet carries now. */

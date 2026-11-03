@@ -4,7 +4,8 @@
 //
 // One worker holds one open sheet. MPMB's scripts keep their state in globals, so a second sheet gets
 // a fresh worker (EngineClient does that) instead of reusing this global scope.
-import { addOnsOf } from '../engine/add-ons.ts';
+import { FILES_DIALOG_SCRIPT, PASTE_SCRIPT, addOnsOf, answerFilesDialog, scriptFilesOf } from '../engine/add-ons.ts';
+import type { ScriptChanges } from '../engine/add-ons.ts';
 import { BUILDER_INFO_SCRIPT, answerUnits, readBuilderInfo } from '../engine/builder.ts';
 import { displaySettings, refreshFormats } from '../engine/display-settings.ts';
 import type { UnitSystem } from '../engine/builder.ts';
@@ -81,6 +82,8 @@ let answerItself: ((view: DialogView) => DialogReply | null) | null = null;
  * a follow-up question) go to the player.
  */
 let menuAnswer: string | null = null;
+/** The code of the files the "Add-on scripts" window adds, for MPMB's "Add file" presses in order. */
+let filesToHand: string[] = [];
 let menuPicked = false;
 /**
  * For a spell level's "+ Row" (newSpellRow): the next menu goes to the player, but MPMB gets "nothing"
@@ -111,8 +114,9 @@ const host: Host = {
     if (channel) post({ type: 'dialogClosed' });
   },
   launchURL: (url) => post({ type: 'launchURL', url }),
-  // Without shared memory the page can't hand the file back: like a cancelled picker.
-  openFile: () => ask({ kind: 'file' }) as string | null,
+  // Files the app hands MPMB itself come first (setScripts); without shared memory the page can't hand
+  // the player's file back, which MPMB takes as a cancelled picker.
+  openFile: () => filesToHand.shift() ?? (ask({ kind: 'file' }) as string | null),
 };
 
 /** Sends the page every field that looks different since the last time. */
@@ -191,6 +195,13 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
   bookmark: ({ path }) => opened().clickBookmark(path),
   save: () => diffCharacter(blankSheet(), opened().snapshot()),
   addOns: () => addOnsOf(opened()),
+  scriptFiles: () => scriptFilesOf(opened()),
+  setScripts: ({ changes }) => setScripts(opened(), changes),
+  pasteScript: () => {
+    const sheet = opened();
+    sheet.evaluate(PASTE_SCRIPT);
+    sheet.runTimers();
+  },
   builder: () => readBuilderInfo(opened().evaluate(BUILDER_INFO_SCRIPT)),
   units: ({ system }) => switchUnits(opened(), system),
   scores: ({ changes }) => answered(answerScores(changes), () => opened().click('Ability Scores Button')),
@@ -208,6 +219,20 @@ function pick(sheet: Engine, field: string, answer: string): boolean {
     menuAnswer = null;
   }
   return menuPicked;
+}
+
+/**
+ * The "Add-on scripts" window's changes through MPMB's own files dialog, which the app answers in the
+ * player's place; MPMB then runs the scripts, says so, and opens its Source Selection for the player.
+ */
+function setScripts(sheet: Engine, changes: ScriptChanges): void {
+  filesToHand = [...changes.add];
+  try {
+    answered(answerFilesDialog(changes), () => sheet.evaluate(FILES_DIALOG_SCRIPT));
+    sheet.runTimers();
+  } finally {
+    filesToHand = [];
+  }
 }
 
 /** The app's answers and the player's withheld pick for newSpellRow (a spell level's "+ Row"). */
