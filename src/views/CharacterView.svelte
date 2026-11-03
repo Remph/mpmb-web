@@ -76,8 +76,8 @@
   const shortRestText = (): string =>
     /warlock/i.test(open.meta.classes) ? `${t.shortRestText} ${t.shortRestPactMagic}` : t.shortRestText;
 
-  /** Every part the character has something for, in print order. */
   let printWindow = $state(false);
+  /** The parts and the pencil choice from the print window; null until it was used (Ctrl+P prints every part). */
   let printParts = $state<PrintPart[] | null>(null);
   let printBlank = $state(true);
   /** Only while the browser prints: the print sheet reads every part, too much to redo on each tap. */

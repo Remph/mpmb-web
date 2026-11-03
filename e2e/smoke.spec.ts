@@ -69,10 +69,11 @@ test('a new character gets a class, armour and a weapon, and the play view shows
   await expect(printWindow.getByRole('checkbox')).toHaveCount(5);
   await expect(printWindow).not.toContainText('Every spell');
   await printWindow.getByRole('button', { name: 'Cancel' }).click();
-  await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
+  // A string, not a function: this file is type-checked with Node's types, which have no `window`.
+  await page.evaluate("window.dispatchEvent(new Event('beforeprint'))");
   const sheet = page.locator('.print-sheet');
   await expect(sheet.locator('.attacks')).toContainText('Longsword');
-  await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+  await page.evaluate("window.dispatchEvent(new Event('afterprint'))");
   await expect(sheet).toHaveCount(0);
 
   expect(errors).toEqual([]);

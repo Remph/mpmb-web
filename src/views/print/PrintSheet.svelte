@@ -1,7 +1,8 @@
 <!--
-  The app's own print layout (M10): the character on A4 paper, in the app's look, not the PDF's. It is in
-  the page all the time but only shows when printing (`@media print` in app.css hides everything else), so
-  the browser's own print dialog does the paging, the paper size and "Save as PDF".
+  The app's own print layout (M10): the character on A4 paper, in the app's look, not the PDF's.
+  CharacterView mounts it only while the browser prints (`beforeprint` to `afterprint`), and `@media print`
+  in app.css hides everything else, so the browser's own print dialog does the paging, the paper size and
+  "Save as PDF".
   The compact layout the owner picked (2026-11-03): what a turn needs on the first page, the long texts in two
   columns, the short parts sharing a sheet. With `blank`, what changes during play
   (current hit points, used uses and slots) is left empty for a pencil.
@@ -12,7 +13,7 @@
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import { DEFAULT_NOTES_TITLE } from '../../play/notes.ts';
-  import { filledNotesPages, marks, poolLeft } from '../../play/print.ts';
+  import { filledNotesPages, marks, poolLeft, spellMarks } from '../../play/print.ts';
   import type { PrintPart } from '../../play/print.ts';
   import {
     attacksPerAction,
@@ -160,7 +161,7 @@
               <dd>{level}</dd>
             </div>{/if}
           {#if xp}<div>
-              <dt>XP</dt>
+              <dt>{t.printXp}</dt>
               <dd>{xp}</dd>
             </div>{/if}
         </dl>
@@ -431,12 +432,9 @@
                 {#each lvl.spells as spell (spell.row)}
                   <tr>
                     <td class="mark">
-                      {#if spell.mark.prepared !== null}<span class="box" class:on={spell.mark.prepared}
-                        ></span>{:else if spell.mark.always}<span class="always">★</span
-                        >{:else if spell.mark.free !== null}<span
-                          class="circle"
-                          class:on={!blank && spell.mark.freeUsed}
-                        ></span>{/if}
+                      {#each spellMarks(spell.mark, blank) as paper, k (k)}{#if paper.kind === 'star'}<span
+                            class="always">★</span
+                          >{:else}<span class={paper.kind} class:on={paper.on}></span>{/if}{/each}
                     </td>
                     <td class="name">
                       {spell.fullName || spell.name} <small>{flags(spell)}</small>
@@ -576,7 +574,7 @@
 </div>
 
 <style>
-  /* Hidden on screen; app.css shows it (and hides the app) when printing. */
+  /* Hidden on screen should it ever be there outside printing; app.css hides the app when printing. */
   .print-sheet {
     display: none;
     /* Paper is white whatever the screen's theme: fixed colours, black text, one purple for headings. */
@@ -989,6 +987,8 @@
 
   .spell-table .mark {
     width: 4mm;
+    /* ★ and a circle side by side for a species' once-a-day spell. */
+    white-space: nowrap;
     text-align: center;
   }
 
