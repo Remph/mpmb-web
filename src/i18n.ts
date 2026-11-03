@@ -111,6 +111,7 @@ export const ui = {
     openFileDrop: 'oder hierher ziehen',
     openFileReading: 'Wird gelesen …',
     openFileFailed: 'Die Datei ließ sich nicht lesen. Eine andere wählen?',
+    openFileTooLarge: 'Die Datei ist zu groß: Die App öffnet Skriptdateien bis 4 MB.',
     pastedScript: 'Eingefügtes Skript',
     linkTitle: 'Link öffnen?',
     linkMessage:
@@ -845,6 +846,7 @@ export const ui = {
     openFileDrop: 'or drag it here',
     openFileReading: 'Reading …',
     openFileFailed: 'The file could not be read. Choose another one?',
+    openFileTooLarge: 'The file is too large: the app opens script files up to 4 MB.',
     pastedScript: 'Pasted script',
     linkTitle: 'Open this link?',
     linkMessage: 'The sheet wants to open a page outside MPMB’s websites. Only open it if you know the address:',

@@ -25,6 +25,10 @@ export interface Channel {
 export const canWait = (): boolean =>
   typeof SharedArrayBuffer === 'function' && globalThis.crossOriginIsolated === true;
 
+/** Whether an answer fits a channel of this size (a script file the player picks can be several MB). */
+export const fitsChannel = (answer: unknown, bytes = CHANNEL_BYTES): boolean =>
+  new TextEncoder().encode(JSON.stringify(answer ?? null)).length <= bytes;
+
 export function createChannel(bytes = CHANNEL_BYTES): Channel {
   return { buffer: new SharedArrayBuffer(HEADER_BYTES + bytes) };
 }

@@ -6,6 +6,7 @@
 -->
 <script lang="ts">
   import type { Texts } from '../i18n.ts';
+  import { CHANNEL_BYTES, fitsChannel } from '../worker/channel.ts';
   import Modal from './Modal.svelte';
 
   interface Props {
@@ -15,20 +16,32 @@
 
   let { t, answer }: Props = $props();
   let reading = $state(false);
-  let failed = $state(false);
+  /** Why the last file wasn't taken: unreadable, or too large to hand to the waiting worker. */
+  let failed: 'unreadable' | 'tooLarge' | null = $state(null);
   let over = $state(false);
 
   async function take(file: File | undefined) {
     if (!file || reading) return;
+    failed = null;
+    // Checked before reading, so a huge file isn't read into memory at all.
+    if (file.size > CHANNEL_BYTES) {
+      failed = 'tooLarge';
+      return;
+    }
     reading = true;
-    failed = false;
     try {
       // As text in UTF-8, as Acrobat's util.stringFromStream reads a stream by default.
-      answer(await file.text());
+      const text = await file.text();
+      // Quotes and line breaks grow the text on its way to the worker, so the exact size is checked too.
+      if (fitsChannel(text)) {
+        answer(text);
+        return;
+      }
+      failed = 'tooLarge';
     } catch {
-      failed = true;
-      reading = false;
+      failed = 'unreadable';
     }
+    reading = false;
   }
 
   function picked(event: Event) {
@@ -59,7 +72,7 @@
     <small>{t.openFileDrop}</small>
   </label>
   {#if failed}
-    <p class="failed" role="alert">{t.openFileFailed}</p>
+    <p class="failed" role="alert">{failed === 'tooLarge' ? t.openFileTooLarge : t.openFileFailed}</p>
   {/if}
   {#snippet actions()}
     <button type="button" onclick={() => answer(null)}>{t.cancel}</button>

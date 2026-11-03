@@ -176,7 +176,13 @@ export class EngineClient {
     const handlers: { [K in FromWorker['type']]: (m: Extract<FromWorker, { type: K }>) => void | Promise<void> } = {
       ask: async ({ ask }) => {
         const answer = await this.answer(ask);
-        if (channel) sendAnswer(channel, answer);
+        if (!channel) return;
+        try {
+          sendAnswer(channel, answer);
+        } catch {
+          // Too large for the channel: the worker must still wake up, or the sheet sleeps forever.
+          sendAnswer(channel, null);
+        }
       },
       notice: ({ ask }) => {
         if (ask.kind === 'alert') this.popUps.notice?.(ask.request);
