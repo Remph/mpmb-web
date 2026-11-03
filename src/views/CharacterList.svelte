@@ -4,6 +4,7 @@
   import type { Texts } from '../i18n.ts';
   import { counted, fill } from '../i18n.ts';
   import { MPMB_DOWNLOAD, MPMB_PATREON } from '../mpmb-links.ts';
+  import { SAFE_PICTURE } from '../play/pictures.ts';
   import type { Session } from '../session.svelte.ts';
   import Notes from './Notes.svelte';
 
@@ -84,8 +85,10 @@
   <ul class="characters">
     {#each session.characters as character (character.id)}
       {@const addOns = character.addOns.files.length + Number(character.addOns.manual)}
+      {@const portrait = character.portrait && SAFE_PICTURE.test(character.portrait) ? character.portrait : ''}
       <li>
-        <a class="card" href={`#/character/${character.id}`}>
+        <a class="card" class:pictured={portrait} href={`#/character/${character.id}`}>
+          {#if portrait}<img class="thumb" src={portrait} alt="" />{/if}
           <span class="name">{character.name || t.unnamed}</span>
           <span class="line">{[character.classes, character.species].filter(Boolean).join(' · ')}</span>
           <span class="line muted">
@@ -191,6 +194,28 @@
     color: inherit;
     text-decoration: none;
     flex: 1;
+  }
+
+  /* With a portrait: the small picture on the left, the three lines beside it (M8). */
+  .card.pictured {
+    display: grid;
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+    column-gap: 0.875rem;
+    align-content: start;
+  }
+
+  .card.pictured > :not(.thumb) {
+    grid-column: 2;
+  }
+
+  .thumb {
+    grid-row: 1 / span 3;
+    width: 4.5rem;
+    max-width: 100%;
+    aspect-ratio: 4 / 5;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    object-fit: cover;
   }
 
   .card:hover .name,

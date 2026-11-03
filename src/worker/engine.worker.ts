@@ -208,6 +208,7 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
   pick: ({ field, answer }) => pick(opened(), field, answer),
   spells: () => readSpellsInfo(opened().evaluate(SPELLS_READ_SCRIPT)),
   setSpells: ({ picks, sheet }) => applySpellPicks(opened(), picks, answered, sheet),
+  setImage: ({ slot, image }) => opened().setImage(slot, image),
 };
 
 function pick(sheet: Engine, field: string, answer: string): boolean {

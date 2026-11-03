@@ -5,7 +5,7 @@
 // - A character is stored as the difference from the blank sheet: only the fields (and the parts of
 //   a field) that differ, plus the fields of pages spawned from templates. That keeps a character
 //   small and lets a character made with one sheet version open on the same version's data.
-import type { Bookmark, FieldDef, SheetSnapshot, Trigger } from './types.ts';
+import type { Bookmark, FieldDef, SheetImages, SheetSnapshot, Trigger } from './types.ts';
 
 export const PACKED_FORMAT = 'mpmb-web-sheet';
 export const CHARACTER_FORMAT = 'mpmb-web-character';
@@ -89,6 +89,8 @@ export interface CharacterData {
    * there is none); removed fields as `null`.
    */
   fields: Record<string, FieldPatch | null>;
+  /** The portrait and organisation symbol, when the player has them (M8). */
+  images?: SheetImages;
 }
 
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
@@ -140,6 +142,7 @@ export function diffCharacter(blank: SheetSnapshot, sheet: SheetSnapshot): Chara
   };
   if (!same(blank.calcOrder, sheet.calcOrder)) data.calcOrder = sheet.calcOrder;
   if (!same(blank.outline, sheet.outline)) data.outline = sheet.outline;
+  if (sheet.images && Object.keys(sheet.images).length) data.images = sheet.images;
   return data;
 }
 
@@ -160,7 +163,7 @@ export function applyCharacter(blank: SheetSnapshot, data: CharacterData): Sheet
     const base = baseFieldOf(blank, name);
     fields[name] = base ? applyPatch(base, patch) : structuredClone(patch as FieldDef);
   });
-  return {
+  const sheet: SheetSnapshot = {
     fields,
     calcOrder: data.calcOrder ?? [...blank.calcOrder],
     numPages: data.numPages,
@@ -168,6 +171,8 @@ export function applyCharacter(blank: SheetSnapshot, data: CharacterData): Sheet
     outline: data.outline ?? structuredClone(blank.outline),
     info: { ...data.info },
   };
+  if (data.images) sheet.images = { ...data.images };
+  return sheet;
 }
 
 function applyPatch(def: FieldDef, patch: FieldPatch): FieldDef {

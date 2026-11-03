@@ -13,6 +13,8 @@ export interface CharacterMeta {
   classes: string;
   species: string;
   addOns: AddOns;
+  /** The portrait's small picture for the list (a data URL), when the character has a portrait. */
+  portrait?: string;
   /** ISO dates. `updated` is the last change on any device (a backup carries it along). */
   created: string;
   updated: string;
@@ -122,7 +124,9 @@ export function describeCharacter(
   before: Pick<CharacterMeta, 'id' | 'created'> | null,
   now = new Date(),
 ): CharacterMeta {
+  const portrait = data.images?.portrait?.thumb;
   return {
+    ...(portrait ? { portrait } : {}),
     id: before?.id ?? crypto.randomUUID(),
     name: textOf(data, 'PC Name'),
     classes: classLine(data),

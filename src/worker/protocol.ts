@@ -5,6 +5,7 @@ import type { ScoreChange } from '../engine/scores.ts';
 import type { SpellPicks, SpellSheetPicks } from '../engine/spells.ts';
 import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem } from '../engine/host.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
+import type { ImageSlot, SheetImage } from '../engine/types.ts';
 import type { FieldViews } from './views.ts';
 
 /** What the page asks the engine to do. */
@@ -48,7 +49,9 @@ export type Command =
    * The Spells step's picks into MPMB's spell dialogs, then MPMB's "(Re)generate a Spell Sheet" with the app
    * pressing OK in those dialogs.
    */
-  | { type: 'setSpells'; picks: SpellPicks[]; sheet: SpellSheetPicks | null };
+  | { type: 'setSpells'; picks: SpellPicks[]; sheet: SpellSheetPicks | null }
+  /** Puts the portrait or symbol on the sheet (already fitted by the page), or takes it off (null). */
+  | { type: 'setImage'; slot: ImageSlot; image: SheetImage | null };
 
 /** The page's first message: the shared memory for answers, when the page is cross-origin isolated. */
 export interface Setup {

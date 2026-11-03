@@ -80,6 +80,21 @@ export interface Bookmark {
   color?: unknown[];
 }
 
+/** What the app keeps a picture for: the character portrait and the organisation symbol. */
+export type ImageSlot = 'portrait' | 'symbol';
+export const IMAGE_SLOTS: readonly ImageSlot[] = ['portrait', 'symbol'];
+
+/**
+ * A picture the player put on the sheet, as data URLs: `src` to show (at most about 640 pixels on its
+ * long side once the page has fitted it), `thumb` for the character list.
+ */
+export interface SheetImage {
+  src: string;
+  thumb: string;
+}
+
+export type SheetImages = Partial<Record<ImageSlot, SheetImage>>;
+
 export interface SheetSnapshot {
   /** Every terminal field by its full name, in the PDF's order (Acrobat's `getNthFieldName`). */
   fields: Record<string, FieldDef>;
@@ -91,6 +106,8 @@ export interface SheetSnapshot {
   outline: Bookmark[];
   /** Document info, including MPMB's own entries (SheetVersion, SheetType, ...). */
   info: Record<string, string>;
+  /** The portrait and symbol (button icons in the PDF); the scripts never see them. */
+  images?: SheetImages;
 }
 
 /* eslint-disable ts-patterns/no-magic-numbers -- the flag tables below are bit positions from the PDF specification */

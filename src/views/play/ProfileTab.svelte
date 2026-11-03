@@ -1,22 +1,27 @@
 <!--
   Who the character is: appearance, personality, allies and enemies, backstory. Every box is one of
   the sheet's own fields (page 1, the background page and the notes page of the PDF), saved when it
-  loses focus so typing doesn't run MPMB's scripts on every key.
+  loses focus so typing doesn't run MPMB's scripts on every key. The portrait sits left of the
+  appearance, the organisation symbol under faction, rank and renown (M8).
 -->
 <script lang="ts">
+  import type { ImageSlot, SheetImages } from '../../engine/types.ts';
   import type { Texts, UiKey } from '../../i18n.ts';
   import type { Step } from '../../session.svelte.ts';
   import { choicesOf, valueOf } from '../../play/read.ts';
   import type { FieldViews } from '../../worker/views.ts';
+  import Picture from './Picture.svelte';
 
   interface Props {
     fields: FieldViews;
+    images: SheetImages;
     disabled: boolean;
     change: (steps: Step[]) => void;
+    setImage: (slot: ImageSlot, file: File | null) => Promise<boolean>;
     t: Texts;
   }
 
-  let { fields, disabled, change, t }: Props = $props();
+  let { fields, images, disabled, change, setImage, t }: Props = $props();
 
   type Box = readonly [field: string, label: UiKey];
   const FACTS: Box[] = [
@@ -107,8 +112,22 @@
 
 <section class="panel" aria-labelledby="appearance-title">
   <h2 id="appearance-title">{t.appearance}</h2>
-  {@render facts(FACTS)}
-  {@render texts([['Background_Appearance', 'description']])}
+  <div class="hero">
+    <Picture
+      image={images.portrait}
+      label={t.portrait}
+      empty={t.portraitAdd}
+      change={t.portraitChange}
+      shape="portrait"
+      {disabled}
+      set={(file) => setImage('portrait', file)}
+      {t}
+    />
+    <div class="beside">
+      {@render facts(FACTS)}
+      {@render texts([['Background_Appearance', 'description']])}
+    </div>
+  </div>
 </section>
 
 <section class="panel" aria-labelledby="personality-title">
@@ -120,6 +139,19 @@
   <h2 id="allies-title">{t.alliesEnemies}</h2>
   {@render texts(ALLIES)}
   {@render facts(FACTION)}
+  <div class="symbol">
+    <Picture
+      image={images.symbol}
+      label={t.symbol}
+      empty={t.symbol}
+      change={t.symbolChange}
+      shape="square"
+      {disabled}
+      set={(file) => setImage('symbol', file)}
+      {t}
+    />
+    <p>{t.symbolHint}</p>
+  </div>
 </section>
 
 <section class="panel" aria-labelledby="backstory-title">
@@ -143,6 +175,34 @@
     margin: 0;
     font-size: 1rem;
     font-weight: 800;
+  }
+
+  /* The portrait on the left, about as wide as on the PDF; the appearance boxes beside it. */
+  .hero {
+    display: grid;
+    grid-template-columns: 9.5rem minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: start;
+  }
+
+  .beside {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+
+  .symbol {
+    display: grid;
+    grid-template-columns: 9.5rem minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: start;
+  }
+
+  .symbol p {
+    margin: 0.25rem 0 0;
+    color: var(--ink-muted);
+    font-size: 0.875rem;
   }
 
   .facts {
@@ -201,17 +261,22 @@
     width: 2.75rem;
     display: grid;
     place-items: center;
-    border-left: 1px solid var(--line);
+    /*
+     * Clipped: WebKit lets the invisible select's own text stick out past the arrow, which scrolled the page
+     * sideways once the portrait narrowed the boxes. The dividing line is a shadow, not a border, so the
+     * select still covers the full 44 px (2.75rem) inside the clip.
+     */
+    overflow: hidden;
     border-radius: 0 0.5rem 0.5rem 0;
+    box-shadow: inset 1px 0 0 var(--line);
     color: var(--ink-muted);
   }
 
   /* The select itself is invisible on top of the arrow: its own text would repeat the input's. */
   .pick select {
     position: absolute;
-    /* Over the border too, so the tap area is the full 44 px (2.75rem). */
-    inset: 0 0 0 -1px;
-    width: calc(100% + 1px);
+    inset: 0;
+    width: 100%;
     opacity: 0;
     cursor: pointer;
   }
