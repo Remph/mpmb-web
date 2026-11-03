@@ -18,6 +18,7 @@ import { allowTimer } from '../engine/startup.ts';
 import type { Bookmark, SheetSnapshot } from '../engine/types.ts';
 import { offers } from '../engine/choices.ts';
 import { answerScores } from '../engine/scores.ts';
+import { SPELLS_READ_SCRIPT, applySpellPicks, readSpellsInfo } from '../engine/spells.ts';
 import { answerWelcome } from '../engine/welcome.ts';
 import { readSheetPdf } from '../pdf/read-sheet.ts';
 import { waitForAnswer } from './channel.ts';
@@ -179,6 +180,8 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
   units: ({ system }) => switchUnits(opened(), system),
   scores: ({ changes }) => answered(answerScores(changes), () => opened().click('Ability Scores Button')),
   pick: ({ field, answer }) => pick(opened(), field, answer),
+  spells: () => readSpellsInfo(opened().evaluate(SPELLS_READ_SCRIPT)),
+  setSpells: ({ picks }) => applySpellPicks(opened(), picks, answered),
 };
 
 function pick(sheet: Engine, field: string, answer: string): boolean {

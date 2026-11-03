@@ -4,6 +4,7 @@ import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem, Unava
 import type { CharacterData } from '../engine/sheet-data.ts';
 import type { BuilderInfo, UnitSystem } from '../engine/builder.ts';
 import type { ScoreChange } from '../engine/scores.ts';
+import type { SpellPicks, SpellsInfo } from '../engine/spells.ts';
 import { canWait, createChannel, sendAnswer } from './channel.ts';
 import type { Channel } from './channel.ts';
 import type { Answer, Ask, Command, FailureCode, FromWorker, MenuNode, Opened, Summary, ToWorker } from './protocol.ts';
@@ -111,6 +112,14 @@ export class EngineClient {
   /** Picks an item of the menu that the button shows (see the `pick` command); false when not offered. */
   async pick(field: string, answer: string): Promise<boolean> {
     return (await this.send({ type: 'pick', field, answer })).result === true;
+  }
+
+  async spells(): Promise<SpellsInfo> {
+    return (await this.send({ type: 'spells' })).result as SpellsInfo;
+  }
+
+  setSpells(picks: SpellPicks[]): Promise<Done> {
+    return this.send({ type: 'setSpells', picks });
   }
 
   async save(): Promise<CharacterData> {

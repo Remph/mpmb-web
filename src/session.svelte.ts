@@ -4,6 +4,7 @@
 import type { AddOns } from './engine/add-ons.ts';
 import type { BuilderInfo, UnitSystem } from './engine/builder.ts';
 import type { ScoreChange } from './engine/scores.ts';
+import type { SpellPicks, SpellsInfo } from './engine/spells.ts';
 import type { CharacterData } from './engine/sheet-data.ts';
 import { SHEET_ID } from './engine/sheet-id.ts';
 import { FF } from './engine/types.ts';
@@ -330,6 +331,14 @@ export class Session {
     return this.inLine(() => this.client.pick(field, answer));
   }
 
+  /**
+   * The Spells step's picks through MPMB's spell dialogs, then MPMB makes the spell sheet pages again. In line
+   * after the changes before it, like setScores.
+   */
+  setSpells(picks: SpellPicks[]): Promise<void> {
+    return this.inLine(() => this.client.setSpells(picks));
+  }
+
   /** Runs a worker command after the work before it, then shows and saves what it changed. */
   private inLine(job: () => Promise<unknown>): Promise<void> {
     const open = this.current;
@@ -359,6 +368,19 @@ export class Session {
     if (!open || this.current !== open || open.status === 'error') return null;
     try {
       return await this.client.builder();
+    } catch (err) {
+      this.note('error', this.explain(err));
+      return null;
+    }
+  }
+
+  /** What MPMB's spell dialogs offer and hold, for the Spells step; null like builderInfo. */
+  async spellsInfo(): Promise<SpellsInfo | null> {
+    const open = this.current;
+    await this.running;
+    if (!open || this.current !== open || open.status === 'error') return null;
+    try {
+      return await this.client.spells();
     } catch (err) {
       this.note('error', this.explain(err));
       return null;

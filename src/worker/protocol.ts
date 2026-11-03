@@ -2,6 +2,7 @@
 import type { AddOns } from '../engine/add-ons.ts';
 import type { UnitSystem } from '../engine/builder.ts';
 import type { ScoreChange } from '../engine/scores.ts';
+import type { SpellPicks } from '../engine/spells.ts';
 import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem, Unavailable } from '../engine/host.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
 import type { FieldViews } from './views.ts';
@@ -28,7 +29,14 @@ export type Command =
    * answers the menu with this item's cReturn, as the player's pick. Returns false (and picks nothing)
    * when the menu doesn't offer it.
    */
-  | { type: 'pick'; field: string; answer: string };
+  | { type: 'pick'; field: string; answer: string }
+  /** What MPMB's spell dialogs offer and hold (SpellsInfo), read without showing them. */
+  | { type: 'spells' }
+  /**
+   * The Spells step's picks into MPMB's spell dialogs, then MPMB's "(Re)generate a Spell Sheet" with the app
+   * pressing OK in those dialogs.
+   */
+  | { type: 'setSpells'; picks: SpellPicks[] };
 
 /** The page's first message: the shared memory for answers, when the page is cross-origin isolated. */
 export interface Setup {

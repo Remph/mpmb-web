@@ -2,9 +2,10 @@
   The Spells tab (M4.6, layout "by level" that Nick picked on 2026-10-31): the spells on MPMB's spell sheet
   pages, one block per spell level with that level's slots in its heading, so finding a spell and ticking
   the slot happen in one place. The mark in front of a spell ticks it prepared, as a click on the PDF's
-  box does; choosing which spells are on the sheet stays in MPMB's Spells menu.
+  box does; "Choose spells" opens the Build screen's Spells step (M7).
 -->
 <script lang="ts">
+  import { spellsHref } from '../../build/choose-link.ts';
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import Modal from '../../popups/Modal.svelte';
@@ -17,12 +18,14 @@
 
   interface Props {
     fields: FieldViews;
+    /** For the link to the Build screen's Spells step. */
+    characterId: string;
     disabled: boolean;
     change: (steps: Step[]) => void;
     t: Texts;
   }
 
-  let { fields, disabled, change, t }: Props = $props();
+  let { fields, characterId, disabled, change, t }: Props = $props();
 
   const sources = $derived(readSpells(fields));
   const slots = $derived(readSpellSlotUse(fields));
@@ -206,7 +209,10 @@
       {/if}
     {/each}
   </div>
-  <p class="hint">{t.spellsHowTo}</p>
+  <div class="how">
+    <p class="hint">{t.spellsHowTo}</p>
+    <a class="change" href={spellsHref(characterId)}>{t.spellsChoose}</a>
+  </div>
 </section>
 
 {#each levels as block (block.level)}
@@ -380,6 +386,30 @@
 
   .hint {
     margin: 0.25rem 0 0;
+  }
+
+  .how {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .change {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-left: auto;
+    padding: 0 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .change:hover {
+    background: var(--accent-soft);
   }
 
   /* More prepared than the class allows: MPMB lets it happen, the player should see it. */
