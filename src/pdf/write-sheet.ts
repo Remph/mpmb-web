@@ -299,8 +299,10 @@ class SheetWriter {
         if (key !== name('Annots') && key !== name('Parent') && key !== name('TemplateInstantiated'))
           dict.set(key, value);
       });
-      // A template page is /Type /Template; spawned, it is a page like the others.
+      // A template page is /Type /Template; spawned, it is a page like the others, and names the template
+      // it came from (PDF 1.7, 12.7.6; Acrobat writes it on every page it spawns).
       dict.set(name('Type'), name('Page'));
+      dict.set(name('TemplateInstantiated'), name(source.template));
       dict.set(name('Annots'), this.ctx.obj([]));
       return { ref: this.ctx.register(dict), dict };
     });
