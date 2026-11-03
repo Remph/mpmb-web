@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { SpellInfo, SpellSource, SpellsInfo } from '../engine/spells.ts';
 import {
   addList,
+  bonusPickable,
   byLevel,
   changeCount,
   draftOf,
@@ -18,6 +19,8 @@ import {
   switched,
   textParts,
   toggled,
+  toPrepare,
+  withBook,
 } from './spells.ts';
 
 const spell = (key: string, name: string, level: number, school = 'Evocation'): SpellInfo => ({
@@ -141,12 +144,14 @@ describe('bonus and prepared spells', () => {
     spells: null,
     show: 0,
     bonus: [
-      { name: 'Cantrip', chosen: 'light', list: ['light', 'fire bolt'] },
-      { name: '1st-Level', chosen: '', list: ['shield', 'magic missile'] },
+      { name: 'Cantrip', chosen: 'light', list: ['light', 'fire bolt'], extra: false },
+      { name: '1st-Level', chosen: '', list: ['shield', 'magic missile'], extra: false },
+      { name: 'Cantrip', chosen: '', list: ['light', 'fire bolt'], extra: true },
     ],
   });
   const wizard = source({
     show: 1,
+    spells: { count: 20, offset: 0, chosen: ['shield', 'magic missile', 'web', 'fireball'], list: [] },
     prepared: { count: 2, offset: 0, chosen: ['shield'], list: ['shield', 'magic missile', 'web'] },
   });
 
@@ -174,6 +179,35 @@ describe('bonus and prepared spells', () => {
       { key: 'magic missile', part: 'prepared' },
       { key: 'shield', part: 'prepared' },
     ]);
+  });
+
+  it("follows the step's spellbook: new spells can be prepared, removed ones are no longer prepared", () => {
+    // Fireball is above what the wizard casts, so MPMB doesn't offer it to prepare.
+    expect(toPrepare(wizard, draftOf(wizard), SPELLS)).toEqual(['shield', 'magic missile', 'web']);
+    const draft = { ...draftOf(wizard), show: 3, spells: ['shield', 'web', 'fire bolt'], prepared: ['shield'] };
+    expect(toPrepare(wizard, draft, SPELLS)).toEqual(['shield', 'web']);
+    expect(filtersOf(wizard, SPELLS, 'prepare', draft)).toEqual([
+      { part: 'prepared', level: 1 },
+      { part: 'prepared', level: 2 },
+    ]);
+    expect(addList(wizard, { part: 'prepared', level: 2 }, '', SPELLS, draft).map((e) => e.key)).toEqual(['web']);
+    expect(withBook(wizard, { ...draft, spells: ['web'] }).prepared).toEqual([]);
+    // A class that prepares from its whole list keeps MPMB's list.
+    const cleric = source({ type: 'list', prepared: wizard.prepared });
+    expect(toPrepare(cleric, { ...draftOf(cleric), spells: [] }, SPELLS)).toEqual(['shield', 'magic missile', 'web']);
+  });
+
+  it('counts and sends prepared spells only while "Prepared spells only" is on', () => {
+    const all = info(wizard);
+    const drafts = { wizard: { ...draftOf(wizard), show: 3, prepared: ['web', 'shield'] } };
+    expect(changeCount(all, drafts)).toBe(2);
+    const back = { wizard: { ...drafts.wizard, show: 1 } };
+    expect(changeCount(all, back)).toBe(0);
+    expect(picksOf(all, back)).toEqual([]);
+  });
+
+  it("doesn't offer a change for the extra rows raised in Acrobat", () => {
+    expect([0, 1, 2].map((i) => bonusPickable(initiate, i))).toEqual([true, true, false]);
   });
 });
 

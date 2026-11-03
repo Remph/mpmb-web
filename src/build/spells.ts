@@ -37,9 +37,34 @@ export const PREPARED_ONLY = 3;
 export const preparing = (source: SpellSource, draft: SpellDraft): boolean =>
   source.prepared !== null && draft.show === PREPARED_ONLY;
 
-/** A bonus spell the player picks: a feature or item that offers more than one. */
+/**
+ * A bonus spell the player picks: a feature or item that offers more than one. Not the extra rows a
+ * player added in Acrobat's dialog (MPMB keeps those in spCast.extraBo, which the step doesn't write).
+ */
 export const bonusPickable = (source: SpellSource, index: number): boolean =>
-  (source.bonus[index]?.list.length ?? 0) > 1;
+  !source.bonus[index]?.extra && (source.bonus[index]?.list.length ?? 0) > 1;
+
+/**
+ * The spells the source may prepare. MPMB offers a spellbook's spells up to the highest level the
+ * character casts, so for a book they follow the spellbook on the step, not the one on the sheet:
+ * a spell just added can be prepared before "Update spell sheet". Other sources keep MPMB's own list.
+ */
+export function toPrepare(source: SpellSource, draft: SpellDraft, spells: Record<string, SpellInfo>): string[] {
+  if (!source.prepared) return [];
+  if (source.type !== 'book') return source.prepared.list;
+  const top = source.maxLevel || Number.MAX_SAFE_INTEGER;
+  return draft.spells.filter((key) => {
+    const level = spells[key]?.level ?? 0;
+    return level >= 1 && level <= top;
+  });
+}
+
+/**
+ * The draft after the spellbook changed: a spell that left the book can't stay prepared (MPMB would drop
+ * it without a word, and the step would still count it).
+ */
+export const withBook = (source: SpellSource, draft: SpellDraft): SpellDraft =>
+  source.type === 'book' ? { ...draft, prepared: draft.prepared.filter((key) => draft.spells.includes(key)) } : draft;
 
 /** Whether the player picks this source's spells here: cantrips, spells known or a spellbook. */
 export const pickable = (source: SpellSource): boolean =>
@@ -60,13 +85,15 @@ export function changeCount(info: SpellsInfo, drafts: Record<string, SpellDraft>
     const diff = (now: string[], before: string[]) =>
       now.filter((k) => !before.includes(k)).length + before.filter((k) => !now.includes(k)).length;
     const bonus = draft.bonus.filter((k, i) => k !== was.bonus[i]).length;
+    // Prepared picks count only while the step shows them ("Prepared spells only").
+    const prepared = preparing(source, draft) ? diff(draft.prepared, was.prepared) : 0;
     return (
       total +
       diff(draft.cantrips, was.cantrips) +
       diff(draft.spells, was.spells) +
       (draft.show !== was.show ? 1 : 0) +
       bonus +
-      diff(draft.prepared, was.prepared)
+      prepared
     );
   }, 0);
 }
@@ -82,7 +109,7 @@ export function picksOf(info: SpellsInfo, drafts: Record<string, SpellDraft>): S
     if (source.spells && !sameSet(draft.spells, was.spells)) picks.spells = draft.spells;
     if (draft.show !== was.show) picks.show = draft.show;
     if (draft.bonus.some((k, i) => k !== was.bonus[i])) picks.bonus = draft.bonus;
-    if (source.prepared && !sameSet(draft.prepared, was.prepared)) picks.prepared = draft.prepared;
+    if (preparing(source, draft) && !sameSet(draft.prepared, was.prepared)) picks.prepared = draft.prepared;
     return Object.keys(picks).length > 1 ? [picks] : [];
   });
 }
@@ -122,9 +149,10 @@ export function filtersOf(
   source: SpellSource,
   spells: Record<string, SpellInfo>,
   mode: 'pick' | 'prepare' = 'pick',
+  draft: SpellDraft = draftOf(source),
 ): AddFilter[] {
   if (mode === 'prepare') {
-    const levels = [...new Set((source.prepared?.list ?? []).map((k) => spells[k]?.level ?? 0))];
+    const levels = [...new Set(toPrepare(source, draft, spells).map((k) => spells[k]?.level ?? 0))];
     return levels.sort((a, b) => a - b).map((level): AddFilter => ({ part: 'prepared', level }));
   }
   const out: AddFilter[] = source.cantrips ? [{ part: 'cantrips' }] : [];
@@ -145,6 +173,7 @@ export function addList(
   filter: AddFilter,
   query: string,
   spells: Record<string, SpellInfo>,
+  draft: SpellDraft = draftOf(source),
 ): { key: string; part: SpellListPart }[] {
   const words = query.trim().toLowerCase();
   // To prepare: only the prepared list. Otherwise the cantrips and the spells to choose from.
@@ -152,8 +181,8 @@ export function addList(
     ...(source.cantrips?.list ?? []).map((key) => ({ key, part: 'cantrips' as const })),
     ...(source.type === 'list' ? [] : (source.spells?.list ?? [])).map((key) => ({ key, part: 'spells' as const })),
   ];
-  const toPrepare = (source.prepared?.list ?? []).map((key) => ({ key, part: 'prepared' as const }));
-  const entries = (filter.part === 'prepared' ? toPrepare : own).filter((e) => spells[e.key]);
+  const prepare = toPrepare(source, draft, spells).map((key) => ({ key, part: 'prepared' as const }));
+  const entries = (filter.part === 'prepared' ? prepare : own).filter((e) => spells[e.key]);
   const top = source.maxLevel || Number.MAX_SAFE_INTEGER;
   const fits = (e: { key: string; part: SpellListPart }): boolean => {
     if (words) return `${spells[e.key]?.name ?? ''} ${spells[e.key]?.school ?? ''}`.toLowerCase().includes(words);

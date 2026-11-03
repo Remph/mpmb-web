@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { openSheet, referenceSheet } from '../../test/characters.ts';
 import { ScriptedHost } from '../../test/hosts.ts';
+import { draftOf, toPrepare } from '../build/spells.ts';
 import { checkboxField, freeRow, readSpells } from '../play/spells.ts';
 import { viewsOf } from '../worker/views.ts';
 import type { Engine } from './engine.ts';
@@ -78,6 +79,9 @@ describe("reading MPMB's spell dialogs", () => {
     // A wizard 10 prepares 15, from the spellbook only.
     expect(book?.prepared).toMatchObject({ count: 15, chosen: [] });
     expect(book?.prepared?.list.every((k) => book.spells?.chosen.includes(k))).toBe(true);
+    // The step builds that list from its own spellbook; for the sheet's spellbook it is MPMB's list.
+    if (book)
+      expect(toPrepare(book, draftOf(book), wizard.spells).sort()).toEqual([...(book.prepared?.list ?? [])].sort());
     // The read itself chose "only prepared" to see that dialog; the real choice stays.
     expect(book?.show).toBe(1);
     const paladin = read(openSheet(referenceSheet('paladin8-warlock2')));
