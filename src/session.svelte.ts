@@ -9,6 +9,8 @@ import type { SpellPicks, SpellSheetPicks, SpellsInfo } from './engine/spells.ts
 import type { CharacterData } from './engine/sheet-data.ts';
 import { SHEET_ID } from './engine/sheet-id.ts';
 import { FF } from './engine/types.ts';
+import type { ImageSlot, SheetImage, SheetImages } from './engine/types.ts';
+import { fitImages, fitPicture } from './play/pictures.ts';
 import type { Texts } from './i18n.ts';
 import { counted, fill } from './i18n.ts';
 import { PopUpStack } from './popups/popups.svelte.ts';
@@ -41,6 +43,8 @@ export interface OpenCharacter {
   fields: FieldViews;
   menu: MenuNode[];
   status: 'opening' | 'working' | 'saving' | 'saved' | 'error';
+  /** The portrait and organisation symbol (M8). */
+  images: SheetImages;
 }
 
 /**
@@ -184,6 +188,10 @@ export class Session {
     try {
       const opened = await this.client.importPdf(await file.arrayBuffer());
       const data = await this.client.save();
+      // The PDF's portrait comes as it was put in (up to a few MB): scaled down before it is stored.
+      const images = await fitImages(data.images);
+      if (images) data.images = images;
+      else delete data.images;
       const { addOns } = opened.result;
       const before = await this.sameAs(data, addOns);
       if (before === 'cancel') {
@@ -284,7 +292,7 @@ export class Session {
     const stored = await this.store?.get(id);
     if (!stored) return false;
     this.waiting.clear();
-    this.current = { meta: stored.meta, fields: {}, menu: [], status: 'opening' };
+    this.current = { meta: stored.meta, fields: {}, menu: [], status: 'opening', images: { ...stored.data.images } };
     try {
       await this.client.open(stored.data);
       this.dirty = false;
@@ -442,6 +450,30 @@ export class Session {
   /** Opens MPMB's own dialog for pasted code, which the player fills in. */
   pasteScript(): Promise<void> {
     return this.work(() => this.client.pasteScript());
+  }
+
+  /**
+   * Puts a picture file on the open sheet as its portrait or symbol (scaled down first), or takes the
+   * picture off (null). False when the browser can't read the file; nothing changes then.
+   */
+  async setImage(slot: ImageSlot, file: Blob | null): Promise<boolean> {
+    let image: SheetImage | null = null;
+    if (file) {
+      try {
+        image = await fitPicture(file);
+      } catch {
+        return false;
+      }
+    }
+    const open = this.current;
+    if (!open) return false;
+    await this.work(async () => {
+      await this.client.setImage(slot, image);
+      const { [slot]: _old, ...others } = open.images;
+      open.images = image ? { ...others, [slot]: image } : others;
+      this.dirty = true;
+    });
+    return true;
   }
 
   /** One piece of work on the open sheet that isn't a play view change (a menu entry, the units); saved after. */

@@ -15,8 +15,9 @@ import {
   PDFString,
   decodePDFRawStream,
 } from '@cantoo/pdf-lib';
-import type { Bookmark, FieldDef, PdfFieldType, SheetSnapshot, Trigger, Widget } from '../engine/types.ts';
-import { FF, TRIGGERS } from '../engine/types.ts';
+import type { Bookmark, FieldDef, PdfFieldType, SheetImages, SheetSnapshot, Trigger, Widget } from '../engine/types.ts';
+import { FF, IMAGE_SLOTS, TRIGGERS } from '../engine/types.ts';
+import { PICTURE_FIELDS, dataUrl, iconImage } from './icons.ts';
 
 /** Keys that a field inherits from its parents in the field tree (PDF 1.7, 12.7.3.1). */
 const INHERITED = ['FT', 'Ff', 'V', 'DV', 'Opt', 'MaxLen'] as const;
@@ -79,6 +80,8 @@ export async function readSheetPdf(bytes: Uint8Array | ArrayBuffer): Promise<She
   });
 
   const fields: Record<string, FieldDef> = {};
+  /** The widgets of the picture buttons (portrait, symbol), to read their icons after the walk. */
+  const pictureWidgets = new Map<string, PDFDict[]>();
   // Field or widget object -> field name, to resolve the calculation order (/CO points at either).
   const nameOfRef = new Map<string, string>();
 
@@ -165,6 +168,7 @@ export async function readSheetPdf(bytes: Uint8Array | ArrayBuffer): Promise<She
       def.widgets = def.widgets.map((w, i) => ({ ...w, on: onStateOf(widgetDicts[i]) ?? 'Yes' }));
     }
     fields[full] = def;
+    if (Object.values(PICTURE_FIELDS).includes(full)) pictureWidgets.set(full, widgetDicts);
     [ref, ...kids].forEach((r) => {
       if (r instanceof PDFRef && !nameOfRef.has(r.toString())) nameOfRef.set(r.toString(), full);
     });
@@ -214,5 +218,22 @@ export async function readSheetPdf(bytes: Uint8Array | ArrayBuffer): Promise<She
     if (s !== undefined) info[k.decodeText()] = s;
   });
 
-  return { fields, calcOrder, numPages: pdf.getPageCount(), templates, outline, info };
+  // The first widget whose icon is an image; the others show the same picture or MPMB's placeholder.
+  const images: SheetImages = {};
+  await IMAGE_SLOTS.reduce(async (previous, slot) => {
+    await previous;
+    const widgets = pictureWidgets.get(PICTURE_FIELDS[slot]) ?? [];
+    const found = await widgets.reduce<Promise<Awaited<ReturnType<typeof iconImage>>>>(
+      async (before, widget) => (await before) ?? iconImage(ctx, widget),
+      Promise.resolve(null),
+    );
+    if (found) {
+      const src = dataUrl(found.type, found.bytes);
+      images[slot] = { src, thumb: src };
+    }
+  }, Promise.resolve());
+
+  const sheet: SheetSnapshot = { fields, calcOrder, numPages: pdf.getPageCount(), templates, outline, info };
+  if (Object.keys(images).length) sheet.images = images;
+  return sheet;
 }

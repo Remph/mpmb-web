@@ -27,7 +27,7 @@ import type { Realm, RealmTools } from './realm.ts';
 import { installAcrobatReplace } from './acrobat-replace.ts';
 import { installToSource } from './to-source.ts';
 import type { RealmConstructors } from './to-source.ts';
-import type { SheetSnapshot } from './types.ts';
+import type { ImageSlot, SheetImage, SheetImages, SheetSnapshot } from './types.ts';
 import { DISPLAY } from './types.ts';
 import { printd, printf, scand } from './util.ts';
 
@@ -123,8 +123,14 @@ export class Engine {
   private readonly root: BookmarkNode;
   /** The text behind each stream object `util.readFileIntoStream` gave the scripts. */
   private readonly streams = new WeakMap<object, string>();
+  /**
+   * The portrait and symbol. They ride along with the sheet so that a save keeps them; MPMB's scripts
+   * never see them (in Acrobat they are button icons, which the scripts only copy or reset).
+   */
+  private images: SheetImages;
 
   private constructor({ sheet, host, realm, now, allowTimer }: EngineOptions) {
+    this.images = { ...sheet.images };
     this.tools = realmTools(realm);
     this.host = host;
     this.now = now ?? (() => performance.now());
@@ -507,7 +513,14 @@ export class Engine {
     const snap = this.doc.snapshot();
     const info = this.tools.realm.global.info as Record<string, unknown>;
     snap.info = Object.fromEntries(Object.entries(info).map(([k, v]) => [k, String(v)]));
+    if (Object.keys(this.images).length) snap.images = { ...this.images };
     return snap;
+  }
+
+  /** Puts a picture on the sheet, or takes it off (null). */
+  setImage(slot: ImageSlot, image: SheetImage | null): void {
+    const { [slot]: _old, ...others } = this.images;
+    this.images = image ? { ...others, [slot]: image } : others;
   }
 }
 

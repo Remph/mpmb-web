@@ -126,7 +126,14 @@
       {:else if shownTab === 'features'}
         <FeaturesTab {fields} characterId={open.meta.id} {t} />
       {:else if shownTab === 'profile'}
-        <ProfileTab {fields} {disabled} {change} {t} />
+        <ProfileTab
+          {fields}
+          images={open.images}
+          {disabled}
+          {change}
+          setImage={(slot, file) => session.setImage(slot, file)}
+          {t}
+        />
       {:else}
         <NotesTab {fields} {disabled} {change} pick={(field, answer) => session.pick(field, answer)} {t} />
       {/if}

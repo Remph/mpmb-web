@@ -3,6 +3,7 @@
 import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem } from '../engine/host.ts';
 import type { AddOns, ScriptChanges, ScriptFiles } from '../engine/add-ons.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
+import type { ImageSlot, SheetImage } from '../engine/types.ts';
 import type { BuilderInfo, UnitSystem } from '../engine/builder.ts';
 import type { ScoreChange } from '../engine/scores.ts';
 import type { SpellPicks, SpellSheetPicks, SpellsInfo } from '../engine/spells.ts';
@@ -121,6 +122,10 @@ export class EngineClient {
 
   setSpells(picks: SpellPicks[], sheet: SpellSheetPicks | null): Promise<Done> {
     return this.send({ type: 'setSpells', picks, sheet });
+  }
+
+  setImage(slot: ImageSlot, image: SheetImage | null): Promise<Done> {
+    return this.send({ type: 'setImage', slot, image });
   }
 
   async save(): Promise<CharacterData> {
