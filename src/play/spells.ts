@@ -281,17 +281,42 @@ function isShownField(fields: FieldViews, name: string): boolean {
 /** For a tick the player makes: MPMB's toggle on the check box ("checkbox" ↔ "checkedbox", once-box ↔ "_used"). */
 export const checkboxField = (spell: Spell): string => `${spell.page}spells.checkbox.${spell.row}`;
 
+/** Every row of the spell sheet pages in the sheet's order, with what MPMB remembers for it. */
+function sheetRows(fields: FieldViews): { prefix: string; row: number; used: boolean }[] {
+  return spellPages(fields).flatMap(({ prefix, template }) =>
+    Array.from({ length: ROWS[template] }, (_, row) => ({
+      prefix,
+      row,
+      used: valueOf(fields, `${prefix}spells.remember.${row}`) !== '',
+    })),
+  );
+}
+
+const box = (r: { prefix: string; row: number }): string => `${r.prefix}spells.checkbox.${r.row}`;
+
 /**
- * Where "Add a row" opens MPMB's row menu: the check box of the first empty row after the last row in
- * use, across the spell sheet pages. MPMB's menu then writes a spell, a caption or a divider there, as a
- * Shift+click on that row's first column does in Acrobat. null when every row is in use (MPMB's own
- * "Insert empty rows" on a spell's row still works then).
+ * Where "Add a row" at the end of the tab opens MPMB's row menu: the check box of the first empty row
+ * after the last row in use, across the spell sheet pages. MPMB's menu then writes a spell, a caption or
+ * a divider there, as a Shift+click on that row's first column does in Acrobat. null when every row is in
+ * use (MPMB's own "Insert empty rows" on a spell's row still works then).
  */
 export function freeRow(fields: FieldViews): string | null {
-  const rows = spellPages(fields).flatMap(({ prefix, template }) =>
-    Array.from({ length: ROWS[template] }, (_, row) => ({ prefix, row })),
-  );
-  const lastUsed = rows.findLastIndex(({ prefix, row }) => valueOf(fields, `${prefix}spells.remember.${row}`) !== '');
-  const free = rows[lastUsed + 1];
-  return free ? `${free.prefix}spells.checkbox.${free.row}` : null;
+  const rows = sheetRows(fields);
+  const free = rows[rows.findLastIndex((r) => r.used) + 1];
+  return free ? box(free) : null;
 }
+
+/**
+ * Where a level's "Add a row" opens MPMB's row menu: the row right after the spell (after its options,
+ * Arcane Hand's hands), and whether that row is in use, so that MPMB first inserts an empty row there
+ * (its own "Insert empty rows", which moves the rest down). null after the last row of the last page.
+ */
+export function rowAfter(fields: FieldViews, spell: Spell): { box: string; used: boolean } | null {
+  const last = spell.options.at(-1) ?? spell;
+  const rows = sheetRows(fields);
+  const next = rows[rows.findIndex((r) => r.prefix === last.page && r.row === last.row) + 1];
+  return next ? { box: box(next), used: next.used } : null;
+}
+
+/** MPMB's cReturn for "Insert empty rows" > "1 empty row" in a spell row's menu. */
+export const INSERT_ONE_ROW = 'insert#1#';

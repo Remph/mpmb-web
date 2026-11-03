@@ -14,8 +14,11 @@ export type Command =
   /** Opens a character from a filled MPMB PDF (Colorful A4 v24.2.0). */
   | { type: 'importPdf'; bytes: ArrayBuffer }
   | { type: 'edit'; field: string; text: string }
-  /** `shift`: with Shift held, as for MPMB's spell row menu. */
-  | { type: 'click'; field: string; widget?: number; shift?: boolean }
+  /**
+   * `shift`: with Shift held, as for MPMB's spell row menu. `answer`: the app picks this in the first menu
+   * the click opens (MPMB's cReturn), as `pick` does; later menus go to the player.
+   */
+  | { type: 'click'; field: string; widget?: number; shift?: boolean; answer?: string }
   | { type: 'bookmark'; path: string[] }
   /** The open character as differences from the blank sheet, to save. */
   | { type: 'save' }

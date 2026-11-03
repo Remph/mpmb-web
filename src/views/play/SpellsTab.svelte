@@ -11,11 +11,13 @@
   import Modal from '../../popups/Modal.svelte';
   import { ABILITIES, isOn, readSpellSlotUse } from '../../play/read.ts';
   import {
+    INSERT_ONE_ROW,
     checkboxField,
     freeRow,
     isReady,
     preparedCount,
     readSpells,
+    rowAfter,
     spellPages,
     spellText,
   } from '../../play/spells.ts';
@@ -67,6 +69,7 @@
             .map((spell): Entry => ({ spell, source, level })),
         ),
         slots: slots.find((s) => s.level === level),
+        addRow: addRowSteps(level),
       }))
       .filter((block) => block.entries.length > 0),
   );
@@ -129,6 +132,27 @@
     rowMenu(box);
   }
   const hasPages = $derived(spellPages(fields).length > 0);
+
+  /**
+   * A level's "+ Row": MPMB's row menu on the row under the class's last spell of that level (another
+   * source's when the class has none), so a spell added there lands in that level. Where that row is in
+   * use (the next level's divider), MPMB first inserts an empty row there, its own "Insert empty rows",
+   * which the app picks in the player's place.
+   */
+  function addRowSteps(level: number): Step[] | null {
+    const lastOf = (source: SpellSource | undefined): Spell | undefined =>
+      source?.levels.find((l) => l.level === level)?.spells.at(-1);
+    const anchor =
+      lastOf(main) ??
+      sources
+        .map(lastOf)
+        .filter((s) => s !== undefined)
+        .at(-1);
+    const after = anchor ? rowAfter(fields, anchor) : null;
+    if (!after) return null;
+    const open: Step = { click: after.box, shift: true };
+    return after.used ? [{ ...open, answer: INSERT_ONE_ROW }, open] : [open];
+  }
   const freeBox = $derived(freeRow(fields));
 
   let details: Entry | null = $state(null);
@@ -279,6 +303,17 @@
         </li>
       {/each}
     </ul>
+    {#if block.addRow}
+      {@const addRow = block.addRow}
+      <button
+        type="button"
+        class="add-row"
+        aria-haspopup="menu"
+        aria-label={fill(t.spellsAddRowLabel, { level: levelName(block.level) })}
+        {disabled}
+        onclick={() => change(addRow)}>{t.spellsAddRowHere}</button
+      >
+    {/if}
   </section>
 {:else}
   <p class="panel hint">{t.noReadySpells}</p>
@@ -630,6 +665,16 @@
     border-color: var(--line);
     color: var(--ink-muted);
     text-decoration: line-through;
+  }
+
+  /* Quiet, under the level's list: the spells are the point of the block, not adding rows. */
+  .add-row {
+    display: block;
+    margin: 0.25rem 0 0 auto;
+    padding: 0 0.75rem;
+    color: var(--accent);
+    font-size: 0.875rem;
+    font-weight: 600;
   }
 
   .rows {

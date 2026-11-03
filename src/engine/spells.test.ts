@@ -5,12 +5,12 @@ import { describe, expect, it } from 'vitest';
 import { openSheet, referenceSheet } from '../../test/characters.ts';
 import { ScriptedHost } from '../../test/hosts.ts';
 import { draftOf, toPrepare } from '../build/spells.ts';
-import { checkboxField, freeRow, readSpells } from '../play/spells.ts';
+import { INSERT_ONE_ROW, checkboxField, freeRow, readSpells, rowAfter } from '../play/spells.ts';
 import { viewsOf } from '../worker/views.ts';
 import type { Engine } from './engine.ts';
 import { SPELLS_READ_SCRIPT, answerSpellDialogs, applySpellPicks, readSpellsInfo } from './spells.ts';
 import type { SpellPicks } from './spells.ts';
-import type { DialogView } from './host.ts';
+import type { DialogView, Host } from './host.ts';
 
 const read = (engine: Engine) => readSpellsInfo(engine.evaluate(SPELLS_READ_SCRIPT));
 /** The test hosts press OK in every dialog themselves, as answerSpellDialogs does in the app. */
@@ -243,6 +243,42 @@ describe("MPMB's own spell row menu (Shift and a click on a row's first column)"
     const sleep = all().find((sp) => sp.key === 'sleep');
     expect(sleep).toMatchObject({ fullName: 'Sleep', mark: { prepared: false } });
     expect(checkboxField(sleep!)).toBe(box);
+  });
+});
+
+describe('a level\'s "Add a row" (MPMB\'s Insert empty rows, then its Spell menu)', () => {
+  it("adds a spell right after the class's last spell of that level, moving the rest down", () => {
+    // The first menu gets the app's own answer, as the worker's click with `answer` gives it; the next is the player's.
+    const scripted = new ScriptedHost({ menus: [['Spell', 'with a Checkbox', 'Wizard spells', '1st-level', 'Sleep']] });
+    let appAnswers = true;
+    const host: Host = {
+      alert: scripted.alert.bind(scripted),
+      dialog: scripted.dialog.bind(scripted),
+      popUpMenu: (items) => {
+        if (!appAnswers) return scripted.popUpMenu(items);
+        appAnswers = false;
+        return INSERT_ONE_ROW;
+      },
+    };
+    const wizard = openSheet(referenceSheet('wizard10-evoker'), host);
+    const level1 = () =>
+      readSpells(viewsOf(wizard.doc))
+        .find((s) => s.key === 'wizard')
+        ?.levels.find((l) => l.level === 1)?.spells ?? [];
+    const before = level1().map((sp) => sp.key);
+    const lastSpell = level1().at(-1);
+    if (!lastSpell) throw new Error('The wizard has level 1 spells');
+    const after = rowAfter(viewsOf(wizard.doc), lastSpell);
+    // The next row is the level 2 divider, so MPMB inserts an empty row first.
+    expect(after?.used).toBe(true);
+    if (!after) return;
+    const levels = () => readSpells(viewsOf(wizard.doc)).find((s) => s.key === 'wizard')?.levels.length;
+    const levelCount = levels();
+    wizard.click(after.box, 0, true);
+    expect(appAnswers).toBe(false);
+    wizard.click(after.box, 0, true);
+    expect(level1().map((sp) => sp.key)).toEqual([...before, 'sleep']);
+    expect(levels()).toBe(levelCount);
   });
 });
 

@@ -221,7 +221,9 @@ export const ui = {
     spellsRows: 'Zeilen auf dem Zauberblatt',
     spellsRowsLine:
       'MPMBs Zeilenmenü, wie Umschalt+Klick im PDF: ein Zauber, eine leere Zeile, Spaltentitel, eine Klassen- oder Gradüberschrift.',
-    spellsAddRow: 'Zeile hinzufügen',
+    spellsAddRow: 'Zeile am Ende',
+    spellsAddRowHere: '+ Zeile',
+    spellsAddRowLabel: 'Eine Zeile unter {level} hinzufügen (MPMBs Zeilenmenü)',
     spellsNoFreeRow: 'Keine freie Zeile mehr. Im Menü eines Zaubers: „Insert empty rows“.',
     spellRowOptions: 'Zeile bearbeiten',
     spellRowOptionsLine: 'MPMBs Zeilenmenü: verschieben, leeren, eine Zeile davor einfügen und mehr.',
@@ -947,7 +949,9 @@ export const ui = {
     spellsRows: 'Rows on the spell sheet',
     spellsRowsLine:
       "MPMB's row menu, as Shift and a click in the PDF: a spell, an empty line, column captions, a class header or a level divider.",
-    spellsAddRow: 'Add a row',
+    spellsAddRow: 'Row at the end',
+    spellsAddRowHere: '+ Row',
+    spellsAddRowLabel: "Add a row under {level} (MPMB's row menu)",
     spellsNoFreeRow: 'No free row left. In a spell\'s menu: "Insert empty rows".',
     spellRowOptions: 'Edit row',
     spellRowOptionsLine: "MPMB's row menu: move it, clear it, insert rows before it and more.",

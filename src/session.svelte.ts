@@ -36,9 +36,10 @@ export interface OpenCharacter {
 
 /**
  * One change the play view makes on the sheet: type into a field, or click a check box or button
- * (`shift`: with Shift held, which opens a spell row's own menu in MPMB).
+ * (`shift`: with Shift held, which opens a spell row's own menu in MPMB; `answer`: the app picks this in
+ * the first menu the click opens, MPMB's cReturn).
  */
-export type Step = { edit: string; text: string } | { click: string; shift?: boolean };
+export type Step = { edit: string; text: string } | { click: string; shift?: boolean; answer?: string };
 
 /**
  * The fields as they will be once the worker made these steps. The page shows them at once, so the
@@ -427,7 +428,9 @@ export class Session {
         await steps.reduce<Promise<unknown>>(
           (previous, step) =>
             previous.then(() =>
-              'edit' in step ? this.client.edit(step.edit, step.text) : this.client.click(step.click, 0, step.shift),
+              'edit' in step
+                ? this.client.edit(step.edit, step.text)
+                : this.client.click(step.click, 0, step.shift, step.answer),
             ),
           Promise.resolve(),
         );

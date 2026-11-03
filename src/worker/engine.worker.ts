@@ -173,7 +173,8 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
     return open(sheet);
   },
   edit: ({ field, text }) => opened().edit(field, text),
-  click: ({ field, widget, shift }) => opened().click(field, widget, shift),
+  click: ({ field, widget, shift, answer }) =>
+    answer === undefined ? opened().click(field, widget, shift) : clickAnswered(opened(), field, shift, answer),
   bookmark: ({ path }) => opened().clickBookmark(path),
   save: () => diffCharacter(blankSheet(), opened().snapshot()),
   builder: () => readBuilderInfo(opened().evaluate(BUILDER_INFO_SCRIPT)),
@@ -189,6 +190,18 @@ function pick(sheet: Engine, field: string, answer: string): boolean {
   menuPicked = false;
   try {
     sheet.click(field);
+  } finally {
+    menuAnswer = null;
+  }
+  return menuPicked;
+}
+
+/** A click whose first menu the app answers itself (a spell row's "Insert empty rows"), like `pick`. */
+function clickAnswered(sheet: Engine, field: string, shift: boolean | undefined, answer: string): boolean {
+  menuAnswer = answer;
+  menuPicked = false;
+  try {
+    sheet.click(field, 0, shift);
   } finally {
     menuAnswer = null;
   }
