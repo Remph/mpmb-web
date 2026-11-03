@@ -92,6 +92,11 @@
     color: var(--ink-muted);
   }
 
+  /* The app's accent, readable in light and dark (the browser's own link blue is dark on dark). */
+  a {
+    color: var(--accent);
+  }
+
   .status {
     min-height: 2.75rem;
   }
