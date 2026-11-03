@@ -181,7 +181,7 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
   scores: ({ changes }) => answered(answerScores(changes), () => opened().click('Ability Scores Button')),
   pick: ({ field, answer }) => pick(opened(), field, answer),
   spells: () => readSpellsInfo(opened().evaluate(SPELLS_READ_SCRIPT)),
-  setSpells: ({ picks }) => applySpellPicks(opened(), picks, answered),
+  setSpells: ({ picks, sheet }) => applySpellPicks(opened(), picks, answered, sheet),
 };
 
 function pick(sheet: Engine, field: string, answer: string): boolean {

@@ -1,10 +1,11 @@
 <!--
   The Spells step's list to add from (M7): the spells MPMB's dialog offers for one source, by level, with a
-  search. Next to the chosen spells on wide screens, in a pop-up from "+ Add spells" on narrow ones.
+  search; or, with "Prepared spells only", the spells its prepared spells dialog offers. Next to the chosen
+  spells on wide screens, in a pop-up from "+ Add spells" on narrow ones.
 -->
 <script lang="ts">
   import { addList, filtersOf } from '../../build/spells.ts';
-  import type { AddFilter, SpellDraft } from '../../build/spells.ts';
+  import type { AddFilter, SpellDraft, SpellListPart } from '../../build/spells.ts';
   import type { SpellInfo, SpellSource } from '../../engine/spells.ts';
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
@@ -15,27 +16,36 @@
     draft: SpellDraft;
     /** The filter to start with ("2 more cantrips to choose" opens on the cantrips). */
     start: AddFilter | null;
-    ontoggle: (part: 'cantrips' | 'spells', key: string) => void;
+    /** The source's own spells, or the spells to prepare. */
+    mode: 'pick' | 'prepare';
+    /** No more to prepare: the buttons of the spells not chosen are off. */
+    full: boolean;
+    /** While the sheet is busy (MPMB making the pages): nothing changes. */
+    disabled: boolean;
+    ontoggle: (part: SpellListPart, key: string) => void;
     oninfo: (spell: SpellInfo) => void;
     line: (spell: SpellInfo) => string;
     t: Texts;
   }
 
-  let { source, spells, draft, start, ontoggle, oninfo, line, t }: Props = $props();
+  let { source, spells, draft, start, mode, full, disabled, ontoggle, oninfo, line, t }: Props = $props();
 
-  const filters = $derived(filtersOf(source, spells));
+  const filters = $derived(filtersOf(source, spells, mode));
   const key = (f: AddFilter): string => (f.part === 'cantrips' ? 'c' : String(f.level));
   let chosenFilter = $state<string | null>(null);
-  /** The source's highest castable level first: that is where a new level's spells come from. */
+  /**
+   * The source's highest castable level first: that is where a new level's spells come from. To prepare,
+   * the lowest level first.
+   */
   const filter = $derived(
     filters.find((f) => key(f) === (chosenFilter ?? (start ? key(start) : null))) ??
+      (mode === 'prepare' ? filters[0] : undefined) ??
       filters.filter((f) => f.part === 'spells' && f.level !== 'higher').at(-1) ??
       filters[0] ?? { part: 'cantrips' as const },
   );
   let query = $state('');
   const entries = $derived(addList(source, filter, query, spells));
-  const chosen = (part: 'cantrips' | 'spells', k: string): boolean =>
-    (part === 'cantrips' ? draft.cantrips : draft.spells).includes(k);
+  const chosen = (part: SpellListPart, k: string): boolean => draft[part].includes(k);
 
   const label = (f: AddFilter): string =>
     f.part === 'cantrips' ? t.cantrips : f.level === 'higher' ? t.spellsHigher : String(f.level);
@@ -80,6 +90,7 @@
             class="toggle"
             class:on
             aria-pressed={on}
+            disabled={disabled || (!on && full)}
             aria-label={fill(on ? t.spellsAddedLabel : t.spellsAddLabel, { name: spell.name })}
             onclick={() => ontoggle(entry.part, entry.key)}>{on ? t.spellsAdded : t.spellsAdd}</button
           >

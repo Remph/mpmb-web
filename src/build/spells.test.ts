@@ -8,8 +8,14 @@ import {
   draftOf,
   fillState,
   filtersOf,
+  moved,
   pickable,
   picksOf,
+  preparing,
+  sheetChangeCount,
+  sheetDraftOf,
+  sheetPicksOf,
+  switched,
   textParts,
   toggled,
 } from './spells.ts';
@@ -55,6 +61,7 @@ const source = (over: Partial<SpellSource> = {}): SpellSource => ({
   showOptions: [],
   preparedCantrips: null,
   bonus: [],
+  prepared: null,
   extra: null,
   ...over,
 });
@@ -76,7 +83,7 @@ describe('the Spells step', () => {
     expect(changeCount(all, drafts)).toBe(1);
     // Order doesn't count as a change; MPMB sorts them itself.
     expect(picksOf(all, { wizard: { ...draftOf(wizard), cantrips: ['light'] } })).toEqual([]);
-    const swapped = { wizard: { cantrips: ['fire bolt'], spells: ['shield'], show: 2 } };
+    const swapped = { wizard: { ...draftOf(wizard), cantrips: ['fire bolt'], show: 2 } };
     expect(picksOf(all, swapped)).toEqual([{ key: 'wizard', cantrips: ['fire bolt'], show: 2 }]);
     expect(changeCount(all, swapped)).toBe(3);
   });
@@ -123,6 +130,82 @@ describe('the Spells step', () => {
     expect(toggled(['a'], 'b')).toEqual(['a', 'b']);
     expect(toggled(['a', 'b'], 'a')).toEqual(['b']);
     expect([fillState(1, 2), fillState(2, 2), fillState(3, 2)]).toEqual(['open', 'full', 'over']);
+  });
+});
+
+describe('bonus and prepared spells', () => {
+  const initiate = source({
+    key: 'initiate',
+    type: 'feat',
+    cantrips: null,
+    spells: null,
+    show: 0,
+    bonus: [
+      { name: 'Cantrip', chosen: 'light', list: ['light', 'fire bolt'] },
+      { name: '1st-Level', chosen: '', list: ['shield', 'magic missile'] },
+    ],
+  });
+  const wizard = source({
+    show: 1,
+    prepared: { count: 2, offset: 0, chosen: ['shield'], list: ['shield', 'magic missile', 'web'] },
+  });
+
+  it('sends the whole bonus list when one of them changed, and the prepared spells as a set', () => {
+    const all = info(initiate, wizard);
+    const drafts = {
+      initiate: { ...draftOf(initiate), bonus: ['light', 'magic missile'] },
+      wizard: { ...draftOf(wizard), show: 3, prepared: ['web', 'shield'] },
+    };
+    expect(picksOf(all, drafts)).toEqual([
+      { key: 'initiate', bonus: ['light', 'magic missile'] },
+      { key: 'wizard', show: 3, prepared: ['web', 'shield'] },
+    ]);
+    expect(changeCount(all, drafts)).toBe(3);
+  });
+
+  it('shows the spells to prepare only with "Prepared spells only", by level', () => {
+    expect(preparing(wizard, draftOf(wizard))).toBe(false);
+    expect(preparing(wizard, { ...draftOf(wizard), show: 3 })).toBe(true);
+    expect(filtersOf(wizard, SPELLS, 'prepare')).toEqual([
+      { part: 'prepared', level: 1 },
+      { part: 'prepared', level: 2 },
+    ]);
+    expect(addList(wizard, { part: 'prepared', level: 1 }, '', SPELLS)).toEqual([
+      { key: 'magic missile', part: 'prepared' },
+      { key: 'shield', part: 'prepared' },
+    ]);
+  });
+});
+
+describe('the spell sheet settings', () => {
+  const all: SpellsInfo = {
+    ...info(source(), source({ key: 'staff' }), source({ key: 'tiefling' })),
+    included: ['wizard', 'staff', 'tiefling'],
+    excluded: [],
+    options: {
+      glossary: false,
+      dashEmptyFields: true,
+      amendSpellDescriptions: true,
+      allowSpellAdd: true,
+      useDependencies: true,
+    },
+  };
+
+  it('counts a new order once, each source taken off or put back, and each option', () => {
+    const draft = sheetDraftOf(all);
+    expect(draft && sheetPicksOf(all, draft)).toBeNull();
+    if (!draft) return;
+    const reordered = { ...draft, included: moved(draft.included, 'tiefling', -1) };
+    expect(reordered.included).toEqual(['wizard', 'tiefling', 'staff']);
+    expect(sheetChangeCount(all, reordered)).toBe(1);
+    const off = switched(reordered, 'staff');
+    expect(off).toMatchObject({ included: ['wizard', 'tiefling'], excluded: ['staff'] });
+    // Staff off the sheet: wizard, tiefling is the old order again, so that's one change, plus the glossary.
+    expect(sheetChangeCount(all, { ...off, options: { ...off.options, glossary: true } })).toBe(2);
+    expect(sheetPicksOf(all, off)).toMatchObject({ included: ['wizard', 'tiefling'], excluded: ['staff'] });
+    // The first can't go up, the last can't go down.
+    expect(moved(['a', 'b'], 'a', -1)).toEqual(['a', 'b']);
+    expect(moved(['a', 'b'], 'b', 1)).toEqual(['a', 'b']);
   });
 });
 

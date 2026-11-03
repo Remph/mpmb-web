@@ -4,7 +4,7 @@ import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem, Unava
 import type { CharacterData } from '../engine/sheet-data.ts';
 import type { BuilderInfo, UnitSystem } from '../engine/builder.ts';
 import type { ScoreChange } from '../engine/scores.ts';
-import type { SpellPicks, SpellsInfo } from '../engine/spells.ts';
+import type { SpellPicks, SpellSheetPicks, SpellsInfo } from '../engine/spells.ts';
 import { canWait, createChannel, sendAnswer } from './channel.ts';
 import type { Channel } from './channel.ts';
 import type { Answer, Ask, Command, FailureCode, FromWorker, MenuNode, Opened, Summary, ToWorker } from './protocol.ts';
@@ -118,8 +118,8 @@ export class EngineClient {
     return (await this.send({ type: 'spells' })).result as SpellsInfo;
   }
 
-  setSpells(picks: SpellPicks[]): Promise<Done> {
-    return this.send({ type: 'setSpells', picks });
+  setSpells(picks: SpellPicks[], sheet: SpellSheetPicks | null): Promise<Done> {
+    return this.send({ type: 'setSpells', picks, sheet });
   }
 
   async save(): Promise<CharacterData> {

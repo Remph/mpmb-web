@@ -1,23 +1,36 @@
 <!--
   Build step "Spells" (M7, Nick picked a Build step, 2026-11-03): each of MPMB's spell sources (a class, a
-  feat, a species, an item) with what its SPELL SELECTION DIALOG holds. The player picks a class's cantrips
-  and spells here; "Update spell sheet" hands the picks to MPMB's own dialogs and has MPMB make the spell
-  sheet pages again, as "(Re)generate a Spell Sheet" does in Acrobat (engine/spells.ts).
+  feat, a species, an item) with what its SPELL SELECTION DIALOG holds, and "Spell sheet" with MPMB's order
+  dialog. The player picks a class's cantrips and spells, the bonus spells of feats and items, the spells
+  for "Prepared spells only", and the sheet's order and options; "Update spell sheet" hands it all to MPMB's
+  own dialogs and has MPMB make the spell sheet pages again, as "(Re)generate a Spell Sheet" does in Acrobat
+  (engine/spells.ts).
 -->
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { MediaQuery } from 'svelte/reactivity';
+  import { unsentFor, unsentSpells } from '../../build/spell-drafts.svelte.ts';
   import {
+    SHEET_OPTIONS,
+    bonusPickable,
     byLevel,
     changeCount,
     draftOf,
     fillState,
+    hasAddList,
+    moved,
     pickable,
     picksOf,
+    preparing,
+    sheetChangeCount,
+    sheetDraftOf,
+    sheetPicksOf,
+    switched,
     textParts,
     toggled,
   } from '../../build/spells.ts';
-  import type { AddFilter, SpellDraft } from '../../build/spells.ts';
-  import type { SpellInfo, SpellPicks, SpellSource, SpellsInfo } from '../../engine/spells.ts';
+  import type { AddFilter, SheetDraft, SpellDraft, SpellListPart } from '../../build/spells.ts';
+  import type { SpellInfo, SpellPicks, SpellSheetPicks, SpellSource, SpellsInfo } from '../../engine/spells.ts';
   import { counted, fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import { ABILITIES } from '../../play/read.ts';
@@ -30,21 +43,32 @@
     /** What MPMB's spell dialogs offer and hold now; null while the sheet isn't open. */
     load: () => Promise<SpellsInfo | null>;
     /** Hands the picks to MPMB's dialogs and makes the spell sheet again. */
-    apply: (picks: SpellPicks[]) => Promise<void>;
+    apply: (picks: SpellPicks[], sheet: SpellSheetPicks | null) => Promise<void>;
     fields: FieldViews;
+    /** The character and when it was last saved: unsent picks stay while the sheet is the same. */
+    characterId: string;
+    updated: string;
     disabled: boolean;
     t: Texts;
   }
 
-  let { load, apply, fields, disabled, t }: Props = $props();
+  let { load, apply, fields, characterId, updated, disabled, t }: Props = $props();
 
   let info = $state<SpellsInfo | null>(null);
   let drafts = $state<Record<string, SpellDraft>>({});
   let chosenKey = $state<string | null>(null);
   let busy = $state(false);
+  let sheetDraft = $state<SheetDraft | null>(null);
   /** The add list in a pop-up (narrow screens), with the filter it opens on. */
   let adding = $state<{ start: AddFilter | null } | null>(null);
   let reading = $state<SpellInfo | null>(null);
+  /** The bonus spell whose list is open, by its place in the dialog. */
+  let bonusPicking = $state<number | null>(null);
+  /** A spellbook with "Prepared spells only" has two lists to add from; the player switches. */
+  let addMode = $state<'pick' | 'prepare'>('pick');
+
+  /** The "Spell sheet" button's key among the sources' keys (MPMB's keys never start with "#"). */
+  const SHEET = '#sheet';
 
   /** Wide enough for the add list next to the chosen spells (the laptops, the iPad across). */
   const wide = new MediaQuery('min-width: 1100px');
@@ -53,7 +77,10 @@
     const fresh = await load();
     if (!fresh) return;
     info = fresh;
-    drafts = Object.fromEntries(fresh.sources.map((s) => [s.key, draftOf(s)]));
+    // Picks made before the player left the step, if nothing was saved since.
+    const kept = untrack(() => unsentFor(characterId, updated));
+    drafts = Object.fromEntries(fresh.sources.map((s) => [s.key, kept?.drafts[s.key] ?? draftOf(s)]));
+    sheetDraft = kept?.sheet ?? sheetDraftOf(fresh);
   }
 
   $effect(() => {
@@ -65,7 +92,27 @@
     info?.sources.find((s) => s.key === chosenKey) ?? info?.sources.find(pickable) ?? info?.sources[0] ?? null,
   );
   const draft = $derived(source ? (drafts[source.key] ?? draftOf(source)) : null);
-  const changes = $derived(info ? changeCount(info, drafts) : 0);
+  const changes = $derived(info ? changeCount(info, drafts) + sheetChangeCount(info, sheetDraft) : 0);
+  const onSheet = $derived(chosenKey === SHEET && sheetDraft !== null);
+
+  // Keeps the picks for when the player comes back to the step (spell-drafts.svelte.ts).
+  $effect(() => {
+    if (!info) return;
+    unsentSpells[characterId] = {
+      updated: untrack(() => updated),
+      drafts: $state.snapshot(drafts),
+      sheet: $state.snapshot(sheetDraft),
+      changes,
+    };
+  });
+  const addable = $derived(!onSheet && source !== null && draft !== null && hasAddList(source, draft));
+  /** What the add list adds to: a source with nothing else to pick prepares; a spellbook may do both. */
+  const mode = $derived<'pick' | 'prepare'>(
+    !source || !draft || !preparing(source, draft) ? 'pick' : !pickable(source) ? 'prepare' : addMode,
+  );
+  const preparedFull = $derived(source?.prepared && draft ? draft.prepared.length >= source.prepared.count : false);
+  const pickingBonus = $derived(bonusPicking !== null ? (source?.bonus[bonusPicking] ?? null) : null);
+  const nameOf = (key: string): string => info?.sources.find((s) => s.key === key)?.name ?? key;
 
   /** The save DC and attack bonus MPMB put on the sheet for this source, once there is a sheet. */
   const numbers = $derived(source ? readSpells(fields).find((s) => s.key === source.key) : undefined);
@@ -107,7 +154,8 @@
     if (s.type === 'list') parts.push(t.spellsPartList);
     else if (s.spells && s.type === 'book') parts.push(fill(t.spellsPartBook, { n: d.spells.length }));
     else if (s.spells) parts.push(fill(t.spellsPartSpells, { n: d.spells.length, max: s.spells.count }));
-    const bonus = s.bonus.filter((b) => b.chosen).length;
+    if (preparing(s, d)) parts.push(fill(t.spellsPartPrepared, { n: d.prepared.length }));
+    const bonus = d.bonus.filter(Boolean).length;
     if (bonus) parts.push(counted(t.spellsPartBonusOne, t.spellsPartBonus, bonus));
     return parts.join(' · ');
   }
@@ -120,13 +168,20 @@
     return cantripsOpen || spellsOpen;
   }
 
-  function toggle(part: 'cantrips' | 'spells', key: string) {
-    if (!source || !draft) return;
+  function toggle(part: SpellListPart, key: string) {
+    if (!source || !draft || disabled || busy) return;
+    // MPMB's prepared spells dialog has only as many rows as the character may prepare.
+    if (part === 'prepared' && preparedFull && !draft.prepared.includes(key)) return;
     drafts[source.key] = { ...draft, [part]: toggled(draft[part], key) };
   }
 
-  /** "On the spell sheet": MPMB's own choices, without "only prepared" until the app can pick those. */
-  const showOptions = $derived(source ? source.showOptions.filter((o) => o.id !== 3 || o.id === source.show) : []);
+  function setBonus(index: number, key: string) {
+    if (!source || !draft || disabled || busy) return;
+    drafts[source.key] = { ...draft, bonus: draft.bonus.map((k, i) => (i === index ? key : k)) };
+  }
+
+  /** "On the spell sheet": MPMB's own choices. */
+  const showOptions = $derived(source ? source.showOptions : []);
   const showLabel = (id: number, name: string): string => {
     const labels: Record<number, string> = {
       1: fill(t.spellsShow1, { level: source?.maxLevel ?? 0 }),
@@ -142,7 +197,9 @@
     busy = true;
     try {
       // A plain copy: the drafts are Svelte state (proxies), which can't go to the worker as they are.
-      await apply($state.snapshot(picksOf(info, drafts)));
+      await apply($state.snapshot(picksOf(info, drafts)), $state.snapshot(sheetPicksOf(info, sheetDraft)));
+      // Sent: the step starts again from what MPMB has now.
+      delete unsentSpells[characterId];
       await reload();
     } finally {
       busy = false;
@@ -156,7 +213,7 @@
   };
 </script>
 
-{#snippet row(key: string, part: 'cantrips' | 'spells' | null, tag: string)}
+{#snippet row(key: string, part: SpellListPart | null, tag: string)}
   {@const spell = info?.spells[key]}
   <li>
     {#if spell}
@@ -169,6 +226,7 @@
         <b>{spell.name}</b>
         {#if tag}<span class="tag">{tag}</span>{/if}
         {#if spell.ritual}<span class="tag">{t.spellRitual}</span>{/if}
+        {#if spell.concentration}<span class="tag">{t.spellConcentration}</span>{/if}
         <small>{line(spell)}</small>
       </button>
     {:else}
@@ -196,6 +254,121 @@
   {:else if open > 0}
     <p class="more">{counted(t.spellsMoreToChooseOne, t.spellsMoreToChoose, open)}</p>
   {/if}
+{/snippet}
+
+{#snippet bonusRow(s: SpellSource, index: number, key: string, tag: string)}
+  {@const spell = info?.spells[key]}
+  <li>
+    {#if spell}
+      <button
+        type="button"
+        class="name"
+        aria-label={fill(t.spellsInfoLabel, { name: spell.name })}
+        onclick={() => (reading = spell)}
+      >
+        <b>{spell.name}</b>
+        <span class="tag">{tag}</span>
+        <small>{line(spell)}</small>
+      </button>
+    {:else}
+      <span class="name"><b>{key}</b> <span class="tag">{tag}</span></span>
+    {/if}
+    {#if bonusPickable(s, index)}
+      <button
+        type="button"
+        class="change"
+        aria-label={fill(t.spellsBonusChangeLabel, { name: tag })}
+        disabled={disabled || busy}
+        onclick={() => (bonusPicking = index)}>{t.spellsChange}</button
+      >
+    {/if}
+  </li>
+{/snippet}
+
+{#snippet addHead(s: SpellSource, heading = true)}
+  {#if s.prepared && draft && preparing(s, draft) && pickable(s)}
+    <div class="seg" role="group" aria-label={t.spellsAddTitle}>
+      <button type="button" aria-pressed={mode === 'pick'} onclick={() => (addMode = 'pick')}
+        >{s.type === 'book' ? t.spellsBook : t.spellsKnown}</button
+      >
+      <button type="button" aria-pressed={mode === 'prepare'} onclick={() => (addMode = 'prepare')}
+        >{t.spellsPrepareShort}</button
+      >
+    </div>
+  {:else if heading}
+    <h3>{mode === 'prepare' ? t.spellsPrepareTitle : t.spellsAddTitle}</h3>
+  {/if}
+  <p class="muted">{fill(mode === 'prepare' ? t.spellsPrepareLine : t.spellsAddLine, { name: s.name })}</p>
+  {#if mode === 'prepare' && preparedFull && s.prepared}
+    <p class="note">{fill(t.spellsPreparedFull, { count: s.prepared.count })}</p>
+  {/if}
+{/snippet}
+
+{#snippet sheetPane(sheet: SheetDraft)}
+  <div class="chosen sheet">
+    <h3>{t.spellsSheetOrder}</h3>
+    <p class="muted">{t.spellsSheetOrderLine}</p>
+    <ol class="order">
+      {#each sheet.included as key, i (key)}
+        <li>
+          <span class="name"><b>{nameOf(key)}</b></span>
+          <button
+            type="button"
+            class="quiet icon"
+            aria-label={fill(t.spellsUpLabel, { name: nameOf(key) })}
+            title={fill(t.spellsUpLabel, { name: nameOf(key) })}
+            disabled={disabled || busy || i === 0}
+            onclick={() => (sheetDraft = { ...sheet, included: moved(sheet.included, key, -1) })}>↑</button
+          >
+          <button
+            type="button"
+            class="quiet icon"
+            aria-label={fill(t.spellsDownLabel, { name: nameOf(key) })}
+            title={fill(t.spellsDownLabel, { name: nameOf(key) })}
+            disabled={disabled || busy || i === sheet.included.length - 1}
+            onclick={() => (sheetDraft = { ...sheet, included: moved(sheet.included, key, 1) })}>↓</button
+          >
+          <button
+            type="button"
+            class="change"
+            aria-label={fill(t.spellsLeaveOffLabel, { name: nameOf(key) })}
+            disabled={disabled || busy}
+            onclick={() => (sheetDraft = switched(sheet, key))}>{t.spellsLeaveOff}</button
+          >
+        </li>
+      {/each}
+    </ol>
+    {#if sheet.excluded.length}
+      <h4>{t.spellsLeftOff}</h4>
+      <ul>
+        {#each sheet.excluded as key (key)}
+          <li>
+            <span class="name"><b>{nameOf(key)}</b></span>
+            <button
+              type="button"
+              class="change"
+              aria-label={fill(t.spellsPutBackLabel, { name: nameOf(key) })}
+              disabled={disabled || busy}
+              onclick={() => (sheetDraft = switched(sheet, key))}>{t.spellsPutBack}</button
+            >
+          </li>
+        {/each}
+      </ul>
+    {/if}
+    <h3>{t.spellsSheetOptions}</h3>
+    {#each SHEET_OPTIONS as option (option)}
+      <label class="option">
+        <input
+          type="checkbox"
+          checked={sheet.options[option]}
+          disabled={disabled || busy}
+          onchange={(e) =>
+            (sheetDraft = { ...sheet, options: { ...sheet.options, [option]: e.currentTarget.checked } })}
+        />
+        <span>{t[`spellsOpt_${option}`]}</span>
+      </label>
+    {/each}
+  </div>
 {/snippet}
 
 <section class="card" aria-labelledby="spells-title">
@@ -229,7 +402,7 @@
           }}
         >
           <b>
-            {#if pickable(s)}
+            {#if hasAddList(s, drafts[s.key] ?? draftOf(s))}
               <span class="dot" class:open={isOpen(s)} aria-hidden="true"></span>
               <span class="sr">{isOpen(s) ? t.spellsOpen : t.spellsDone}</span>
             {/if}
@@ -238,119 +411,190 @@
           <small>{partsLine(s)}</small>
         </button>
       {/each}
-    </div>
-
-    <div class="panes" class:split={wide.current && pickable(source)}>
-      <div class="chosen">
-        {#if source.cantrips}
-          {@const state = fillState(draft.cantrips.length, source.cantrips.count)}
-          <h3>
-            {t.cantrips}
-            <span class="chip {state}"
-              >{fill(t.spellsOf, { n: draft.cantrips.length, max: source.cantrips.count })}</span
-            >
-          </h3>
-          <ul>
-            {#each byLevel(draft.cantrips, info.spells).flatMap((g) => g.keys) as key (key)}
-              {@render row(key, 'cantrips', '')}
-            {/each}
-          </ul>
-          {@render more(source.cantrips.count - draft.cantrips.length, { part: 'cantrips' })}
-          {#if state === 'over'}<p class="muted">{t.spellsOver}</p>{/if}
-        {/if}
-
-        {#if source.type === 'list'}
-          <p class="note">{fill(t.spellsWholeList, { name: source.name })}</p>
-        {:else if source.spells}
-          {@const book = source.type === 'book'}
-          {@const state = fillState(draft.spells.length, source.spells.count)}
-          <h3>
-            {book ? t.spellsBook : t.spellsKnown}
-            <span class="chip {book ? 'book' : state}"
-              >{book
-                ? counted(t.spellsBookCountOne, t.spellsBookCount, draft.spells.length)
-                : fill(t.spellsOf, { n: draft.spells.length, max: source.spells.count })}</span
-            >
-          </h3>
-          <p class="muted">{book ? t.spellsBookLine : fill(t.spellsKnownLine, { level: source.maxLevel })}</p>
-          {#each byLevel(draft.spells, info.spells) as group (group.level)}
-            <h4>{group.level === Number.MAX_SAFE_INTEGER ? '–' : levelName(group.level)}</h4>
-            <ul>
-              {#each group.keys as key (key)}
-                {@render row(key, 'spells', '')}
-              {/each}
-            </ul>
-          {/each}
-          {#if !book}
-            {@render more(source.spells.count - draft.spells.length, { part: 'spells', level: source.maxLevel || 1 })}
-            {#if state === 'over'}<p class="muted">{t.spellsOver}</p>{/if}
-          {/if}
-        {/if}
-
-        {#if source.extra?.spells.length}
-          <h3>{t.spellsExtra}</h3>
-          {#if source.extra.label}<p class="muted">{source.extra.label}</p>{/if}
-          <ul>
-            {#each source.extra.spells as key (key)}
-              {@render row(key, null, '')}
-            {/each}
-          </ul>
-        {/if}
-
-        {#if source.bonus.some((b) => b.chosen)}
-          <h3>{pickable(source) || source.type === 'list' ? t.spellsFromFeatures : t.spells}</h3>
-          <ul>
-            {#each source.bonus.filter((b) => b.chosen) as bonus, i (i)}
-              {@render row(bonus.chosen, null, bonus.name)}
-            {/each}
-          </ul>
-        {/if}
-        {#if !pickable(source) && source.type !== 'list'}
-          <p class="note">{fill(t.spellsFromSource, { name: source.name })}</p>
-        {/if}
-
-        {#if showOptions.length > 1}
-          <label class="show">
-            <span>{t.spellsShow}</span>
-            <select
-              value={draft.show}
-              disabled={disabled || busy}
-              onchange={(e) => (drafts[source.key] = { ...draft, show: Number(e.currentTarget.value) })}
-            >
-              {#each showOptions as option (option.id)}
-                <option value={option.id}>{showLabel(option.id, option.name)}</option>
-              {/each}
-            </select>
-          </label>
-        {/if}
-      </div>
-
-      {#if wide.current && pickable(source)}
-        <div class="adder">
-          <h3>{t.spellsAddTitle}</h3>
-          <p class="muted">{fill(t.spellsAddLine, { name: source.name })}</p>
-          {#key source.key}
-            <SpellAddList
-              {source}
-              spells={info.spells}
-              {draft}
-              start={null}
-              ontoggle={toggle}
-              oninfo={(s) => (reading = s)}
-              {line}
-              {t}
-            />
-          {/key}
-        </div>
+      {#if sheetDraft}
+        <button
+          type="button"
+          class="source"
+          aria-pressed={onSheet}
+          onclick={() => {
+            chosenKey = SHEET;
+            adding = null;
+          }}
+        >
+          <b>{t.spellsSheet}</b>
+          <small>{t.spellsSheetLine}</small>
+        </button>
       {/if}
     </div>
+
+    {#if onSheet && sheetDraft}
+      {@render sheetPane(sheetDraft)}
+    {:else}
+      <div class="panes" class:split={wide.current && addable}>
+        <div class="chosen">
+          {#if source.cantrips}
+            {@const state = fillState(draft.cantrips.length, source.cantrips.count)}
+            <h3>
+              {t.cantrips}
+              <span class="chip {state}"
+                >{fill(t.spellsOf, { n: draft.cantrips.length, max: source.cantrips.count })}</span
+              >
+            </h3>
+            <ul>
+              {#each byLevel(draft.cantrips, info.spells).flatMap((g) => g.keys) as key (key)}
+                {@render row(key, 'cantrips', '')}
+              {/each}
+            </ul>
+            {@render more(source.cantrips.count - draft.cantrips.length, { part: 'cantrips' })}
+            {#if state === 'over'}<p class="muted">{t.spellsOver}</p>{/if}
+          {/if}
+
+          {#if source.type === 'list'}
+            <p class="note">{fill(t.spellsWholeList, { name: source.name })}</p>
+          {:else if source.spells}
+            {@const book = source.type === 'book'}
+            {@const state = fillState(draft.spells.length, source.spells.count)}
+            <h3>
+              {book ? t.spellsBook : t.spellsKnown}
+              <span class="chip {book ? 'book' : state}"
+                >{book
+                  ? counted(t.spellsBookCountOne, t.spellsBookCount, draft.spells.length)
+                  : fill(t.spellsOf, { n: draft.spells.length, max: source.spells.count })}</span
+              >
+            </h3>
+            <p class="muted">{book ? t.spellsBookLine : fill(t.spellsKnownLine, { level: source.maxLevel })}</p>
+            {#each byLevel(draft.spells, info.spells) as group (group.level)}
+              <h4>{group.level === Number.MAX_SAFE_INTEGER ? '–' : levelName(group.level)}</h4>
+              <ul>
+                {#each group.keys as key (key)}
+                  {@render row(key, 'spells', '')}
+                {/each}
+              </ul>
+            {/each}
+            {#if !book}
+              {@render more(source.spells.count - draft.spells.length, { part: 'spells', level: source.maxLevel || 1 })}
+              {#if state === 'over'}<p class="muted">{t.spellsOver}</p>{/if}
+            {/if}
+          {/if}
+
+          {#if source.prepared && preparing(source, draft)}
+            {@const state = fillState(draft.prepared.length, source.prepared.count)}
+            <h3>
+              {t.spellsPreparedTitle}
+              <span class="chip {state}"
+                >{fill(t.spellsOf, { n: draft.prepared.length, max: source.prepared.count })}</span
+              >
+            </h3>
+            <p class="muted">{fill(t.spellsPreparedLine, { name: source.name, count: source.prepared.count })}</p>
+            {#each byLevel(draft.prepared, info.spells) as group (group.level)}
+              <h4>{group.level === Number.MAX_SAFE_INTEGER ? '–' : levelName(group.level)}</h4>
+              <ul>
+                {#each group.keys as key (key)}
+                  {@render row(key, 'prepared', '')}
+                {/each}
+              </ul>
+            {/each}
+            {#if state === 'open' && !wide.current}
+              <button
+                type="button"
+                class="more"
+                disabled={disabled || busy}
+                onclick={() => {
+                  addMode = 'prepare';
+                  adding = { start: null };
+                }}
+                >{counted(
+                  t.spellsMoreToChooseOne,
+                  t.spellsMoreToChoose,
+                  source.prepared.count - draft.prepared.length,
+                )}</button
+              >
+            {:else if state === 'open'}
+              <p class="more">
+                {counted(t.spellsMoreToChooseOne, t.spellsMoreToChoose, source.prepared.count - draft.prepared.length)}
+              </p>
+            {/if}
+          {/if}
+
+          {#if source.extra?.spells.length}
+            <h3>{t.spellsExtra}</h3>
+            {#if source.extra.label}<p class="muted">{source.extra.label}</p>{/if}
+            <ul>
+              {#each source.extra.spells as key (key)}
+                {@render row(key, null, '')}
+              {/each}
+            </ul>
+          {/if}
+
+          {#if source.bonus.some((b, i) => draft.bonus[i] || bonusPickable(source, i))}
+            <h3>{pickable(source) || source.type === 'list' ? t.spellsFromFeatures : t.spells}</h3>
+            <ul>
+              {#each source.bonus as bonus, i (i)}
+                {@const key = draft.bonus[i] ?? ''}
+                {#if key}
+                  {@render bonusRow(source, i, key, bonus.name)}
+                {:else if bonusPickable(source, i)}
+                  <li>
+                    <button
+                      type="button"
+                      class="more pick"
+                      disabled={disabled || busy}
+                      onclick={() => (bonusPicking = i)}>{fill(t.spellsBonusPick, { name: bonus.name })}</button
+                    >
+                  </li>
+                {/if}
+              {/each}
+            </ul>
+          {/if}
+          {#if !pickable(source) && source.type !== 'list' && !source.bonus.some((_, i) => bonusPickable(source, i))}
+            <p class="note">{fill(t.spellsFromSource, { name: source.name })}</p>
+          {/if}
+
+          {#if showOptions.length > 1}
+            <label class="show">
+              <span>{t.spellsShow}</span>
+              <select
+                value={draft.show}
+                disabled={disabled || busy}
+                onchange={(e) => (drafts[source.key] = { ...draft, show: Number(e.currentTarget.value) })}
+              >
+                {#each showOptions as option (option.id)}
+                  <option value={option.id}>{showLabel(option.id, option.name)}</option>
+                {/each}
+              </select>
+            </label>
+          {/if}
+        </div>
+
+        {#if wide.current && addable}
+          <div class="adder">
+            {@render addHead(source)}
+            {#key `${source.key}|${mode}`}
+              <SpellAddList
+                {source}
+                spells={info.spells}
+                {draft}
+                start={null}
+                {mode}
+                full={mode === 'prepare' && preparedFull}
+                disabled={disabled || busy}
+                ontoggle={toggle}
+                oninfo={(s) => (reading = s)}
+                {line}
+                {t}
+              />
+            {/key}
+          </div>
+        {/if}
+      </div>
+    {/if}
 
     <footer class="bar">
       <p class="muted">
         {changes ? counted(t.spellsChangedOne, t.spellsChanged, changes) : t.spellsUpToDate}
       </p>
       <div class="acts">
-        {#if !wide.current && pickable(source)}
+        {#if !wide.current && addable}
           <button type="button" class="add" disabled={disabled || busy} onclick={() => (adding = { start: null })}
             >{t.spellsAddOpen}</button
           >
@@ -363,21 +607,77 @@
   {/if}
 </section>
 
-{#if adding && info && source && draft && pickable(source)}
-  <Modal title={t.spellsAddTitle} onescape={() => (adding = null)} closeLabel={t.close} wide>
-    <p class="muted">{fill(t.spellsAddLine, { name: source.name })}</p>
-    <SpellAddList
-      {source}
-      spells={info.spells}
-      {draft}
-      start={adding.start}
-      ontoggle={toggle}
-      oninfo={(s) => (reading = s)}
-      {line}
-      {t}
-    />
+{#if adding && info && source && draft && addable}
+  <Modal
+    title={mode === 'prepare' ? t.spellsPrepareTitle : t.spellsAddTitle}
+    onescape={() => (adding = null)}
+    closeLabel={t.close}
+    wide
+  >
+    {@render addHead(source, false)}
+    {#key mode}
+      <SpellAddList
+        {source}
+        spells={info.spells}
+        {draft}
+        start={adding.start}
+        {mode}
+        full={mode === 'prepare' && preparedFull}
+        disabled={disabled || busy}
+        ontoggle={toggle}
+        oninfo={(s) => (reading = s)}
+        {line}
+        {t}
+      />
+    {/key}
     {#snippet actions()}
       <button type="button" class="primary" onclick={() => (adding = null)}>{t.spellsAddDone}</button>
+    {/snippet}
+  </Modal>
+{/if}
+
+{#if pickingBonus && bonusPicking !== null && info && source && draft}
+  {@const index = bonusPicking}
+  {@const bonus = pickingBonus}
+  <Modal
+    title={fill(t.spellsBonusTitle, { name: bonus.name })}
+    onescape={() => (bonusPicking = null)}
+    closeLabel={t.close}
+    wide
+  >
+    <p class="muted">{fill(t.spellsAddLine, { name: source.name })}</p>
+    <ul class="picks">
+      {#each byLevel(bonus.list, info.spells).flatMap((g) => g.keys) as key (key)}
+        {@const spell = info.spells[key]}
+        {@const on = draft.bonus[index] === key}
+        <li>
+          {#if spell}
+            <button
+              type="button"
+              class="name"
+              aria-label={fill(t.spellsInfoLabel, { name: spell.name })}
+              onclick={() => (reading = spell)}
+            >
+              <b>{spell.name}</b>
+              <small>{[levelName(spell.level), line(spell)].join(' · ')}</small>
+            </button>
+          {:else}
+            <span class="name"><b>{key}</b></span>
+          {/if}
+          <button
+            type="button"
+            class="toggle"
+            class:on
+            aria-pressed={on}
+            disabled={disabled || busy}
+            aria-label={fill(on ? t.spellsPickedLabel : t.spellsPickLabel, { name: spell?.name ?? key })}
+            onclick={() => setBonus(index, key)}>{on ? t.spellsPicked : t.spellsPick}</button
+          >
+        </li>
+      {/each}
+    </ul>
+    {#snippet actions()}
+      <button type="button" class="primary" onclick={() => (bonusPicking = null)}>{t.spellsAddDone}</button>
     {/snippet}
   </Modal>
 {/if}
@@ -731,5 +1031,79 @@
 
   .text {
     margin: 0 0 0.5rem;
+  }
+  .change {
+    flex: none;
+    padding: 0 0.75rem;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .more.pick {
+    margin: 0.25rem 0;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  li:has(.more.pick) {
+    border-bottom: 0;
+  }
+
+  .seg {
+    display: inline-flex;
+    overflow: hidden;
+    margin-bottom: 0.25rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+  }
+
+  .seg button {
+    border: 0;
+    border-radius: 0;
+    color: var(--ink-muted);
+  }
+
+  .seg button + button {
+    border-left: 1px solid var(--line);
+  }
+
+  .seg button[aria-pressed='true'] {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .order {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .option {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 48px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .option input {
+    flex: none;
+    width: 1.375rem;
+    height: 1.375rem;
+    accent-color: var(--accent);
+  }
+
+  .picks .toggle {
+    flex: none;
+    padding: 0 0.75rem;
+    color: var(--accent);
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .picks .toggle.on {
+    border-color: var(--accent);
+    background: var(--accent-soft);
   }
 </style>

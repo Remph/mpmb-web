@@ -12,6 +12,7 @@
   import type { Texts } from '../../i18n.ts';
   import { ABILITIES, shown, valueOf } from '../../play/read.ts';
   import { readSpells } from '../../play/spells.ts';
+  import { unsentFor } from '../../build/spell-drafts.svelte.ts';
   import type { OpenCharacter, Session, Step } from '../../session.svelte.ts';
   import Notes from '../Notes.svelte';
   import SheetMenu from '../play/SheetMenu.svelte';
@@ -124,7 +125,13 @@
     modifiers: modifiersSet ? fill(t.buildModSetCount, { n: String(modifiersSet) }) : t.buildNone,
   });
   /** Shown as a badge on the step, like the mock-up: what still waits for the player. */
-  const badges = $derived<Partial<Record<BuildStep, number>>>({ skills: skillsOpen, choices: openChoices });
+  /** Spells step picks not on the spell sheet yet: the player left the step before "Update spell sheet". */
+  const unsent = $derived(unsentFor(open.meta.id, open.meta.updated)?.changes ?? 0);
+  const badges = $derived<Partial<Record<BuildStep, number>>>({
+    skills: skillsOpen,
+    choices: openChoices,
+    spells: unsent,
+  });
   const stepTitles = $derived<Record<BuildStep, string>>({
     class: t.buildClassTitle,
     species: t.buildSpecies,
@@ -197,8 +204,10 @@
     {:else if step === 'spells'}
       <SpellsStep
         load={() => session.spellsInfo()}
-        apply={(picks) => session.setSpells(picks)}
+        apply={(picks, sheet) => session.setSpells(picks, sheet)}
         {fields}
+        characterId={open.meta.id}
+        updated={open.meta.updated}
         {disabled}
         {t}
       />

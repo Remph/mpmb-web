@@ -83,6 +83,11 @@ export interface SpellSource {
   /** "Prepare cantrips just like spells", or null when the dialog doesn't offer it. */
   preparedCantrips: boolean | null;
   bonus: SpellBonus[];
+  /**
+   * "Prepared spells only": what MPMB's PREPARED SPELLS DIALOG offers (count = how many MPMB lets the
+   * character prepare), or null when the source has no such choice.
+   */
+  prepared: SpellPart | null;
   /** Spells a subclass or feature adds ("[always prepared]"), or null. */
   extra: { label: string; spells: string[] } | null;
 }
@@ -113,6 +118,17 @@ export interface SpellPicks {
   spells?: string[];
   show?: number;
   preparedCantrips?: boolean;
+  /** The bonus spells in the dialog's order: a key, '' for none; shorter keeps the rest. */
+  bonus?: string[];
+  /** The spells for "Prepared spells only". */
+  prepared?: string[];
+}
+
+/** The order dialog's choices: the sources on the spell sheet in order, those left out, and its options. */
+export interface SpellSheetPicks {
+  included: string[];
+  excluded: string[];
+  options: SpellSheetOptions;
 }
 
 /** MPMB's dialogs on the way to a spell sheet, by their description names. */
@@ -174,13 +190,29 @@ export const SPELLS_READ_SCRIPT = `(function () {
       showOptions: dia.showSpRadio ? radios(dia.description.elements, []) : [],
       preparedCantrips: dia.showCaPr ? !!dia.preparedCantrips : null,
       bonus: bonus,
+      prepared: null,
       extra: dia.showAd ? { label: String(dia.nameAd), spells: (dia.selectAd || []).slice() } : null
     });
+    // MPMB offers "Prepared spells only" here: chosen for this run, so MPMB opens its prepared spells
+    // dialog next and shows what it offers. The real choice is noted above; CurrentSpells is put back after.
+    var options = out.sources[out.sources.length - 1].showOptions;
+    for (var o = 0; o < options.length; o++) if (options[o].id === 3) dia.selectSpRadio = 3;
+  };
+  var notePrepared = function (dia) {
+    // The dialog works out how many the character may prepare when it opens (nmbrSp); its rows are
+    // nmbrSp plus the number box's offset.
+    dia.initialize({ enable: function () {}, load: function () {} });
+    for (var s = out.sources.length - 1; s >= 0; s--) {
+      if (out.sources[s].key !== dia.curCast) continue;
+      out.sources[s].prepared = part(true, Number(dia.nmbrSp) + (Number(dia.offsetSp) || 0), dia.offsetSp, dia.selectSp, dia.listSp);
+      break;
+    }
   };
   app.execDialog = function (dia) {
     var name = dia && dia.description ? dia.description.name : "";
     if (name === "${SPELL_DIALOGS.select}") { noteSelect(dia); return "ok"; }
-    if (name === "${SPELL_DIALOGS.book}" || name === "${SPELL_DIALOGS.prepared}") return "ok";
+    if (name === "${SPELL_DIALOGS.prepared}") { notePrepared(dia); return "ok"; }
+    if (name === "${SPELL_DIALOGS.book}") return "ok";
     if (name === "${SPELL_DIALOGS.order}") {
       out.included = (CurrentCasters.incl || []).slice();
       out.excluded = (CurrentCasters.excl || []).slice();
@@ -225,7 +257,7 @@ export const SPELLS_READ_SCRIPT = `(function () {
   };
   for (var i = 0; i < out.sources.length; i++) {
     var src = out.sources[i];
-    var lists = [src.cantrips, src.spells];
+    var lists = [src.cantrips, src.spells, src.prepared];
     for (var l = 0; l < lists.length; l++) {
       if (!lists[l]) continue;
       for (var c = 0; c < lists[l].chosen.length; c++) addSpell(lists[l].chosen[c]);
@@ -257,6 +289,7 @@ const BOOK_ROWS = 20;
 export function spellPicksScript(
   picks: SpellPicks[],
   counts: Record<string, { cantrips: number; spells: number }>,
+  sheet: SpellSheetPicks | null = null,
 ): string {
   const sets = picks.map((p) => {
     const count = counts[p.key] ?? { cantrips: 0, spells: 0 };
@@ -268,9 +301,29 @@ export function spellPicksScript(
       offsetSp: p.spells ? Math.max(0, p.spells.length - count.spells) : undefined,
       show: p.show,
       preparedCantrips: p.preparedCantrips,
+      bonus: p.bonus,
+      prepared: p.prepared,
     };
   });
-  return `(function (sets) {
+  // The bonus spells' choices live in the feature's own bonus entries (spCast.bonus[key], one object or a
+  // list, each maybe "times" over), where AskUserSpellSheet loads them from: walked in the same order as
+  // MPMB's dialog counts them, so the n-th pick lands on the dialog's n-th bonus drop-down.
+  return `(function (sets, sheet) {
+    var setBonus = function (cast, picks) {
+      var n = 0;
+      for (var bKey in cast.bonus) {
+        var entry = cast.bonus[bKey];
+        var list = isArray(entry) ? entry : [entry];
+        for (var i = 0; i < list.length; i++) {
+          var times = !list[i].times ? 1 : isArray(list[i].times) ? list[i].times[Math.min(list[i].times.length, cast.level) - 1] : list[i].times;
+          for (var y = 0; y < times; y++, n++) {
+            if (n >= picks.length) continue;
+            if (!list[i].selection) list[i].selection = [];
+            list[i].selection[y] = picks[n] || undefined;
+          }
+        }
+      }
+    };
     for (var i = 0; i < sets.length; i++) {
       var p = sets[i];
       var cast = CurrentSpells[p.key];
@@ -287,9 +340,20 @@ export function spellPicksScript(
       }
       if (p.show) cast.typeList = p.show;
       if (p.preparedCantrips !== undefined) cast.preparedCantrips = p.preparedCantrips;
+      if (p.prepared) cast.selectPrep = p.prepared;
+      if (p.bonus) setBonus(cast, p.bonus);
+    }
+    if (sheet) {
+      CurrentCasters.incl = sheet.included;
+      CurrentCasters.excl = sheet.excluded;
+      CurrentCasters.glossary = sheet.options.glossary;
+      CurrentCasters.emptyFields = !sheet.options.dashEmptyFields;
+      CurrentCasters.amendSpDescr = sheet.options.amendSpellDescriptions;
+      CurrentCasters.allowSpellAdd = sheet.options.allowSpellAdd;
+      CurrentCasters.useDependencies = sheet.options.useDependencies;
     }
     SetStringifieds("spells");
-  })(${JSON.stringify(sets)})`;
+  })(${JSON.stringify(sets)}, ${JSON.stringify(sheet)})`;
 }
 
 /** MPMB's Spells menu entry "(Re)generate a Spell Sheet", as the menu itself calls it. */
@@ -315,13 +379,14 @@ export function applySpellPicks(
   engine: Engine,
   picks: SpellPicks[],
   answered: (answer: (view: DialogView) => DialogReply | null, job: () => void) => void,
+  sheet: SpellSheetPicks | null = null,
 ): void {
   const info = readSpellsInfo(engine.evaluate(SPELLS_READ_SCRIPT));
   const counts = Object.fromEntries(
     info.sources.map((s) => [s.key, { cantrips: s.cantrips?.count ?? 0, spells: s.spells?.count ?? 0 }]),
   );
   const prepared = preparedOnSheet(engine);
-  engine.evaluate(spellPicksScript(picks, counts));
+  engine.evaluate(spellPicksScript(picks, counts, sheet));
   answered(answerSpellDialogs, () => engine.evaluate(GENERATE_SCRIPT));
   engine.runTimers();
   readSpells(viewsOf(engine.doc))

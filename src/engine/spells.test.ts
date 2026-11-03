@@ -71,6 +71,27 @@ describe("reading MPMB's spell dialogs", () => {
     expect(oath?.extra?.spells).toContain('shield of faith');
     expect(paladin.sources.find((s) => s.key === 'warlock')).toMatchObject({ type: 'known', maxLevel: 1 });
   });
+
+  it('reads what "Prepared spells only" offers, and the spell sheet order and options', () => {
+    const wizard = read(openSheet(referenceSheet('wizard10-evoker')));
+    const book = wizard.sources.find((s) => s.key === 'wizard');
+    // A wizard 10 prepares 15, from the spellbook only.
+    expect(book?.prepared).toMatchObject({ count: 15, chosen: [] });
+    expect(book?.prepared?.list.every((k) => book.spells?.chosen.includes(k))).toBe(true);
+    // The read itself chose "only prepared" to see that dialog; the real choice stays.
+    expect(book?.show).toBe(1);
+    const paladin = read(openSheet(referenceSheet('paladin8-warlock2')));
+    expect(paladin.sources.find((s) => s.key === 'paladin')?.prepared?.count).toBe(7);
+    expect(paladin.sources.find((s) => s.key === 'warlock')?.prepared).toBeNull();
+    expect(wizard.included).toEqual(['tiefling', 'magic initiate_-_wizard', 'wizard', 'staff of the magi']);
+    expect(wizard.options).toEqual({
+      glossary: false,
+      dashEmptyFields: true,
+      amendSpellDescriptions: true,
+      allowSpellAdd: true,
+      useDependencies: true,
+    });
+  });
 });
 
 describe("picks through MPMB's spell dialogs", () => {
@@ -125,6 +146,56 @@ describe("picks through MPMB's spell dialogs", () => {
       .map((s) => s.name);
     expect(prepared).toEqual(['Web', 'Fireball']);
     expect(evoker().map((s) => s.name)).toContain('Shield');
+  });
+});
+
+describe('bonus spells, prepared spells and the spell sheet, through the same dialogs', () => {
+  const sourceTitles = (engine: Engine) => readSpells(viewsOf(engine.doc)).map((s) => s.key);
+
+  it("changes a feat's bonus spell where MPMB's dialog keeps it", () => {
+    const wizard = openSheet(referenceSheet('wizard10-evoker'));
+    apply(wizard, [{ key: 'magic initiate_-_wizard', bonus: ['fire bolt'] }]);
+    const initiate = read(wizard).sources.find((s) => s.key === 'magic initiate_-_wizard');
+    expect(initiate?.bonus.map((b) => b.chosen)).toEqual(['fire bolt', 'shocking grasp', 'shield']);
+    const onSheet = readSpells(viewsOf(wizard.doc)).find((s) => s.key === 'magic initiate_-_wizard');
+    expect(onSheet?.levels.flatMap((l) => l.spells.map((sp) => sp.key))).toContain('fire bolt');
+  });
+
+  it('puts only the prepared spells on the sheet when the player picks "Prepared spells only"', () => {
+    const paladin = openSheet(referenceSheet('paladin8-warlock2'));
+    const prepared = ['bless', 'cure wounds', 'lesser restoration'];
+    apply(paladin, [{ key: 'paladin', show: 3, prepared }]);
+    const oath = read(paladin).sources.find((s) => s.key === 'paladin');
+    expect(oath).toMatchObject({ show: 3 });
+    expect([...(oath?.prepared?.chosen ?? [])].sort()).toEqual([...prepared].sort());
+    const levelled = readSpells(viewsOf(paladin.doc))
+      .find((s) => s.key === 'paladin')
+      ?.levels.filter((l) => l.level > 0)
+      .flatMap((l) => l.spells.map((sp) => sp.key));
+    // The prepared ones are there; the rest of the class list isn't (always prepared oath spells stay).
+    expect(levelled).toEqual(expect.arrayContaining(prepared));
+    expect(levelled).not.toContain('command');
+  });
+
+  it('leaves a source off the sheet and sets the options of the order dialog', () => {
+    const wizard = openSheet(referenceSheet('wizard10-evoker'));
+    const options = {
+      glossary: true,
+      dashEmptyFields: true,
+      amendSpellDescriptions: true,
+      allowSpellAdd: true,
+      useDependencies: true,
+    };
+    applySpellPicks(wizard, [], (_answer, job) => job(), {
+      included: ['wizard', 'magic initiate_-_wizard', 'tiefling'],
+      excluded: ['staff of the magi'],
+      options,
+    });
+    const info = read(wizard);
+    expect(info.included).toEqual(['wizard', 'magic initiate_-_wizard', 'tiefling']);
+    expect(info.excluded).toEqual(['staff of the magi']);
+    expect(info.options).toEqual(options);
+    expect(sourceTitles(wizard)).toEqual(['wizard', 'magic initiate_-_wizard', 'tiefling']);
   });
 });
 

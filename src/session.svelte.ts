@@ -4,7 +4,7 @@
 import type { AddOns } from './engine/add-ons.ts';
 import type { BuilderInfo, UnitSystem } from './engine/builder.ts';
 import type { ScoreChange } from './engine/scores.ts';
-import type { SpellPicks, SpellsInfo } from './engine/spells.ts';
+import type { SpellPicks, SpellSheetPicks, SpellsInfo } from './engine/spells.ts';
 import type { CharacterData } from './engine/sheet-data.ts';
 import { SHEET_ID } from './engine/sheet-id.ts';
 import { FF } from './engine/types.ts';
@@ -335,8 +335,8 @@ export class Session {
    * The Spells step's picks through MPMB's spell dialogs, then MPMB makes the spell sheet pages again. In line
    * after the changes before it, like setScores.
    */
-  setSpells(picks: SpellPicks[]): Promise<void> {
-    return this.inLine(() => this.client.setSpells(picks));
+  setSpells(picks: SpellPicks[], sheet: SpellSheetPicks | null): Promise<void> {
+    return this.inLine(() => this.client.setSpells(picks, sheet));
   }
 
   /** Runs a worker command after the work before it, then shows and saves what it changed. */
