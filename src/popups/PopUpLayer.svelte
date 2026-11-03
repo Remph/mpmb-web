@@ -4,6 +4,7 @@
   import AlertPopUp from './AlertPopUp.svelte';
   import ChoicePopUp from './ChoicePopUp.svelte';
   import DialogPopUp from './DialogPopUp.svelte';
+  import FilePopUp from './FilePopUp.svelte';
   import MenuPopUp from './MenuPopUp.svelte';
   import type { PopUpStack } from './popups.svelte.ts';
 
@@ -22,6 +23,8 @@
     <MenuPopUp items={entry.items} {t} answer={(picked) => popUps.answerMenu(entry.id, picked)} />
   {:else if entry.kind === 'choice'}
     <ChoicePopUp choice={entry.choice} {t} answer={(value) => popUps.answerChoice(entry.id, value)} />
+  {:else if entry.kind === 'file'}
+    <FilePopUp {t} answer={(text) => popUps.answerFile(entry.id, text)} />
   {:else}
     <DialogPopUp
       view={entry.view}

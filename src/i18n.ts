@@ -104,9 +104,13 @@ export const ui = {
     proficiency: 'Übungsbonus',
     speed: 'Bewegung',
     addOnsTitle: 'Zusatzskripte',
-    openFileLaterTitle: 'Dateien öffnen kommt später',
-    openFileLater:
-      'Skriptdateien vom Computer öffnen kann die App noch nicht. Bis dahin: die Datei in einem Texteditor öffnen, den ganzen Text kopieren und über Bogenmenü → Zusatzskripte → „Add material manually (copy-paste)“ einfügen.',
+    openFileTitle: 'Skriptdatei öffnen',
+    openFileMessage:
+      'Eine Datei mit einem Zusatzskript vom Computer, zum Beispiel aus MPMBs Community-Liste geladen. Sie bleibt in diesem Browser, bei diesem Charakter.',
+    openFileChoose: 'Datei auswählen …',
+    openFileDrop: 'oder hierher ziehen',
+    openFileReading: 'Wird gelesen …',
+    openFileFailed: 'Die Datei ließ sich nicht lesen. Eine andere wählen?',
     pastedScript: 'Eingefügtes Skript',
     linkTitle: 'Link öffnen?',
     linkMessage:
@@ -834,9 +838,13 @@ export const ui = {
     proficiency: 'Proficiency',
     speed: 'Speed',
     addOnsTitle: 'Add-on scripts',
-    openFileLaterTitle: 'Opening files comes later',
-    openFileLater:
-      'The app can’t open script files from your computer yet. Until then: open the file in a text editor, copy all of its text and paste it in through Sheet menu → Add-on scripts → “Add material manually (copy-paste)”.',
+    openFileTitle: 'Open a script file',
+    openFileMessage:
+      'A file with an add-on script from your computer, for example one you downloaded from MPMB’s community list. It stays in this browser, with this character.',
+    openFileChoose: 'Choose a file …',
+    openFileDrop: 'or drag it here',
+    openFileReading: 'Reading …',
+    openFileFailed: 'The file could not be read. Choose another one?',
     pastedScript: 'Pasted script',
     linkTitle: 'Open this link?',
     linkMessage: 'The sheet wants to open a page outside MPMB’s websites. Only open it if you know the address:',

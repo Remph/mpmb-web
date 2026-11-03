@@ -115,15 +115,6 @@ export class Session {
       open: this.t.openLink,
       cancel: this.t.cancel,
     });
-    // Shown over MPMB's dialog, which stays open: the player closes the note and carries on there.
-    this.client.onUnavailable = () => {
-      void this.popUps.choose({
-        title: this.t.openFileLaterTitle,
-        message: this.t.openFileLater,
-        buttons: [{ value: 'ok', label: this.t.ok, primary: true }],
-        cancel: 'ok',
-      });
-    };
   }
 
   private get t(): Texts {
@@ -472,7 +463,9 @@ export class Session {
     }
     open.status = 'saving';
     const data = await this.client.save();
-    const meta = describeCharacter(data, open.meta.addOns, open.meta);
+    // Asked each time: "Add Extra Materials" in the Sheet menu adds and removes scripts in the open sheet.
+    const addOns = await this.client.addOns();
+    const meta = describeCharacter(data, addOns, open.meta);
     await this.save({ meta, data });
     this.dirty = false;
     open.meta = meta;

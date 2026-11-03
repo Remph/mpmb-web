@@ -95,3 +95,76 @@ describe('add-on scripts in a sheet', () => {
     expect(addOnsOf(openSheet())).toEqual({ files: [], manual: false });
   });
 });
+
+/** The newer version of LANTERN_FILE: same script name, another text. */
+const LANTERN_V2 = LANTERN.replace('glows whenever a test passes', 'glows brighter whenever a test passes');
+
+/** MPMB's dialog for script files, as Acrobat draws it (ImportScriptFileDialog). */
+const FILES_DIALOG = 'IMPORT CUSTOM SCRIPT DIALOG';
+const ADD_FILE = { click: 'bAdd' };
+
+/**
+ * The Sheet menu's "Add-on scripts": MPMB's own menu ("Import a file ..."), then its dialog with the
+ * player's steps (the host's answers), then Apply ("ok"). MPMB runs the scripts, says so, and opens its
+ * Source Selection, which the host closes with OK.
+ */
+function addOnDialog(engine: ReturnType<typeof openSheet>): void {
+  engine.clickBookmark(['Functions', 'Add Extra Materials']);
+  engine.runTimers();
+}
+
+describe('add-on files through MPMB’s own import dialog', () => {
+  const opened = (answers: ConstructorParameters<typeof ScriptedHost>[0], files: Record<string, string> = {}) => {
+    const host = new ScriptedHost({ menus: [['Import a file']], ...answers });
+    return { host, engine: openSheet(characterSheet(sheetWith(files)), host) };
+  };
+
+  test('"Add file" opens the picker, and Apply runs the file: what it adds is in the lists', () => {
+    const { host, engine } = opened({ files: [LANTERN], dialogs: { [FILES_DIALOG]: { steps: [ADD_FILE] } } });
+    addOnDialog(engine);
+    // As in Acrobat: the dialog, the "Open" window, MPMB's "Success!", then its Source Selection.
+    expect(host.asked.map((a) => (a.kind === 'dialog' ? a.what : a.kind))).toEqual([
+      'menu',
+      FILES_DIALOG,
+      'file',
+      'alert',
+      'SOURCE SELECTION DIALOG',
+    ]);
+    expect(addOnsOf(engine).files).toEqual([expect.stringMatching(/^\d{4}\/\d\d\/\d\d - Lantern of Testing\.js$/)]);
+    expect(engine.stats.errors).toEqual([]);
+    engine.edit('Extra.Magic Item 1', 'Lantern of Testing');
+    expect(engine.doc.states.get('Extra.Magic Item Description 1')?.value).toBe(
+      'This lantern glows whenever a test passes.',
+    );
+  });
+
+  test('a cancelled picker adds nothing', () => {
+    const { host, engine } = opened({ files: [null], dialogs: { [FILES_DIALOG]: { steps: [ADD_FILE] } } });
+    addOnDialog(engine);
+    expect(addOnsOf(engine).files).toEqual([]);
+  });
+
+  test('a file with the same script name replaces the old one after MPMB asks', () => {
+    const { host, engine } = opened(
+      {
+        files: [LANTERN_V2],
+        alerts: { 'do you want to overwrite it': 4 },
+        dialogs: { [FILES_DIALOG]: { steps: [ADD_FILE] } },
+      },
+      { [LANTERN_FILE]: LANTERN },
+    );
+    addOnDialog(engine);
+    expect(addOnsOf(engine).files).toEqual([expect.stringMatching(/ - Lantern of Testing\.js$/)]);
+    expect(engine.evaluate('MagicItemsList["lantern of testing"].description')).toBe(
+      'This lantern glows brighter whenever a test passes.',
+    );
+  });
+
+  test('a file removed in the dialog is gone after Apply', () => {
+    const remove = [{ set: { scrF: { [LANTERN_FILE]: 1 } }, click: 'scrF' }, { click: 'bRem' }];
+    const { host, engine } = opened({ dialogs: { [FILES_DIALOG]: { steps: remove } } }, { [LANTERN_FILE]: LANTERN });
+    addOnDialog(engine);
+    expect(addOnsOf(engine).files).toEqual([]);
+    expect(engine.evaluate('MagicItemsList["lantern of testing"] === undefined')).toBe(true);
+  });
+});

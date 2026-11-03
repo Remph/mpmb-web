@@ -111,7 +111,8 @@ const host: Host = {
     if (channel) post({ type: 'dialogClosed' });
   },
   launchURL: (url) => post({ type: 'launchURL', url }),
-  unavailable: (feature) => post({ type: 'unavailable', feature }),
+  // Without shared memory the page can't hand the file back: like a cancelled picker.
+  openFile: () => ask({ kind: 'file' }) as string | null,
 };
 
 /** Sends the page every field that looks different since the last time. */
@@ -189,6 +190,7 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
     newRow ? newSpellRow(opened(), field, true, ROW_MENUS) : opened().click(field, widget, shift),
   bookmark: ({ path }) => opened().clickBookmark(path),
   save: () => diffCharacter(blankSheet(), opened().snapshot()),
+  addOns: () => addOnsOf(opened()),
   builder: () => readBuilderInfo(opened().evaluate(BUILDER_INFO_SCRIPT)),
   units: ({ system }) => switchUnits(opened(), system),
   scores: ({ changes }) => answered(answerScores(changes), () => opened().click('Ability Scores Button')),
