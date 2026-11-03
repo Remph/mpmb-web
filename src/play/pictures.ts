@@ -8,7 +8,11 @@ export const PICTURE_SIZE = 640;
 /** The long side of the character list's small picture. */
 export const THUMB_SIZE = 160;
 const JPEG_QUALITY = 0.85;
-const OPAQUE = 255;
+/**
+ * Below this alpha a pixel counts as see-through. Not 255: WebKit's smooth downscaling leaves the edge pixels
+ * of an opaque photo at 254, which would make every photo a PNG about six times the size of the JPEG.
+ */
+const SEE_THROUGH = 250;
 /** RGBA: the alpha byte is every fourth. */
 const RGBA = 4;
 const ALPHA = 3;
@@ -53,14 +57,17 @@ function readAsDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-/** Whether any pixel lets the background through. */
+/** Whether any of these RGBA pixels lets the background through. */
+export function seeThroughPixels(data: Uint8ClampedArray): boolean {
+  return Array.from({ length: data.length / RGBA }, (_, i) => data[i * RGBA + ALPHA] ?? SEE_THROUGH).some(
+    (alpha) => alpha < SEE_THROUGH,
+  );
+}
+
 function seeThrough(canvas: Canvas): boolean {
   const context = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
   const data = context?.getImageData(0, 0, canvas.width, canvas.height).data;
-  if (!data) return false;
-  return Array.from({ length: data.length / RGBA }, (_, i) => data[i * RGBA + ALPHA] ?? OPAQUE).some(
-    (alpha) => alpha < OPAQUE,
-  );
+  return data ? seeThroughPixels(data) : false;
 }
 
 async function scaled(bitmap: ImageBitmap, max: number): Promise<string> {

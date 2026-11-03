@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyCharacter, diffCharacter } from '../src/engine/sheet-data.ts';
 import { blankSheet } from '../src/engine/sheet.ts';
-import { PICTURE_SIZE, SAFE_PICTURE, blobOfDataUrl, fitSize } from '../src/play/pictures.ts';
+import { PICTURE_SIZE, SAFE_PICTURE, blobOfDataUrl, fitSize, seeThroughPixels } from '../src/play/pictures.ts';
 import { describeCharacter } from '../src/store/characters.ts';
 import { openSheet, referenceSheet } from './characters.ts';
 
@@ -52,6 +52,13 @@ describe('fitting a picture', () => {
     const blob = blobOfDataUrl('data:image/png;base64,AQID');
     expect(blob.type).toBe('image/png');
     expect([...new Uint8Array(await blob.arrayBuffer())]).toEqual([1, 2, 3]);
+  });
+
+  it('keeps a PNG only for real see-through parts, not for the edges of a scaled photo', () => {
+    // RGBA pixels: opaque, then WebKit's 254 at a scaled photo's edge, then half see-through.
+    expect(seeThroughPixels(Uint8ClampedArray.from([9, 9, 9, 255, 9, 9, 9, 254]))).toBe(false);
+    expect(seeThroughPixels(Uint8ClampedArray.from([9, 9, 9, 255, 9, 9, 9, 128]))).toBe(true);
+    expect(seeThroughPixels(Uint8ClampedArray.from([9, 9, 9, 0]))).toBe(true);
   });
 
   it('shows only JPEG and PNG pictures the app made', () => {

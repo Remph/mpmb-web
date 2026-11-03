@@ -261,17 +261,22 @@
     width: 2.75rem;
     display: grid;
     place-items: center;
-    border-left: 1px solid var(--line);
+    /*
+     * Clipped: WebKit lets the invisible select's own text stick out past the arrow, which scrolled the page
+     * sideways once the portrait narrowed the boxes. The dividing line is a shadow, not a border, so the
+     * select still covers the full 44 px (2.75rem) inside the clip.
+     */
+    overflow: hidden;
     border-radius: 0 0.5rem 0.5rem 0;
+    box-shadow: inset 1px 0 0 var(--line);
     color: var(--ink-muted);
   }
 
   /* The select itself is invisible on top of the arrow: its own text would repeat the input's. */
   .pick select {
     position: absolute;
-    /* Over the border too, so the tap area is the full 44 px (2.75rem). */
-    inset: 0 0 0 -1px;
-    width: calc(100% + 1px);
+    inset: 0;
+    width: 100%;
     opacity: 0;
     cursor: pointer;
   }

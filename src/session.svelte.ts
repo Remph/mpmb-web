@@ -467,7 +467,9 @@ export class Session {
     }
     const open = this.current;
     if (!open) return false;
-    await this.work(async () => {
+    // In line, not work(): a tap on "Remove" right after typing in a box comes while that box's change
+    // is still saving, and work() would drop it.
+    await this.inLine(async () => {
       await this.client.setImage(slot, image);
       const { [slot]: _old, ...others } = open.images;
       open.images = image ? { ...others, [slot]: image } : others;

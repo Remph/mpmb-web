@@ -39,12 +39,22 @@
     busy = false;
   }
 
+  async function remove() {
+    // The message about an earlier file that couldn't be read no longer applies.
+    failed = false;
+    busy = true;
+    await set(null);
+    busy = false;
+  }
+
   /** Only pictures the app made itself are shown (see SAFE_PICTURE). */
   const src = $derived(image && SAFE_PICTURE.test(image.src) ? image.src : '');
+  /** The empty frame's name: "Portrait: Add a picture", but "Symbol" once, not "Symbol: Symbol". */
+  const emptyName = $derived(empty === label ? label : `${label}: ${empty}`);
 </script>
 
 <div class="picture {shape}">
-  <label class="frame" class:empty={!src} aria-label={src ? change : `${label}: ${empty}`}>
+  <label class="frame" class:empty={!src} aria-label={src ? change : emptyName}>
     <input type="file" accept="image/*" disabled={disabled || busy} onchange={picked} />
     {#if src}
       <img {src} alt={label} />
@@ -63,9 +73,7 @@
         <input type="file" accept="image/*" disabled={disabled || busy} onchange={picked} />
         {t.pictureChange}
       </label>
-      <button type="button" class="quiet" disabled={disabled || busy} onclick={() => void set(null)}
-        >{t.pictureRemove}</button
-      >
+      <button type="button" class="quiet" disabled={disabled || busy} onclick={remove}>{t.pictureRemove}</button>
     </div>
   {/if}
   {#if failed}<p class="failed" role="alert">{t.pictureFailed}</p>{/if}
