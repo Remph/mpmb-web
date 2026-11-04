@@ -18,8 +18,9 @@
   # 'unsafe-inline' for styles only. vite.config.ts reads this line, so `pnpm preview` sends it too.
   Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
 
-  # The page itself is checked on every visit, so a new version shows up at once...
-  <FilesMatch "\.html$">
+  # The page itself is checked on every visit, so a new version shows up at once (so are the service
+  # worker, which stores the app for offline use, and the web app manifest)...
+  <FilesMatch "(\.html|\.webmanifest|^sw\.js)$">
     Header set Cache-Control "no-cache"
   </FilesMatch>
   # ...while the build's files carry a content hash in their name ("index-CH5oqtRN.js"): a new
@@ -27,6 +28,11 @@
   <FilesMatch "-[A-Za-z0-9_-]{8}\.(js|css|woff2?)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
+</IfModule>
+
+# The web app manifest's type, which older Apache setups don't know yet.
+<IfModule mod_mime.c>
+  AddType application/manifest+json .webmanifest
 </IfModule>
 
 # The engine is a 5 MB script; compressed it is about 1.2 MB.

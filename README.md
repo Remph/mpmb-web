@@ -54,6 +54,11 @@ The smoke test needs Firefox for Playwright once: `pnpm exec playwright install 
   cross-origin isolated page: `pnpm dev` and `pnpm preview` send the headers, the live site gets them
   from `public/.htaccess`.
 - `src/store/`: characters in the browser (IndexedDB) and backup files.
+- `src/offline/`: the service worker that keeps the built app usable without network: it stores the
+  build's files after the first visit, loads the page from the network first (so a new version shows at
+  once) and from its copy when there is none. `tools/offline-plugin.ts` builds it into `dist/sw.js` with
+  the build's file list. `public/manifest.webmanifest` and the icons (drawn by `node tools/make-icons.ts`
+  from `tools/app-icon.svg`) let the iPad add the app to its home screen.
 - `src/homebrew/`: house rules the app adds on top of MPMB's sheet, each behind a switch in "Homebrew
   rules" (per browser). They stay in the app and never go into a PDF. So far: ult charges.
 - `src/popups/`: the page's side of MPMB's pop-ups (alerts, menus, dialogs) and the app's own questions.

@@ -6,8 +6,11 @@ import '@fontsource/atkinson-hyperlegible-next/700.css';
 import '@fontsource/atkinson-hyperlegible-next/800.css';
 import './app.css';
 import App from './App.svelte';
+import { registerOffline } from './offline/register.ts';
 
 const target = document.getElementById('app');
 if (!target) throw new Error('#app is missing in index.html');
+
+registerOffline();
 
 export default mount(App, { target });
