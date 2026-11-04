@@ -35,6 +35,7 @@ describe('play view values', () => {
     expect(readHitPoints(paladin)).toEqual({
       current: null,
       max: 92,
+      lowered: null,
       temp: null,
       hitDice: [
         { row: 1, die: 'd10', total: 8, used: 0 },

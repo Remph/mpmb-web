@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { openSheet, referenceSheet } from '../../test/characters.ts';
 import { withValues } from '../../test/fields.ts';
 import { viewsOf } from '../worker/views.ts';
-import { readSpellSlotUse } from './read.ts';
+import { readHitPoints, readSpellSlotUse } from './read.ts';
 import {
   applyDamage,
   applyHealing,
@@ -22,18 +22,53 @@ const wizard = viewsOf(openSheet(referenceSheet('wizard10-evoker')).doc);
 
 describe('hit points', () => {
   it('takes damage from temporary hit points first', () => {
-    expect(applyDamage({ current: 71, max: 92, temp: 5 }, 3)).toEqual({ current: 71, temp: 2 });
-    expect(applyDamage({ current: 71, max: 92, temp: 5 }, 12)).toEqual({ current: 64, temp: 0 });
+    expect(applyDamage({ current: 71, max: 92, temp: 5 }, 3)).toEqual({ current: 71, temp: 2, lowered: null });
+    expect(applyDamage({ current: 71, max: 92, temp: 5 }, 12)).toEqual({ current: 64, temp: 0, lowered: null });
   });
 
   it('stops at 0 and counts an empty field as full', () => {
-    expect(applyDamage({ current: 4, max: 92, temp: null }, 10)).toEqual({ current: 0, temp: 0 });
-    expect(applyDamage({ current: null, max: 92, temp: null }, 10)).toEqual({ current: 82, temp: 0 });
+    expect(applyDamage({ current: 4, max: 92, temp: null }, 10)).toEqual({ current: 0, temp: 0, lowered: null });
+    expect(applyDamage({ current: null, max: 92, temp: null }, 10)).toEqual({ current: 82, temp: 0, lowered: null });
   });
 
   it('heals up to the maximum and keeps temporary hit points', () => {
-    expect(applyHealing({ current: 85, max: 92, temp: 5 }, 20)).toEqual({ current: 92, temp: 5 });
-    expect(applyHealing({ current: 0, max: 92, temp: null }, 7)).toEqual({ current: 7, temp: 0 });
+    expect(applyHealing({ current: 85, max: 92, temp: 5 }, 20)).toEqual({ current: 92, temp: 5, lowered: null });
+    expect(applyHealing({ current: 0, max: 92, temp: null }, 7)).toEqual({ current: 7, temp: 0, lowered: null });
+  });
+
+  it('lowers the maximum by the damage when asked, taking hit points above it along', () => {
+    // 71 of 92, 16 necrotic from Life Drain: 55 left, maximum 76.
+    expect(applyDamage({ current: 71, max: 92, temp: null }, 16, true)).toEqual({ current: 55, temp: 0, lowered: 76 });
+    // Temporary hit points take the hit, but the maximum still drops, and 90 is more than the new 76.
+    expect(applyDamage({ current: 90, max: 92, temp: 20 }, 16, true)).toEqual({ current: 76, temp: 4, lowered: 76 });
+    // Lowered again: from the lowered maximum, never below 0.
+    expect(applyDamage({ current: 30, max: 92, lowered: 40, temp: null }, 50, true)).toEqual({
+      current: 0,
+      temp: 0,
+      lowered: 0,
+    });
+    // Plain damage leaves a lowered maximum as it is.
+    expect(applyDamage({ current: 30, max: 92, lowered: 40, temp: null }, 5)).toEqual({
+      current: 25,
+      temp: 0,
+      lowered: 40,
+    });
+  });
+
+  it('heals only up to a lowered maximum, and counts an empty field as full at it', () => {
+    expect(applyHealing({ current: 30, max: 92, lowered: 40, temp: null }, 20)).toEqual({
+      current: 40,
+      temp: 0,
+      lowered: 40,
+    });
+    expect(applyDamage({ current: null, max: 92, lowered: 40, temp: null }, 10).current).toBe(30);
+  });
+
+  it('reads a lowered maximum only when it is below the maximum', () => {
+    const max = readHitPoints(paladin).max!;
+    expect(readHitPoints(paladin).lowered).toBeNull();
+    expect(readHitPoints(withValues(paladin, { 'HP Max Current': String(max - 10) })).lowered).toBe(max - 10);
+    expect(readHitPoints(withValues(paladin, { 'HP Max Current': String(max) })).lowered).toBeNull();
   });
 
   it('finds the ticked death saves, which healing from 0 clears', () => {
@@ -67,6 +102,16 @@ describe('rests', () => {
       },
       untick: ['Death Save Fail1'],
     });
+  });
+
+  it('a long rest makes a lowered maximum whole again, and leaves a box that only repeats it', () => {
+    const max = readHitPoints(paladin).max!;
+    expect(longRest(withValues(paladin, { 'HP Max Current': String(max - 16) })).values).toMatchObject({
+      'HP Max Current': '',
+    });
+    expect(longRest(withValues(paladin, { 'HP Max Current': String(max) })).values).not.toHaveProperty(
+      'HP Max Current',
+    );
   });
 
   it('a short rest gives back what MPMB marks "regain 1/SR"', () => {

@@ -329,6 +329,16 @@ test('a character saved on an older sheet is updated when it opens, and the vers
     };
   })`);
   expect(wizardName).toBe('Test Wizard');
+  // A hit that lowers the maximum too (Life Drain, session fixes 2026-11-04): the card says so, and Restore
+  // makes it whole again.
+  await page.getByRole('button', { name: 'Damage', exact: true }).click();
+  const damagePad = page.getByRole('dialog', { name: 'Take damage' });
+  await damagePad.getByRole('button', { name: '3', exact: true }).click();
+  await damagePad.getByRole('checkbox', { name: /^Lowers max HP too/ }).check();
+  await damagePad.getByRole('button', { name: 'Take damage' }).click();
+  await expect(page.getByText('Max lowered by 3')).toBeVisible();
+  await page.getByRole('button', { name: /^Restore max HP to/ }).click();
+  await expect(page.getByText(/^Max lowered by/)).toHaveCount(0);
   // The next opening of the paladin tries again.
   await page.getByRole('link', { name: /Characters/ }).click();
   await page.getByRole('link', { name: /Test Paladin/ }).click();

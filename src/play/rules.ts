@@ -10,22 +10,38 @@ import type { Spell } from './spells.ts';
 export interface HpChange {
   current: number;
   temp: number;
+  /** The lowered maximum after the change, or null when the maximum is whole. */
+  lowered: number | null;
 }
+
+/** What the hit point arithmetic needs; companions have no lowered maximum. */
+type HpNow = Pick<HitPoints, 'current' | 'max' | 'temp'> & { lowered?: number | null };
+
+/** The most hit points the character can have right now: the lowered maximum while there is one. */
+export const maxNow = (hp: Pick<HpNow, 'max' | 'lowered'>): number | null => hp.lowered ?? hp.max;
 
 /** Hit points now: an empty field means not hurt yet. */
-const currentOf = (hp: Pick<HitPoints, 'current' | 'max'>): number => hp.current ?? hp.max ?? 0;
+const currentOf = (hp: Pick<HpNow, 'current' | 'max' | 'lowered'>): number => hp.current ?? maxNow(hp) ?? 0;
 
-/** Damage takes temporary hit points first, then hit points, down to 0 (SRD 5.2.1, Temporary Hit Points). */
-export function applyDamage(hp: Pick<HitPoints, 'current' | 'max' | 'temp'>, amount: number): HpChange {
+/**
+ * Damage takes temporary hit points first, then hit points, down to 0 (SRD 5.2.1, Temporary Hit Points).
+ * With `lowersMax` the maximum drops by the damage too, as a Wight's Life Drain does, until a long rest;
+ * hit points above the new maximum go with it.
+ */
+export function applyDamage(hp: HpNow, amount: number, lowersMax = false): HpChange {
   const temp = hp.temp ?? 0;
   const fromTemp = Math.min(temp, amount);
-  return { current: Math.max(0, currentOf(hp) - (amount - fromTemp)), temp: temp - fromTemp };
+  const current = Math.max(0, currentOf(hp) - (amount - fromTemp));
+  const top = maxNow(hp);
+  if (!lowersMax || top === null) return { current, temp: temp - fromTemp, lowered: hp.lowered ?? null };
+  const lowered = Math.max(0, top - amount);
+  return { current: Math.min(current, lowered), temp: temp - fromTemp, lowered };
 }
 
-/** Healing never goes above the maximum and leaves temporary hit points alone. */
-export function applyHealing(hp: Pick<HitPoints, 'current' | 'max' | 'temp'>, amount: number): HpChange {
-  const max = hp.max ?? Infinity;
-  return { current: Math.min(max, currentOf(hp) + amount), temp: hp.temp ?? 0 };
+/** Healing never goes above the maximum (a lowered one included) and leaves temporary hit points alone. */
+export function applyHealing(hp: HpNow, amount: number): HpChange {
+  const top = maxNow(hp) ?? Infinity;
+  return { current: Math.min(top, currentOf(hp) + amount), temp: hp.temp ?? 0, lowered: hp.lowered ?? null };
 }
 
 /** Field edits a rest makes: values to store (empty clears) and check boxes to untick. */
@@ -44,13 +60,18 @@ const DEATH_SAVES = ['Success1', 'Success2', 'Success3', 'Fail1', 'Fail2', 'Fail
 export const tickedDeathSaves = (fields: FieldViews): string[] => DEATH_SAVES.filter((name) => isOn(fields, name));
 
 /**
- * A long rest (SRD 5.2.1): all hit points and spent hit dice back, temporary hit points gone, one level
- * of exhaustion less, death saves cleared, all spell slots, every feature that recovers on a short or
- * long rest, and the spells cast once for free (MPMB's once-per-rest boxes; "dawn" counts as a long rest).
+ * A long rest (SRD 5.2.1): all hit points (a lowered maximum whole again) and spent hit dice back,
+ * temporary hit points gone, one level of exhaustion less, death saves cleared, all spell slots, every
+ * feature that recovers on a short or long rest, and the spells cast once for free (MPMB's once-per-rest
+ * boxes; "dawn" counts as a long rest).
  */
 export function longRest(fields: FieldViews): RestEdits {
   const values: Record<string, string> = { 'HP Current': '', 'HP Temp': '' };
-  readHitPoints(fields).hitDice.forEach((hd) => (values[`HD${hd.row} Used`] = ''));
+  const hp = readHitPoints(fields);
+  // A lowered maximum lasts until a long rest (SRD 5.2.1, Wight's Life Drain); a box that only repeats
+  // the maximum stays as the player typed it.
+  if (hp.lowered !== null) values['HP Max Current'] = '';
+  hp.hitDice.forEach((hd) => (values[`HD${hd.row} Used`] = ''));
   readLimitedFeatures(fields)
     // "Dawn", "7 days" and the like are not rests: a long rest leaves them to the player.
     .filter((f) => f.used > 0 && ['long', 'short'].includes(recoveryKind(f.recovery) ?? ''))

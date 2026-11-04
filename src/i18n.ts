@@ -236,6 +236,11 @@ export const ui = {
 
     // Play view (M4)
     hpTitle: 'Trefferpunkte',
+    hpMaxLowered: 'Maximum um {count} gesenkt',
+    hpMaxRestore: 'Zurücksetzen',
+    hpMaxRestoreLabel: 'Maximum wieder auf {max} setzen',
+    lowersMax: 'Senkt auch das Maximum',
+    lowersMaxHint: 'Wie Lebensentzug, bis zur langen Rast',
     tempHp: '+{count} temporär',
     hpOf: 'von {max}',
     damage: 'Schaden',
@@ -1272,6 +1277,11 @@ export const ui = {
 
     // Play view (M4)
     hpTitle: 'Hit points',
+    hpMaxLowered: 'Max lowered by {count}',
+    hpMaxRestore: 'Restore',
+    hpMaxRestoreLabel: 'Restore max HP to {max}',
+    lowersMax: 'Lowers max HP too',
+    lowersMaxHint: 'Life Drain and the like, until a long rest',
     tempHp: '+{count} temp',
     hpOf: 'of {max}',
     damage: 'Damage',

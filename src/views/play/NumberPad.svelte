@@ -3,6 +3,7 @@
   Enter applies). Used for damage, healing and temporary hit points.
 -->
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import type { Texts } from '../../i18n.ts';
   import Modal from '../../popups/Modal.svelte';
 
@@ -17,10 +18,12 @@
     maxDigits?: number;
     onapply: (amount: number) => void;
     onclose: () => void;
+    /** Shown under the keys: the damage window's "Lowers max HP too". */
+    children?: Snippet;
     t: Texts;
   }
 
-  let { title, hint = '', applyLabel, danger = false, maxDigits = 4, onapply, onclose, t }: Props = $props();
+  let { title, hint = '', applyLabel, danger = false, maxDigits = 4, onapply, onclose, children, t }: Props = $props();
   let digits = $state('');
   const amount = $derived(digits === '' ? 0 : Number(digits));
   const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
@@ -55,6 +58,7 @@
     <button type="button" onclick={() => press('0')}>0</button>
     <button type="button" aria-label={t.clearDigit} onclick={() => (digits = digits.slice(0, -1))}>⌫</button>
   </div>
+  {@render children?.()}
   {#snippet actions()}
     <button type="button" onclick={onclose}>{t.cancel}</button>
     <button type="button" class="primary" class:danger disabled={digits === ''} onclick={apply}>{applyLabel}</button>
