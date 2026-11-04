@@ -17,7 +17,7 @@
   let { open, back, t, children }: Props = $props();
 
   const statusText = $derived(
-    { opening: t.opening, working: t.saving, saving: t.saving, saved: t.saved, error: '' }[open.status],
+    { opening: t.opening, working: t.saving, saving: t.saving, saved: t.saved, error: '', elsewhere: '' }[open.status],
   );
 </script>
 

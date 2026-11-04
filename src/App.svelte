@@ -75,9 +75,30 @@
   }
 
   void session.start().then(route);
+
+  /**
+   * An error nothing else caught, shown as a note instead of only in the console (tech review finding 6).
+   * Chrome reports a ResizeObserver that needed a second pass as an error; it is harmless, so it is left out.
+   */
+  function uncaught(err: unknown) {
+    const text = err instanceof Error ? err.message : String(err ?? '');
+    if (!text || text.includes('ResizeObserver loop')) return;
+    session.reportError(err);
+  }
+
+  // Leaving the page or switching to another app (the iPad freezes the page then): save what isn't saved.
+  function hidden() {
+    if (document.visibilityState === 'hidden') session.flush();
+  }
 </script>
 
-<svelte:window onhashchange={route} />
+<svelte:window
+  onhashchange={route}
+  onpagehide={() => session.flush()}
+  onerror={(event) => uncaught(event instanceof ErrorEvent ? (event.error ?? event.message) : null)}
+  onunhandledrejection={(event) => uncaught(event.reason)}
+/>
+<svelte:document onvisibilitychange={hidden} />
 
 {#if session.current}
   <!-- The play view brings its own top bar and uses the whole width; the language sits in its menu. -->

@@ -135,6 +135,27 @@ export const ui = {
       'Diese Sicherung kommt aus einer neueren Version von MPMB Web. Lade die Seite neu und versuche es noch einmal.',
     wrongSheetBackup: 'Diese Sicherung gehört zu einem anderen Bogen ({what}); hier geht {version}.',
     storageFailed: 'Speichern im Browser hat nicht geklappt: {reason}',
+    // Tech review 2026-11-04: backups, tabs, errors.
+    backupDueNamesOne: '{names} hat sich seit der letzten Sicherung geändert.',
+    backupDueNames: '{names} haben sich seit der letzten Sicherung geändert.',
+    backupDueCount: '{count} Charaktere haben sich seit der letzten Sicherung geändert.',
+    backupDueWhy: 'Charaktere liegen nur in diesem Browser; eine Sicherungsdatei schützt sie.',
+    backupDueSafari: 'Safari kann sie nach 7 Tagen ohne Besuch löschen.',
+    dbBlocked:
+      'MPMB Web ist in einem anderen Tab mit einer älteren Version offen. Schließe diesen Tab, dann öffnet dieser hier die Charaktere.',
+    dbReplaced:
+      'In einem anderen Tab läuft eine neuere Version von MPMB Web. Lade diese Seite neu, um hier weiterzumachen; Gespeichertes bleibt erhalten.',
+    reload: 'Neu laden',
+    unexpectedError: 'Auf dieser Seite ist etwas schiefgegangen: {reason}',
+    openElsewhere:
+      'Dieser Charakter ist in einem anderen Tab oder Fenster offen. Hol ihn hierher, dann speichert der andere Tab nicht mehr.',
+    takenElsewhere:
+      'Dieser Charakter wurde in einem anderen Tab geöffnet und wird jetzt dort gespeichert. Änderungen hier werden nicht mehr gespeichert.',
+    takeOver: 'Hierher holen',
+    reopen: 'Charakter neu öffnen',
+    reopenHint: 'Was vorher gespeichert war, ist sicher; neu öffnen lädt es wieder.',
+    deleteOpenElsewhere: '{name} ist in einem anderen Tab offen. Schließe ihn dort zuerst, dann lösche ihn.',
+    restoreOpenElsewhere: 'Nichts eingespielt: in einem anderen Tab offen ist {names}. Schließe den Tab zuerst.',
 
     backToList: 'Charaktere',
     opening: 'Bogen wird geöffnet …',
@@ -1080,6 +1101,27 @@ export const ui = {
     newerBackup: 'This backup comes from a newer version of MPMB Web. Reload the page and try again.',
     wrongSheetBackup: 'This backup belongs to another sheet ({what}); this app reads {version}.',
     storageFailed: 'Saving in the browser failed: {reason}',
+    // Tech review 2026-11-04: backups, tabs, errors.
+    backupDueNamesOne: '{names} changed since the last backup.',
+    backupDueNames: '{names} changed since the last backup.',
+    backupDueCount: '{count} characters changed since the last backup.',
+    backupDueWhy: 'Characters live only in this browser; a backup file keeps them safe.',
+    backupDueSafari: 'Safari may clear them after 7 days without a visit.',
+    dbBlocked:
+      'MPMB Web is open in another tab with an older version. Close that tab, and this one opens the characters.',
+    dbReplaced:
+      'A newer version of MPMB Web opened in another tab. Reload this page to go on here; nothing saved is lost.',
+    reload: 'Reload',
+    unexpectedError: 'Something went wrong on this page: {reason}',
+    openElsewhere:
+      'This character is open in another tab or window. Take it over here, and the other tab stops saving it.',
+    takenElsewhere:
+      'This character was opened in another tab and is saved there now. Changes here are no longer saved.',
+    takeOver: 'Take over',
+    reopen: 'Reopen character',
+    reopenHint: 'What was saved before is safe; reopening loads it again.',
+    deleteOpenElsewhere: '{name} is open in another tab. Close it there first, then delete it.',
+    restoreOpenElsewhere: 'Nothing restored: {names} is open in another tab. Close that tab first.',
 
     backToList: 'Characters',
     opening: 'Opening the sheet …',

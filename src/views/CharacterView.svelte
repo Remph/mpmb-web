@@ -8,6 +8,7 @@
   import type { Texts } from '../i18n.ts';
   import { longRest, shortRest } from '../play/rules.ts';
   import type { RestEdits } from '../play/rules.ts';
+  import { readOnly } from '../session.svelte.ts';
   import type { OpenCharacter, Session, Step } from '../session.svelte.ts';
   import Notes from './Notes.svelte';
   import Checks from './play/Checks.svelte';
@@ -68,7 +69,9 @@
   const shownTab = $derived((wide && tab === 'checks') || (tab === 'spells' && !hasSpells) ? 'combat' : tab);
 
   const fields = $derived(open.fields);
-  const disabled = $derived(open.status === 'opening' || open.status === 'error');
+  const disabled = $derived(readOnly(open.status));
+  /** Open in another tab before this one loaded its sheet (see store/tab-lock.ts). */
+  const elsewhereOnly = $derived(open.status === 'elsewhere' && Object.keys(open.fields).length === 0);
   const change = (steps: Step[]) => void session.change(steps);
   /** The ult charges card only while its homebrew switch is on; the values stay with the character either way. */
   const ult = $derived(homebrew.switches.ultCharges ? readUlt(open.meta.homebrew?.ult) : null);
@@ -181,64 +184,67 @@
     />
   {/if}
 
-  <div class="play">
-    <div class="side left">
-      {#if noClass}
-        <section class="start" aria-labelledby="no-class-title">
-          <h2 id="no-class-title">{t.noClassTitle}</h2>
-          <p>{t.noClassLine}</p>
-          <a href={buildHref}>{t.menuBuild}</a>
-        </section>
-      {:else}
-        <Vitals {fields} {disabled} {change} {ult} onult={(u) => void session.setUlt(u)} {t} />
-      {/if}
-    </div>
-
-    <div class="middle">
-      <div class="tabs" role="tablist">
-        {#each tabs as [key, label] (key)}
-          <button
-            type="button"
-            role="tab"
-            id={`tab-${key}`}
-            aria-selected={shownTab === key}
-            aria-controls="tab-panel"
-            onclick={() => (tab = key)}>{label}</button
-          >
-        {/each}
-      </div>
-      <div id="tab-panel" role="tabpanel" aria-labelledby={`tab-${shownTab}`}>
-        {#if shownTab === 'combat'}
-          <CombatTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
-        {:else if shownTab === 'spells'}
-          <SpellsTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
-        {:else if shownTab === 'checks'}
-          <Checks {fields} {disabled} {change} {t} />
-        {:else if shownTab === 'inventory'}
-          <InventoryTab {fields} {disabled} {change} {t} />
-        {:else if shownTab === 'features'}
-          <FeaturesTab {fields} characterId={open.meta.id} {t} />
-        {:else if shownTab === 'profile'}
-          <ProfileTab
-            {fields}
-            images={open.images}
-            {disabled}
-            {change}
-            setImage={(slot, file) => session.setImage(slot, file)}
-            {t}
-          />
+  <!-- Open in another tab from the start: no sheet here, only the line offering to take it over. -->
+  {#if !elsewhereOnly}
+    <div class="play">
+      <div class="side left">
+        {#if noClass}
+          <section class="start" aria-labelledby="no-class-title">
+            <h2 id="no-class-title">{t.noClassTitle}</h2>
+            <p>{t.noClassLine}</p>
+            <a href={buildHref}>{t.menuBuild}</a>
+          </section>
         {:else}
-          <NotesTab {fields} {disabled} {change} pick={(field, answer) => session.pick(field, answer)} {t} />
+          <Vitals {fields} {disabled} {change} {ult} onult={(u) => void session.setUlt(u)} {t} />
         {/if}
       </div>
-    </div>
 
-    {#if wide}
-      <div class="side right">
-        <Checks {fields} {disabled} {change} {t} />
+      <div class="middle">
+        <div class="tabs" role="tablist">
+          {#each tabs as [key, label] (key)}
+            <button
+              type="button"
+              role="tab"
+              id={`tab-${key}`}
+              aria-selected={shownTab === key}
+              aria-controls="tab-panel"
+              onclick={() => (tab = key)}>{label}</button
+            >
+          {/each}
+        </div>
+        <div id="tab-panel" role="tabpanel" aria-labelledby={`tab-${shownTab}`}>
+          {#if shownTab === 'combat'}
+            <CombatTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
+          {:else if shownTab === 'spells'}
+            <SpellsTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
+          {:else if shownTab === 'checks'}
+            <Checks {fields} {disabled} {change} {t} />
+          {:else if shownTab === 'inventory'}
+            <InventoryTab {fields} {disabled} {change} {t} />
+          {:else if shownTab === 'features'}
+            <FeaturesTab {fields} characterId={open.meta.id} {t} />
+          {:else if shownTab === 'profile'}
+            <ProfileTab
+              {fields}
+              images={open.images}
+              {disabled}
+              {change}
+              setImage={(slot, file) => session.setImage(slot, file)}
+              {t}
+            />
+          {:else}
+            <NotesTab {fields} {disabled} {change} pick={(field, answer) => session.pick(field, answer)} {t} />
+          {/if}
+        </div>
       </div>
-    {/if}
-  </div>
+
+      {#if wide}
+        <div class="side right">
+          <Checks {fields} {disabled} {change} {t} />
+        </div>
+      {/if}
+    </div>
+  {/if}
 
   {#if menuOpen}
     <SheetMenu

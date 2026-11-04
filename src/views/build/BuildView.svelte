@@ -13,6 +13,7 @@
   import { ABILITIES, shown, valueOf } from '../../play/read.ts';
   import { readSpells } from '../../play/spells.ts';
   import { unsentFor } from '../../build/spell-drafts.svelte.ts';
+  import { readOnly } from '../../session.svelte.ts';
   import type { OpenCharacter, Session, Step } from '../../session.svelte.ts';
   import Notes from '../Notes.svelte';
   import AddOnsWindow from '../play/AddOnsWindow.svelte';
@@ -57,7 +58,7 @@
   let info = $state<BuilderInfo | null>(null);
 
   const fields = $derived(open.fields);
-  const disabled = $derived(open.status === 'opening' || open.status === 'error');
+  const disabled = $derived(readOnly(open.status));
   const playHref = $derived(`#/character/${encodeURIComponent(open.meta.id)}`);
   const change = (steps: Step[]) => void session.change(steps);
 
@@ -182,7 +183,9 @@
   </nav>
 
   <div class="main">
-    {#if !info}
+    {#if !info && open.status === 'elsewhere'}
+      <!-- Open in another tab: the line above offers to take it over. -->
+    {:else if !info}
       <p class="loading">{t.opening}</p>
     {:else if step === 'class'}
       <ClassStep

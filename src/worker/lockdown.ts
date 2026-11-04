@@ -31,16 +31,37 @@ export const REMOVED_GLOBALS = [
 ] as const;
 
 /**
+ * What the worker's `navigator` offers beyond plain facts about the browser. `storage` holds the origin
+ * private file system (`getDirectory()`): no network, but files there outlive the worker, so one sheet's
+ * add-on script could leave something for the next character's scripts to read (tech review 2026-11-04,
+ * finding 8). `locks` would let a script hold the page's per-character locks (see store/tab-lock.ts).
+ */
+export const REMOVED_FROM_NAVIGATOR = ['storage', 'locks'] as const;
+
+/**
  * Removes the globals from the scope and from the prototypes it inherits from (browsers put some on
- * the global object, some on WorkerGlobalScope.prototype). Returns those still reachable afterwards,
- * which should be none.
+ * the global object, some on WorkerGlobalScope.prototype), and the same for `navigator`'s parts above.
+ * Returns those still reachable afterwards ("navigator.storage" for a part of navigator), which should
+ * be none.
  */
 export function lockDown(scope: object): string[] {
-  const holders = prototypeChain(scope);
-  REMOVED_GLOBALS.forEach((name) =>
+  removeAll(scope, REMOVED_GLOBALS);
+  const navigator = (scope as { navigator?: unknown }).navigator;
+  const nav = typeof navigator === 'object' && navigator !== null ? navigator : null;
+  if (nav) removeAll(nav, REMOVED_FROM_NAVIGATOR);
+  return [
+    ...REMOVED_GLOBALS.filter((name) => (scope as Record<string, unknown>)[name] !== undefined),
+    ...(nav ? REMOVED_FROM_NAVIGATOR.filter((name) => (nav as Record<string, unknown>)[name] !== undefined) : []).map(
+      (name) => `navigator.${name}`,
+    ),
+  ];
+}
+
+function removeAll(target: object, names: readonly string[]): void {
+  const holders = prototypeChain(target);
+  names.forEach((name) =>
     holders.filter((holder) => Object.hasOwn(holder, name)).forEach((holder) => removeFrom(holder, name)),
   );
-  return REMOVED_GLOBALS.filter((name) => (scope as Record<string, unknown>)[name] !== undefined);
 }
 
 /** The object and every prototype it inherits from, up to Object.prototype. */

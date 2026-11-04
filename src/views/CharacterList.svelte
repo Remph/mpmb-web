@@ -6,6 +6,7 @@
   import { MPMB_DOWNLOAD, MPMB_PATREON } from '../mpmb-links.ts';
   import { SAFE_PICTURE } from '../play/pictures.ts';
   import type { Session } from '../session.svelte.ts';
+  import { dueForBackup, isSafari } from '../store/backup-reminder.ts';
   import Notes from './Notes.svelte';
 
   interface Props {
@@ -18,6 +19,19 @@
   let pdfInput: HTMLInputElement | undefined = $state();
   let backupInput: HTMLInputElement | undefined = $state();
   const importing = $derived(session.notes.some((n) => n.kind === 'busy'));
+
+  /** More names than this, and the reminder gives a count instead. */
+  const MAX_NAMES = 3;
+  /** The characters with changes no backup holds yet (finding 1 of the tech review; Nick's pick A). */
+  const due = $derived(dueForBackup(session.characters));
+  const dueText = $derived.by(() => {
+    if (due.length > MAX_NAMES) return fill(t.backupDueCount, { count: due.length });
+    const names = new Intl.ListFormat(t.locale, { type: 'conjunction' }).format(
+      due.map((meta) => meta.name || t.unnamed),
+    );
+    return fill(due.length === 1 ? t.backupDueNamesOne : t.backupDueNames, { names });
+  });
+  const safari = isSafari(navigator.userAgent);
 
   const changed = (iso: string) =>
     new Date(iso).toLocaleDateString(lang, { day: 'numeric', month: 'short', year: 'numeric' });
@@ -77,6 +91,20 @@
 
 <Notes notes={session.notes} />
 
+{#if !session.client.answersPopUps}
+  <!-- Without the page's isolation headers MPMB's questions can't wait for an answer (tech review
+       finding 7): said here too, so a check on a new device (the iPad) sees it at once. -->
+  <p class="warning">{t.notIsolated}</p>
+{/if}
+
+{#if due.length}
+  <div class="reminder" role="status">
+    <span class="icon" aria-hidden="true">⤓</span>
+    <p><strong>{dueText}</strong> {t.backupDueWhy}{safari ? ` ${t.backupDueSafari}` : ''}</p>
+    <button type="button" class="primary" onclick={() => session.backUp()}>{t.backUpAll}</button>
+  </div>
+{/if}
+
 {#if session.storageError}
   <Notes notes={[{ id: 0, kind: 'error', text: fill(t.storageFailed, { reason: session.storageError }) }]} />
 {/if}
@@ -129,6 +157,37 @@
 </section>
 
 <style>
+  .warning {
+    margin: 0 0 1.25rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--danger);
+    border-radius: 0.5rem;
+  }
+
+  /* Like the update line in the play view: something to do, not a failure. */
+  .reminder {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    margin: 0 0 1.25rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--accent);
+    border-radius: 0.5rem;
+    background: var(--accent-soft);
+  }
+
+  .reminder .icon {
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .reminder p {
+    flex: 1;
+    min-width: min(14rem, 100%);
+    margin: 0;
+  }
+
   .updated {
     color: var(--accent);
     font-weight: 500;

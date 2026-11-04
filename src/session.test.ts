@@ -14,8 +14,11 @@ import { Session } from './session.svelte.ts';
 import { makeBackup } from './store/backup.ts';
 import { describeCharacter } from './store/characters.ts';
 import type { StoredCharacter } from './store/characters.ts';
+import type { Locks } from './store/tab-lock.ts';
+import { StandInLocks } from '../test/stand-in-locks.ts';
 import type { WorkerLike } from './worker/client.ts';
 import type { Command, FromWorker, ToWorker } from './worker/protocol.ts';
+import type { FieldView } from './worker/views.ts';
 
 const t = ui.en;
 const NO_ADD_ONS = { files: [], manual: false };
@@ -39,20 +42,34 @@ class StandInWorker implements WorkerLike {
   onmessage: ((event: MessageEvent<FromWorker>) => void) | null = null;
   onerror: ((event: ErrorEvent) => void) | null = null;
 
-  constructor(private readonly answer: (command: Command) => Reply) {}
+  constructor(
+    private readonly answer: (command: Command) => Reply,
+    /** Holds the reply to a command back until the promise it returns settles (a slow engine). */
+    private readonly hold?: (command: Command) => Promise<void> | undefined,
+  ) {}
 
   postMessage(message: ToWorker): void {
     if (message.type !== 'command') return;
-    const reply = this.answer(message.command);
+    const { command } = message;
+    const reply = this.answer(command);
     const { id } = message;
+    const held = this.hold?.(command);
     // Asynchronous, like a real worker.
-    queueMicrotask(() => {
+    const send = (): void => {
+      // A typed text changes its field, which the worker reports before the command is done.
+      if (command.type === 'edit' && 'result' in reply) {
+        const view: FieldView = { type: 'Tx', value: command.text, flags: 0, widgets: [], style: {} };
+        const fields: FromWorker = { type: 'fields', changed: { [command.field]: view }, removed: [] };
+        this.onmessage?.({ data: fields } as MessageEvent<FromWorker>);
+      }
       const data: FromWorker =
         'result' in reply
           ? { type: 'done', id, result: reply.result, summary: { errors: 0, missing: {} } }
           : { type: 'failed', id, error: reply.error, ...(reply.code ? { code: reply.code } : {}) };
       this.onmessage?.({ data } as MessageEvent<FromWorker>);
-    });
+    };
+    if (held) void held.then(send);
+    else queueMicrotask(send);
   }
 
   terminate(): void {
@@ -60,11 +77,28 @@ class StandInWorker implements WorkerLike {
   }
 }
 
-/** A session on a fresh stand-in database; an imported "PDF" is the character's JSON. */
-async function startSession(): Promise<Session> {
-  vi.stubGlobal('indexedDB', new IDBFactory());
+/**
+ * A session on a fresh stand-in database; an imported "PDF" is the character's JSON. `tab`: a second tab of
+ * the same browser shares the database and the locks; `sent` collects the commands its worker got.
+ */
+async function startSession(
+  tab: {
+    browser?: IDBFactory;
+    locks?: Locks;
+    sent?: Command[];
+    hold?: (command: Command) => Promise<void> | undefined;
+  } = {},
+): Promise<Session> {
+  vi.stubGlobal('indexedDB', tab.browser ?? new IDBFactory());
   let opened: CharacterData | null = null;
   const answer = (command: Command): Reply => {
+    tab.sent?.push(command);
+    if (command.type === 'edit') {
+      if (command.text === 'boom') return { error: 'MPMB threw' };
+      if (opened) opened.fields[command.field] = { value: command.text };
+      return { result: null };
+    }
+    if (command.type === 'addOns') return { result: NO_ADD_ONS };
     if (command.type === 'importPdf') {
       const text = new TextDecoder().decode(command.bytes);
       if (text === 'not a pdf') return { error: 'Invalid PDF structure', code: 'unreadable-pdf' };
@@ -81,7 +115,8 @@ async function startSession(): Promise<Session> {
   };
   const session = new Session(
     () => t,
-    () => new StandInWorker(answer),
+    () => new StandInWorker(answer, tab.hold),
+    tab.locks,
   );
   await session.start();
   return session;
@@ -252,12 +287,186 @@ describe('opening a character', () => {
     if (!broken) throw new Error('Broken was not imported');
     await session.open(broken.id);
     expect(session.current?.status).toBe('error');
-    expect(session.notes).toMatchObject([{ kind: 'error', text: t.engineFailed.replace('{reason}', 'MPMB threw') }]);
+    expect(session.notes).toMatchObject([
+      {
+        kind: 'error',
+        text: `${t.engineFailed.replace('{reason}', 'MPMB threw')}. ${t.reopenHint}`,
+        action: { label: t.reopen },
+      },
+    ]);
   });
 
   test('an id that is not saved here opens nothing', async () => {
     const session = await startSession();
     expect(await session.open('gone')).toBe(false);
     expect(session.current).toBeNull();
+  });
+});
+
+/** Imports a character and opens it; returns its id. */
+async function openNew(session: Session, name = 'Anna'): Promise<string> {
+  await session.importPdfs([pdf(sheetOf(name))]);
+  const meta = session.characters.find((c) => c.name === name);
+  if (!meta) throw new Error(`${name} was not imported`);
+  await session.open(meta.id);
+  return meta.id;
+}
+
+describe('changes on the open character (tech review 2026-11-04)', () => {
+  test('quick taps in line save once, after the last of them (finding 4a)', async () => {
+    const sent: Command[] = [];
+    const session = await startSession({ sent });
+    await openNew(session);
+    sent.length = 0;
+    void session.change([{ edit: 'Notes', text: 'one' }]);
+    void session.change([{ edit: 'Notes', text: 'two' }]);
+    await session.change([{ edit: 'Notes', text: 'three' }]);
+    expect(sent.filter((c) => c.type === 'edit')).toHaveLength(3);
+    expect(sent.filter((c) => c.type === 'save')).toHaveLength(1);
+    expect(session.current?.status).toBe('saved');
+    // What was saved is the last state.
+    const id = session.current?.meta.id ?? '';
+    await session.close();
+    await session.open(id);
+    expect(sent.at(-1)).toMatchObject({ type: 'open', character: { fields: { Notes: { value: 'three' } } } });
+  });
+
+  test('a failed change offers to reopen the character, which loads what was saved (finding 6)', async () => {
+    const session = await startSession();
+    await openNew(session);
+    await session.change([{ edit: 'Notes', text: 'kept' }]);
+    await session.change([{ edit: 'Notes', text: 'boom' }]);
+    expect(session.current?.status).toBe('error');
+    const note = session.notes.find((n) => n.kind === 'error');
+    expect(note?.action?.label).toBe(t.reopen);
+    note?.action?.run();
+    await vi.waitFor(() => expect(session.current?.status).toBe('saved'));
+    expect(session.notes).toEqual([]);
+  });
+
+  test('ult charges count as a change: the date moves on (finding 13)', async () => {
+    const session = await startSession();
+    await openNew(session);
+    const before = session.current?.meta.updated ?? '';
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await session.setUlt({ name: 'Ult', charges: 2, max: 5 });
+    expect((session.current?.meta.updated ?? '') > before).toBe(true);
+    expect(session.characters[0]?.updated).toBe(session.current?.meta.updated);
+  });
+});
+
+describe('the same character in two tabs (finding 2)', () => {
+  async function twoTabs(): Promise<{ first: Session; second: Session; firstSent: Command[] }> {
+    const browser = new IDBFactory();
+    const locks = new StandInLocks();
+    const firstSent: Command[] = [];
+    const first = await startSession({ browser, locks, sent: firstSent });
+    const second = await startSession({ browser, locks });
+    return { first, second, firstSent };
+  }
+
+  test('the second tab shows it as open elsewhere and changes nothing', async () => {
+    const { first, second } = await twoTabs();
+    const id = await openNew(first);
+    await second.open(id);
+    expect(second.current?.status).toBe('elsewhere');
+    expect(second.notes).toMatchObject([{ kind: 'info', text: t.openElsewhere, action: { label: t.takeOver } }]);
+    await second.change([{ edit: 'Notes', text: 'ignored' }]);
+    expect(second.current?.status).toBe('elsewhere');
+  });
+
+  test('taking over: the first tab is told and stops saving', async () => {
+    const { first, second, firstSent } = await twoTabs();
+    const id = await openNew(first);
+    await second.open(id);
+    second.notes[0]?.action?.run();
+    await vi.waitFor(() => expect(second.current?.status).toBe('saved'));
+    await vi.waitFor(() => expect(first.current?.status).toBe('elsewhere'));
+    expect(first.notes).toMatchObject([{ kind: 'info', text: t.takenElsewhere }]);
+    firstSent.length = 0;
+    await first.change([{ edit: 'Notes', text: 'lost' }]);
+    expect(firstSent.filter((c) => c.type === 'save')).toEqual([]);
+  });
+
+  test('taken over while the first tab was saving: the first tab does not write over what the second read', async () => {
+    const browser = new IDBFactory();
+    const locks = new StandInLocks();
+    // The first tab's engine is slow to report its add-on scripts, the last step before a save writes.
+    let slow: Promise<void> | undefined;
+    const first = await startSession({
+      browser,
+      locks,
+      hold: (command) => (command.type === 'addOns' ? slow : undefined),
+    });
+    const secondSent: Command[] = [];
+    const second = await startSession({ browser, locks, sent: secondSent });
+    const id = await openNew(first);
+    await second.open(id);
+    let letGo = (): void => undefined;
+    slow = new Promise((resolve) => (letGo = resolve));
+    const changing = first.change([{ edit: 'Notes', text: 'late' }]);
+    await vi.waitFor(() => expect(first.current?.status).toBe('saving'));
+    await second.takeOver();
+    letGo();
+    await changing;
+    expect(first.current?.status).toBe('elsewhere');
+    // What the second tab opened is still what is saved.
+    const opened = secondSent.findLast((c) => c.type === 'open');
+    await second.close();
+    await second.open(id);
+    expect(secondSent.at(-1)).toMatchObject({
+      type: 'open',
+      character: opened?.type === 'open' ? opened.character : {},
+    });
+    expect(secondSent.at(-1)).not.toMatchObject({ character: { fields: { Notes: { value: 'late' } } } });
+  });
+
+  test('reopening after a failure keeps the character for this tab', async () => {
+    const { first, second } = await twoTabs();
+    const id = await openNew(first);
+    await first.change([{ edit: 'Notes', text: 'boom' }]);
+    await first.reopen();
+    expect(first.current?.status).toBe('saved');
+    await second.open(id);
+    expect(second.current?.status).toBe('elsewhere');
+  });
+
+  test('deleting it in the list of another tab is refused while it is open', async () => {
+    const { first, second } = await twoTabs();
+    const id = await openNew(first);
+    const meta = first.characters.find((c) => c.id === id);
+    if (!meta) throw new Error('not listed');
+    const removing = second.remove(meta);
+    await answer(second, 'delete');
+    await removing;
+    expect(second.notes).toMatchObject([{ kind: 'error', text: t.deleteOpenElsewhere.replace('{name}', 'Anna') }]);
+    // Still saved: the first tab opens it again.
+    await first.close();
+    expect(await first.open(id)).toBe(true);
+  });
+});
+
+describe('backups and the reminder (finding 1)', () => {
+  test('a backup notes its date without moving the character in the list', async () => {
+    const session = await startSession();
+    await session.importPdfs([pdf(sheetOf('Anna'))]);
+    const before = session.characters[0];
+    // The download link: Node has no page to click it on.
+    vi.stubGlobal('document', { createElement: () => ({ click: () => undefined }) });
+    await session.backUp();
+    const after = session.characters[0];
+    expect(after?.lastBackup).toBeDefined();
+    expect(after?.updated).toBe(before?.updated);
+  });
+
+  test('restored characters count as backed up on the date of their file', async () => {
+    const session = await startSession();
+    const data = sheetOf('Anna');
+    const anna = { meta: describeCharacter(data, NO_ADD_ONS, null, new Date('2026-10-30T10:00:00Z')), data };
+    const backup = makeBackup([anna], SHEET_ID, new Date('2026-11-01T10:00:00Z'));
+    const restoring = session.restore(new File([JSON.stringify(backup)], 'backup.json'));
+    await answer(session, 'restore');
+    await restoring;
+    expect(session.characters[0]?.lastBackup).toBe('2026-11-01T10:00:00.000Z');
   });
 });

@@ -159,6 +159,33 @@ describe('CharacterStore', () => {
     await store.put(character('Anna the Bold', '2026-10-02T00:00:00Z', 'anna'));
     expect((await store.list()).map((m) => m.name)).toEqual(['Anna the Bold']);
   });
+
+  test('a newer version in another tab: the old tab lets go and is told, the new one opens', async () => {
+    const browser = new IDBFactory();
+    let replaced = 0;
+    const old = await CharacterStore.open(browser, 'mpmb-web', { replaced: () => replaced++ });
+    await old.put(character('Anna', '2026-10-01T00:00:00Z'));
+    // The next release's tab, one database version up: before the fix its opening never finished.
+    const newer = await CharacterStore.open(browser, 'mpmb-web', {}, 3);
+    expect(replaced).toBe(1);
+    expect((await newer.list()).map((m) => m.name)).toEqual(['Anna']);
+  });
+
+  test('an older tab that does not let go: the new tab is told it waits', async () => {
+    const browser = new IDBFactory();
+    // A raw connection without the store's handler stands in for a tab of an older release.
+    const raw = await new Promise<IDBDatabase>((resolve) => {
+      const request = browser.open('mpmb-web', 2);
+      request.onsuccess = () => resolve(request.result);
+    });
+    let blocked = 0;
+    const opening = CharacterStore.open(browser, 'mpmb-web', { blocked: () => blocked++ }, 3);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(blocked).toBe(1);
+    // Closing the other tab lets the opening go on.
+    raw.close();
+    expect(await (await opening).list()).toEqual([]);
+  });
 });
 
 describe('backups', () => {
