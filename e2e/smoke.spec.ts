@@ -180,6 +180,19 @@ test('a character saved on an older sheet is updated when it opens, and the vers
         },
         data: paladin,
       },
+      {
+        // On the current sheet: opens as it is.
+        meta: {
+          id: 'wizard',
+          name: 'Test Wizard',
+          classes: 'Wizard 10',
+          species: '',
+          addOns: { files: [], manual: false },
+          created: day,
+          updated: day,
+        },
+        data: JSON.parse(fs.readFileSync('test/characters/wizard10-evoker.json', 'utf8')) as unknown,
+      },
     ],
   };
 
@@ -188,6 +201,32 @@ test('a character saved on an older sheet is updated when it opens, and the vers
     .locator('input[accept=".json,application/json"]')
     .setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
   await page.getByRole('dialog', { name: 'Restore backup?' }).getByRole('button', { name: 'Restore' }).click();
+  // Leaving while the update runs stops it, and another character opened meanwhile stays itself: the
+  // update must not take over its sheet once the old one has opened (review of #39: the wizard's screen
+  // showed the paladin, and the next tap saved the paladin over the wizard).
+  await page.getByRole('link', { name: /Test Paladin/ }).click();
+  await expect(page.getByText('Moving Test Paladin / Warlock to sheet v24.2.0').first()).toBeVisible({
+    timeout: STARTUP,
+  });
+  await page.getByRole('link', { name: /Characters/ }).click();
+  await page.getByRole('link', { name: /Test Wizard/ }).click();
+  await expect(page.getByText('Saved')).toBeVisible({ timeout: STARTUP });
+  // Long enough for the paladin's old sheet to have opened in its own worker (about 3 s).
+  await page.waitForTimeout(8_000);
+  await page.getByRole('checkbox', { name: 'Heroic Inspiration' }).click();
+  await expect(page.getByText('Saved')).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Test Wizard');
+  await expect(page.getByText('could not be moved')).toBeHidden();
+  const wizardName = await page.evaluate(`new Promise((resolve) => {
+    const open = indexedDB.open('mpmb-web');
+    open.onsuccess = () => {
+      const get = open.result.transaction('data').objectStore('data').get('wizard');
+      get.onsuccess = () => resolve(get.result.fields['PC Name'].value);
+    };
+  })`);
+  expect(wizardName).toBe('Test Wizard');
+  // The next opening of the paladin tries again.
+  await page.getByRole('link', { name: /Characters/ }).click();
   await page.getByRole('link', { name: /Test Paladin/ }).click();
 
   // Two engines start (the old sheet and the new one) and MPMB's import runs between them.
