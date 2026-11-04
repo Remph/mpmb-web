@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
   import type { Texts } from '../i18n.ts';
-  import { dawn, dawnFeatures, longRest, shortRest } from '../play/rules.ts';
+  import { dawn, dawnFeatures, longRest, pactSlots, shortRest } from '../play/rules.ts';
   import type { RestEdits } from '../play/rules.ts';
   import { readOnly } from '../session.svelte.ts';
   import type { OpenCharacter, Session, Step } from '../session.svelte.ts';
@@ -157,12 +157,15 @@
     ...edits.untick.map((click) => ({ click })),
   ];
 
-  /**
-   * MPMB adds Pact Magic slots to the other slots of their level, so the boxes can't tell which ones a
-   * short rest gives back; a warlock is told to do it by hand.
-   */
+  /** What a short rest gives back: Pact Magic slots for a warlock, half the hit points with the house rule. */
   const shortRestText = (): string =>
-    /warlock/i.test(open.meta.classes) ? `${t.shortRestText} ${t.shortRestPactMagic}` : t.shortRestText;
+    [
+      t.shortRestText,
+      pactSlots(open.fields) ? t.shortRestPactMagic : '',
+      homebrew.switches.shortRestHalfHp ? t.shortRestHalfHp : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
 
   // After a sheet update (M11): the line until the player keeps or undoes it; after an undo, the line that
   // offers the update again.
@@ -246,7 +249,8 @@
       ],
       cancel: 'cancel',
     });
-    if (answer === 'rest') change(restSteps(long ? longRest(open.fields) : shortRest(open.fields)));
+    if (answer === 'rest')
+      change(restSteps(long ? longRest(open.fields) : shortRest(open.fields, homebrew.switches.shortRestHalfHp)));
   }
 </script>
 

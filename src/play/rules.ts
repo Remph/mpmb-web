@@ -2,7 +2,15 @@
 // boxes for these but no buttons, so the PDF leaves them to the player; the app does the counting and
 // writes the results into the same fields.
 import type { FieldViews } from '../worker/views.ts';
-import { isOn, readConditions, readHitPoints, readLimitedFeatures, readSpellSlotUse, recoveryKind } from './read.ts';
+import {
+  isOn,
+  readConditions,
+  readHitPoints,
+  readLimitedFeatures,
+  readSpellSlotUse,
+  recoveryKind,
+  valueOf,
+} from './read.ts';
 import type { HitPoints } from './read.ts';
 import { checkboxField, readSpells } from './spells.ts';
 import type { Spell } from './spells.ts';
@@ -100,11 +108,57 @@ function usedFreeCasts(fields: FieldViews, kinds: NonNullable<Spell['mark']['fre
     .map(checkboxField);
 }
 
+/** Pact Magic slots by warlock level (SRD 5.2.1, Warlock Features table): how many, and their level. */
+const PACT_MAGIC: readonly (readonly [number, number])[] = [
+  [1, 1],
+  [2, 1],
+  [2, 2],
+  [2, 2],
+  [2, 3],
+  [2, 3],
+  [2, 4],
+  [2, 4],
+  [2, 5],
+  [2, 5],
+  [3, 5],
+  [3, 5],
+  [3, 5],
+  [3, 5],
+  [3, 5],
+  [3, 5],
+  [4, 5],
+  [4, 5],
+  [4, 5],
+  [4, 5],
+];
+
+// "Paladin (Oath of Devotion) 8, Warlock (Fiend Patron) 2": the warlock's level is the number after its name.
+// Try it: https://regex101.com/?regex=%5Cbwarlock%5Cb%5B%5E%2C%5Cd%5D*%28%5Cd%2B%29&flags=i&testString=Paladin%20%28Oath%20of%20Devotion%29%208%2C%20Warlock%20%28Fiend%20Patron%29%202
+const WARLOCK_LEVEL = /\bwarlock\b[^,\d]*(\d+)/i;
+
+/**
+ * The character's Pact Magic slots, read from MPMB's class field; null without warlock levels. A single class
+ * can stand there without its level ("Warlock (Undead Patron)"): MPMB then takes the character level.
+ */
+export function pactSlots(fields: FieldViews): { level: number; count: number } | null {
+  const classes = valueOf(fields, 'Class and Levels');
+  if (!/\bwarlock\b/i.test(classes)) return null;
+  const level = WARLOCK_LEVEL.exec(classes)?.[1] ?? (classes.includes(',') ? '' : valueOf(fields, 'Character Level'));
+  const slots = PACT_MAGIC[Math.min(20, Number(level) || 0) - 1];
+  return slots ? { count: slots[0], level: slots[1] } : null;
+}
+
 /**
  * A short rest: features and free spell casts that recover on a short rest come back, and features MPMB
  * marks "regain 1/SR" get that many back. Spending hit dice is the player's choice, so it stays a tap on the dice.
+ *
+ * Pact Magic slots come back too. MPMB adds them to the other slots of their level (a paladin 8 / warlock 2
+ * has 4 + 2 first-level boxes), so the boxes can't say which used ones were the warlock's: up to that many
+ * of the used boxes at the pact level come back, as a player spends pact slots first between short rests.
+ *
+ * `halfHp` is the house rule switch (Nick, 2026-11-04): half the maximum hit points back, rounded down.
  */
-export function shortRest(fields: FieldViews): RestEdits {
+export function shortRest(fields: FieldViews, halfHp = false): RestEdits {
   const values: Record<string, string> = {};
   readLimitedFeatures(fields)
     .filter((f) => f.used > 0)
@@ -113,7 +167,21 @@ export function shortRest(fields: FieldViews): RestEdits {
       if (recoveryKind(f.recovery) === 'short') values[`Limited Feature Used ${f.row}`] = '';
       else if (partial) values[`Limited Feature Used ${f.row}`] = usedText(f.used - Number(partial[1]));
     });
-  return { values, untick: usedFreeCasts(fields, ['short']) };
+  const untick = usedFreeCasts(fields, ['short']);
+  const pact = pactSlots(fields);
+  const slots = pact && readSpellSlotUse(fields).find((s) => s.level === pact.level);
+  if (pact && slots && slots.used > 0)
+    untick.push(...slotClicks(fields, slots.boxes, slots.used - Math.min(slots.used, pact.count)));
+  if (halfHp) {
+    const hp = readHitPoints(fields);
+    const healed = applyHealing(hp, Math.floor((hp.max ?? 0) / 2));
+    if (healed.current !== (hp.current ?? maxNow(hp))) {
+      values['HP Current'] = healed.current === hp.max ? '' : String(healed.current);
+      // Back above 0 hit points: the death saves start over.
+      if ((hp.current ?? 1) === 0) untick.push(...tickedDeathSaves(fields));
+    }
+  }
+  return { values, untick };
 }
 
 /** MPMB leaves "used" empty rather than 0. */

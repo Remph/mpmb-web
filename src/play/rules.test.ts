@@ -10,6 +10,7 @@ import {
   dawn,
   dawnFeatures,
   longRest,
+  pactSlots,
   rollRegain,
   shortRest,
   slotClicks,
@@ -122,6 +123,47 @@ describe('rests', () => {
     const used = withValues(wizard, { 'Limited Feature Used 1': '1', 'Limited Feature Used 2': '10' });
     expect(longRest(used).values).toMatchObject({ 'Limited Feature Used 1': '' });
     expect(longRest(used).values).not.toHaveProperty('Limited Feature Used 2');
+  });
+
+  it('reads the Pact Magic slots from the warlock level', () => {
+    expect(pactSlots(paladin)).toEqual({ count: 2, level: 1 }); // Warlock 2
+    expect(pactSlots(wizard)).toBeNull();
+    expect(pactSlots(withValues(wizard, { 'Class and Levels': 'Warlock (Undead Patron) 8' }))).toEqual({
+      count: 2,
+      level: 4,
+    });
+    // One class without its level, as MPMB allows: the character level counts.
+    const noLevel = withValues(wizard, { 'Class and Levels': 'Warlock (Undead Patron)', 'Character Level': '8' });
+    expect(pactSlots(noLevel)).toEqual({ count: 2, level: 4 });
+  });
+
+  it('a short rest gives back the Pact Magic slots, and only those', () => {
+    // Paladin 8 / warlock 2: the first-level boxes hold the paladin's 4 and the warlock's 2.
+    const [first, second] = readSpellSlotUse(paladin);
+    expect(first?.total).toBe(6);
+    const allUsed = withValues(paladin, {
+      ...Object.fromEntries((first?.boxes ?? []).slice(0, 6).map((box) => [box, 'Yes'])),
+      ...Object.fromEntries((second?.boxes ?? []).slice(0, 1).map((box) => [box, 'Yes'])),
+    });
+    // Two of the six come back (the last two ticked); the second-level slot stays used.
+    expect(shortRest(allUsed).untick).toEqual((first?.boxes ?? []).slice(4, 6));
+    // One used: it comes back.
+    const oneUsed = withValues(paladin, { [first?.boxes[0] ?? '']: 'Yes' });
+    expect(shortRest(oneUsed).untick).toEqual([first?.boxes[0]]);
+    expect(shortRest(paladin).untick).toEqual([]);
+  });
+
+  it('a short rest heals half the maximum with the house rule, never above it', () => {
+    const max = readHitPoints(paladin).max!;
+    const hurt = withValues(paladin, { 'HP Current': '10' });
+    expect(shortRest(hurt).values).not.toHaveProperty('HP Current');
+    expect(shortRest(hurt, true).values).toMatchObject({ 'HP Current': String(10 + Math.floor(max / 2)) });
+    expect(shortRest(withValues(paladin, { 'HP Current': String(max - 3) }), true).values).toMatchObject({
+      'HP Current': '',
+    });
+    expect(shortRest(paladin, true).values).not.toHaveProperty('HP Current');
+    const dying = withValues(paladin, { 'HP Current': '0', 'Death Save Fail1': 'Yes' });
+    expect(shortRest(dying, true).untick).toContain('Death Save Fail1');
   });
 
   it('a rest gives back the free casts of spells (MPMB clicks the box back)', () => {

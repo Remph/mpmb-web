@@ -528,8 +528,8 @@ export const ui = {
     longRest: 'Lange Rast',
     shortRestTitle: 'Kurze Rast machen?',
     longRestTitle: 'Lange Rast machen?',
-    shortRestPactMagic:
-      'Warlock-Zauberplätze (Paktmagie) zählt der Bogen mit den anderen zusammen: gib sie selbst zurück (tippe auf sie).',
+    shortRestPactMagic: 'Hexenmeister-Zauberplätze (Paktmagie) kommen auch zurück.',
+    shortRestHalfHp: 'Hausregel: die Hälfte deiner maximalen Trefferpunkte kommt zurück.',
     shortRestText:
       'Merkmale, die nach einer kurzen Rast zurückkommen, werden wieder voll. Trefferwürfel gibst du selbst aus (tippe auf sie).',
     longRestText:
@@ -1033,6 +1033,9 @@ export const ui = {
       'Regeln eurer Runde, die die App zu MPMBs Bogen hinzufügt. Sie gelten für alle Charaktere in diesem Browser und bleiben in der App: Drucken und „MPMB-PDF ausfüllen“ lassen sie weg.',
     homebrewUltTitle: 'Ult-Ladungen',
     homebrewUltLine: 'Eine Leiste links in der Spielansicht, die mit deinen Zügen und Angriffen steigt.',
+    homebrewHalfHpTitle: 'Kurze Rast heilt die Hälfte',
+    homebrewHalfHpLine:
+      'Eine kurze Rast gibt die Hälfte der maximalen Trefferpunkte zurück (abgerundet), eine lange Rast wie immer alle.',
     homebrewNoAmmoTitle: 'Munition nicht zählen',
     homebrewNoAmmoLine:
       'Blendet die Munition im Kampf-Reiter aus. Der Bogen behält die Zähler, auch für „MPMB-PDF ausfüllen“.',
@@ -1567,8 +1570,8 @@ export const ui = {
     longRest: 'Long rest',
     shortRestTitle: 'Take a short rest?',
     longRestTitle: 'Take a long rest?',
-    shortRestPactMagic:
-      'The sheet counts Warlock (Pact Magic) slots together with the others: give them back yourself (tap them).',
+    shortRestPactMagic: 'Warlock (Pact Magic) spell slots come back too.',
+    shortRestHalfHp: 'House rule: half your maximum hit points come back.',
     shortRestText: 'Features that come back on a short rest are full again. You spend hit dice yourself (tap them).',
     longRestText:
       'Hit points, all hit dice, spell slots and features that come back on a rest are full again; temporary hit points go; one level of exhaustion less. Charges that come back “at dawn” stay as they are.',
@@ -2068,6 +2071,9 @@ export const ui = {
       "Your group's rules that the app adds on top of MPMB's sheet. They count for every character in this browser and stay in the app: printing and Fill MPMB PDF leave them out.",
     homebrewUltTitle: 'Ult charges',
     homebrewUltLine: 'A meter on the left of the play view that goes up with your turns and attacks.',
+    homebrewHalfHpTitle: 'Short rest heals half',
+    homebrewHalfHpLine:
+      'A short rest gives back half your maximum hit points (rounded down); a long rest all of them, as always.',
     homebrewNoAmmoTitle: 'No ammunition counting',
     homebrewNoAmmoLine: 'Hides ammunition on the Combat tab. The sheet keeps its counters, for Fill MPMB PDF too.',
     homebrewOnCount: 'On: {count}',

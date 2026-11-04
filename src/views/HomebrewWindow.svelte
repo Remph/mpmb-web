@@ -20,6 +20,7 @@
     ({
       ultCharges: { title: t.homebrewUltTitle, line: t.homebrewUltLine },
       noAmmo: { title: t.homebrewNoAmmoTitle, line: t.homebrewNoAmmoLine },
+      shortRestHalfHp: { title: t.homebrewHalfHpTitle, line: t.homebrewHalfHpLine },
     })[key];
 </script>
 
