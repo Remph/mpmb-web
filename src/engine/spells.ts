@@ -1,4 +1,4 @@
-// The Build screen's "Spells" step (M7, Nick picked a Build step, 2026-11-03): what MPMB's own spell dialogs
+// The Build screen's "Spells" step (M7, Remph picked a Build step, 2026-11-03): what MPMB's own spell dialogs
 // offer, read without showing them, and the player's picks handed to those same dialogs.
 //
 // In Acrobat, "(Re)generate a Spell Sheet" walks through one SPELL SELECTION DIALOG per spell source

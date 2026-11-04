@@ -1,6 +1,6 @@
 // Nothing may be wider than a phone. One box that sticks out past the right edge makes the page scroll
 // sideways, and Chrome on Android then zooms the whole page out to fit it and keeps that zoom after the
-// box is gone: the top bar ends short of the right edge and its top is cut off until a reload (Nick's
+// box is gone: the top bar ends short of the right edge and its top is cut off until a reload (Remph's
 // report, 2026-11-04). The check walks a new character's Build steps and play tabs at 360 px.
 import { expect, test, type Page } from '@playwright/test';
 

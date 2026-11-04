@@ -22,7 +22,7 @@
 
   /** More names than this, and the reminder gives a count instead. */
   const MAX_NAMES = 3;
-  /** The characters with changes no backup holds yet (finding 1 of the tech review; Nick's pick A). */
+  /** The characters with changes no backup holds yet (finding 1 of the tech review; Remph's pick A). */
   const due = $derived(dueForBackup(session.characters));
   const dueText = $derived.by(() => {
     if (due.length > MAX_NAMES) return fill(t.backupDueCount, { count: due.length });

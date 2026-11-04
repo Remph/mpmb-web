@@ -1,5 +1,5 @@
 // The homebrew switches: house rules the app can add on top of MPMB's sheet. They count for this browser
-// (Nick, 2026-11-04), like the language, so they sit in localStorage and not with a character.
+// (Remph, 2026-11-04), like the language, so they sit in localStorage and not with a character.
 
 export type HomebrewKey = 'ultCharges' | 'noAmmo';
 export type HomebrewSwitches = Record<HomebrewKey, boolean>;

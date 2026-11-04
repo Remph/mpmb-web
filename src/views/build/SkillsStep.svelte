@@ -1,5 +1,5 @@
 <!--
-  Build step 5 "Skills & languages" (M6.5, as in the mock-ups Nick saw): MPMB's note on what the class,
+  Build step 5 "Skills & languages" (M6.5, as in the mock-ups Remph saw): MPMB's note on what the class,
   species and background give, the 18 skill boxes to tick, languages and tools, and the armour and weapon
   training. Every tap goes into MPMB's own fields: a skill box runs MPMB's applySkillClick, a training box
   its setCheckboxProfsManual, and a language or tool is typed into one of the sheet's eight rows.

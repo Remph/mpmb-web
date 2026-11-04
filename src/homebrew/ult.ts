@@ -10,7 +10,7 @@ export interface UltCharges {
 
 /**
  * A start until the player sets their own. The group's meters fill over a fight: one charge for each turn
- * and each attack, up to 25 or 30 (Nick, 2026-11-04).
+ * and each attack, up to 25 or 30 (Remph, 2026-11-04).
  */
 export const DEFAULT_ULT: UltCharges = { name: '', max: 30, charges: 0 };
 /** Two digits: the number stays one line in the left column. */

@@ -1,5 +1,5 @@
 <!--
-  The sheet menu (redesigned in M6 as Nick picked it, 2026-10-31): what isn't needed at the table, grouped
+  The sheet menu (redesigned in M6 as Remph picked it, 2026-10-31): what isn't needed at the table, grouped
   by what the player wants to do. Building the character first, then this character's settings with their
   state, then what belongs to this browser. MPMB's own full menu stays at the bottom, folded, for anything
   else. Opened from the top bar of the play view and the Build screen.

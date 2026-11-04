@@ -1,5 +1,5 @@
 <!--
-  The Build screen (M6, Nick picked its own screen, 2026-10-31): the steps on the left, each with what
+  The Build screen (M6, Remph picked its own screen, 2026-10-31): the steps on the left, each with what
   the character has, the chosen step on the right. Opened from the sheet menu (Build character, Level up)
   and for a new character. Every change goes through MPMB's own fields, as in the play view.
 -->

@@ -1,4 +1,4 @@
-// The service worker: keeps the app usable without network (Nick, 2026-11-04: "Build it").
+// The service worker: keeps the app usable without network (Remph, 2026-11-04: "Build it").
 //
 // On install it stores every file of its own build in one cache (the list is written in by the build,
 // tools/offline-plugin.ts). Then:

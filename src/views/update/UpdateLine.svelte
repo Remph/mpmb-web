@@ -1,5 +1,5 @@
 <!--
-  The line under the top bar after MPMB's import moved the character to a new sheet version (M11, Nick's pick A):
+  The line under the top bar after MPMB's import moved the character to a new sheet version (M11, Remph's pick A):
   how many entries changed, "See what changed", and ✕ to keep the update. After an undo it says the character
   stays on its old sheet and offers the update again.
 -->

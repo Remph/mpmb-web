@@ -1,6 +1,6 @@
 <!--
   The homebrew window: house rules the app can add on top of MPMB's sheet, each with an on/off switch.
-  They count for this browser (Nick, 2026-11-04) and stay in the app: neither the PDF export nor printing
+  They count for this browser (Remph, 2026-11-04) and stay in the app: neither the PDF export nor printing
   carries them. Opened from the start page and the play view's sheet menu.
 -->
 <script lang="ts">

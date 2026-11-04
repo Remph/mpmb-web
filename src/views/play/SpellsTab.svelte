@@ -1,5 +1,5 @@
 <!--
-  The Spells tab (M4.6, layout "by level" that Nick picked on 2026-10-31): the spells on MPMB's spell sheet
+  The Spells tab (M4.6, layout "by level" that Remph picked on 2026-10-31): the spells on MPMB's spell sheet
   pages, one block per spell level with that level's slots in its heading, so finding a spell and ticking
   the slot happen in one place. The mark in front of a spell ticks it prepared, as a click on the PDF's
   box does; "Choose spells" opens the Build screen's Spells step (M7).

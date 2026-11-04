@@ -54,7 +54,7 @@ export interface Note {
   /** `info`: something to know that isn't a failure (the character is open in another tab). */
   kind: 'busy' | 'ok' | 'error' | 'info';
   text: string;
-  /** A button at the end of the line: the way out of what it says (Nick's pick, 2026-11-04). */
+  /** A button at the end of the line: the way out of what it says (Remph's pick, 2026-11-04). */
   action?: { label: string; run: () => void };
   /** Stays when other notes are cleared, until the page reloads (the database went to a newer tab). */
   keep?: boolean;
@@ -489,7 +489,7 @@ export class Session {
   }
 
   /**
-   * A failed action's note, with the button that opens the character again (Nick's pick A, 2026-11-04).
+   * A failed action's note, with the button that opens the character again (Remph's pick A, 2026-11-04).
    * Nothing to say when another tab took the character over meanwhile: that has its own line.
    */
   private failed(err: unknown): void {
@@ -509,7 +509,7 @@ export class Session {
 
   /**
    * Opens a character saved on an older sheet version that the app keeps: updated onto the current sheet
-   * and saved, with the copy from before kept (Nick, 2026-11-04). Without shared memory, or when the
+   * and saved, with the copy from before kept (Remph, 2026-11-04). Without shared memory, or when the
    * update fails, it opens on its own version and stays there until the next try.
    */
   private async openOlder(stored: StoredCharacter, pack: SheetPack, shown: () => boolean): Promise<void> {
