@@ -23,6 +23,7 @@ import { SPELLS_READ_SCRIPT, applySpellPicks, newSpellRow, readSpellsInfo } from
 import type { RowMenus } from '../engine/spells.ts';
 import { answerWelcome } from '../engine/welcome.ts';
 import { readSheetPdf } from '../pdf/read-sheet.ts';
+import { writeSheetPdf } from '../pdf/write-sheet.ts';
 import { waitForAnswer } from './channel.ts';
 import type { Channel } from './channel.ts';
 import type { Answer, Ask, Command, FailureCode, FromWorker, MenuNode, Opened, ToWorker } from './protocol.ts';
@@ -33,10 +34,10 @@ import type { FieldViews } from './views.ts';
 // The worker's global scope, typed by hand: the app's TypeScript setup has the DOM types, not the
 // worker ones, and this is all the worker needs of it.
 const scope = globalThis as unknown as {
-  postMessage(message: FromWorker): void;
+  postMessage(message: FromWorker, transfer?: Transferable[]): void;
   onmessage: ((event: MessageEvent<ToWorker>) => void) | null;
 };
-const post = (message: FromWorker): void => scope.postMessage(message);
+const post = (message: FromWorker, transfer: Transferable[] = []): void => scope.postMessage(message, transfer);
 
 // Before any sheet script can run (see lockdown.ts). The imports above have loaded the engine already.
 const stillReachable = lockDown(globalThis);
@@ -189,6 +190,13 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
     checkSheetType(sheet);
     return open(sheet);
   },
+  // The PDF is read first (its own type check, and the writer needs it read anyway), then the open
+  // character goes into it.
+  exportPdf: async ({ bytes }) => {
+    const sheet = await readPdf(bytes);
+    checkSheetType(sheet);
+    return writeSheetPdf(bytes, opened().snapshot(), sheet);
+  },
   edit: ({ field, text }) => opened().edit(field, text),
   click: ({ field, widget, shift, newRow }) =>
     newRow ? newSpellRow(opened(), field, true, ROW_MENUS) : opened().click(field, widget, shift),
@@ -283,12 +291,16 @@ async function run(id: number, command: Command): Promise<void> {
     sendFields();
     sendMenu();
     const stats = engine?.stats;
-    post({
-      type: 'done',
-      id,
-      result: result ?? null,
-      summary: { errors: stats?.errors.length ?? 0, missing: { ...stats?.missing } },
-    });
+    post(
+      {
+        type: 'done',
+        id,
+        result: result ?? null,
+        summary: { errors: stats?.errors.length ?? 0, missing: { ...stats?.missing } },
+      },
+      // A filled PDF (27 MB) moves to the page instead of being copied.
+      result instanceof Uint8Array ? [result.buffer as ArrayBuffer] : [],
+    );
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     if (err instanceof CommandError) post({ type: 'failed', id, error, code: err.code, detail: err.detail });

@@ -14,7 +14,7 @@ import { fitImages, fitPicture } from './play/pictures.ts';
 import type { Texts } from './i18n.ts';
 import { counted, fill } from './i18n.ts';
 import { PopUpStack } from './popups/popups.svelte.ts';
-import { BackupError, backupFileName, makeBackup, planRestore, readBackup } from './store/backup.ts';
+import { BackupError, backupFileName, filledPdfName, makeBackup, planRestore, readBackup } from './store/backup.ts';
 import { CharacterStore, describeCharacter, keepStorage } from './store/characters.ts';
 import type { CharacterMeta, StoredCharacter } from './store/characters.ts';
 import { EngineClient, EngineError } from './worker/client.ts';
@@ -613,14 +613,31 @@ export class Session {
     const characters = found.filter((c): c is StoredCharacter => c !== undefined);
     if (!characters.length) return;
     const backup = makeBackup(characters, SHEET_ID);
-    const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = backupFileName(characters);
-    link.click();
-    // The download has started from the link; the address can go once the browser took it.
-    setTimeout(() => URL.revokeObjectURL(url), REVOKE_AFTER_MS);
+    download(new Blob([JSON.stringify(backup)], { type: 'application/json' }), backupFileName(characters));
+  }
+
+  /**
+   * The open character written into the player's own copy of MPMB's sheet (M10), after the work before
+   * it; returns the filled PDF and its file name, or throws an Error whose message the window shows.
+   */
+  async fillPdf(file: File): Promise<{ pdf: Blob; name: string }> {
+    const open = this.current;
+    await this.running;
+    if (!open || this.current !== open || open.status === 'error') throw new Error(this.t.fillPdfNoSheet);
+    try {
+      const { result } = await this.client.exportPdf(await file.arrayBuffer());
+      return {
+        pdf: new Blob([result as Uint8Array<ArrayBuffer>], { type: 'application/pdf' }),
+        name: filledPdfName(open.meta.name),
+      };
+    } catch (err) {
+      throw new Error(err instanceof EngineError && !err.code ? err.message : this.explain(err));
+    }
+  }
+
+  /** Saves a file to the player's downloads. */
+  download(file: Blob, name: string): void {
+    download(file, name);
   }
 
   async restore(file: File): Promise<void> {
@@ -661,5 +678,15 @@ export class Session {
   }
 }
 
-/** How long a backup's download address stays valid. */
+/** How long a download's address stays valid. */
 const REVOKE_AFTER_MS = 60_000;
+
+function download(file: Blob, name: string): void {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.click();
+  // The download has started from the link; the address can go once the browser took it.
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_AFTER_MS);
+}

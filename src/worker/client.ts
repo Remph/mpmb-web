@@ -87,6 +87,11 @@ export class EngineClient {
     return this.restart({ type: 'importPdf', bytes }) as Promise<Done<Opened>>;
   }
 
+  /** The open character in the player's copy of the sheet: the filled PDF. The bytes move to the worker. */
+  exportPdf(bytes: ArrayBuffer): Promise<Done<Uint8Array>> {
+    return this.send({ type: 'exportPdf', bytes }) as Promise<Done<Uint8Array>>;
+  }
+
   edit(field: string, text: string): Promise<Done> {
     return this.send({ type: 'edit', field, text });
   }
@@ -184,7 +189,7 @@ export class EngineClient {
     return new Promise<Done>((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
       // A PDF's bytes move to the worker instead of being copied (27 MB for a filled sheet).
-      const transfer = command.type === 'importPdf' ? [command.bytes] : [];
+      const transfer = command.type === 'importPdf' || command.type === 'exportPdf' ? [command.bytes] : [];
       worker.postMessage({ type: 'command', id, command }, transfer);
     });
   }

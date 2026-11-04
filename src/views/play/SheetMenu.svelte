@@ -20,10 +20,14 @@
     open: OpenCharacter;
     onclose: () => void;
     toggleLanguage: () => void;
+    /** Opens the print window (the play view only; the Build screen has nothing to print from). */
+    onprint?: () => void;
+    /** Opens "Fill MPMB PDF" (M10); left out where the menu doesn't offer it. */
+    onfillpdf?: () => void;
     t: Texts;
   }
 
-  let { session, open, onclose, toggleLanguage, t }: Props = $props();
+  let { session, open, onclose, toggleLanguage, onprint, onfillpdf, t }: Props = $props();
 
   // MPMB's bookmarks: "Functions" is its menu; the page jumps under "Navigation" mean nothing here.
   const MENU_ROOT = 'Functions';
@@ -114,6 +118,16 @@
       <button type="button" class="tile" disabled={busy} onclick={() => run([MENU_ROOT, 'Source Material'])}>
         <b>{t.menuSources}</b><small>{t.menuSourcesLine}</small>
       </button>
+      {#if onprint}
+        <button type="button" class="tile" disabled={busy} onclick={onprint}>
+          <b>{t.printTitle}</b><small>{t.menuPrintLine}</small>
+        </button>
+      {/if}
+      {#if onfillpdf}
+        <button type="button" class="tile" disabled={busy} onclick={onfillpdf}>
+          <b>{t.fillPdfTitle}</b><small>{t.menuFillPdfLine}</small>
+        </button>
+      {/if}
     </div>
 
     <h3>{t.menuSettings}</h3>
