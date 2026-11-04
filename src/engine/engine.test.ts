@@ -37,6 +37,9 @@ const sheet = (): SheetSnapshot => ({
     ),
     Button: field({ A: 'askAndRemember();' }, { type: 'Btn', flags: FF.pushButton }),
     Note: field({}, { widgets: [{ page: TEMPLATE_PAGE, rect: RECT, flags: AF.print }] }),
+    // Like MPMB's magic item field: applies the item (here: Shown) and then asks which form.
+    Pick: field({ V: 'this.getField("Shown").value = event.value; if (event.value) askName();' }),
+    Shown: field({}),
   },
   calcOrder: ['Double', 'PlusOne'],
   numPages: 1,
@@ -57,6 +60,10 @@ function askAndRemember() {
   };
   var result = app.execDialog(dialog);
   log.push("alert " + answer + ", dialog " + result + " " + dialog.name);
+}
+function askName() {
+  var result = app.execDialog({ description: { name: "NAME DIALOG", elements: [{ type: "ok" }] } });
+  log.push("asked " + result);
 }
 `;
 
@@ -174,6 +181,32 @@ describe('buttons', () => {
     const engine = load({ dialogs: { 'NAME DIALOG': { close: 'cancel' } } });
     engine.click('Button');
     expect(takeLog(engine)).toEqual(['alert 3, dialog cancel undefined']);
+  });
+
+  // (A change runs the calculations, which log too: only the dialog's line counts here.)
+  const values = (engine: Engine) => [engine.doc.states.get('Pick')?.value, engine.doc.states.get('Shown')?.value];
+
+  test('a cancelable edit ends when the user cancels its dialog, and its own scripts undo the rest', () => {
+    const engine = load({ dialogs: { 'NAME DIALOG': { close: 'cancel' } } });
+    expect(engine.edit('Pick', 'new', { cancelable: true })).toBe(false);
+    expect(values(engine)).toEqual(['', '']);
+    // The scripts after the dialog didn't run, and it isn't an error.
+    expect(takeLog(engine)).not.toContain('asked cancel');
+    expect(engine.stats.errors).toEqual([]);
+  });
+
+  test('a cancelable edit goes on after OK', () => {
+    const engine = load();
+    expect(engine.edit('Pick', 'new', { cancelable: true })).toBe(true);
+    expect(values(engine)).toEqual(['new', 'new']);
+    expect(takeLog(engine)).toContain('asked ok');
+  });
+
+  test('an edit that is not cancelable takes the value whatever the dialog says, as in Acrobat', () => {
+    const engine = load({ dialogs: { 'NAME DIALOG': { close: 'cancel' } } });
+    expect(engine.edit('Pick', 'new')).toBe(true);
+    expect(values(engine)).toEqual(['new', 'new']);
+    expect(takeLog(engine)).toContain('asked cancel');
   });
 });
 
