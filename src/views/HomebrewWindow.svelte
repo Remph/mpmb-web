@@ -17,7 +17,10 @@
   let { onclose, t }: Props = $props();
 
   const texts = (key: HomebrewKey): { title: string; line: string } =>
-    ({ ultCharges: { title: t.homebrewUltTitle, line: t.homebrewUltLine } })[key];
+    ({
+      ultCharges: { title: t.homebrewUltTitle, line: t.homebrewUltLine },
+      noAmmo: { title: t.homebrewNoAmmoTitle, line: t.homebrewNoAmmoLine },
+    })[key];
 </script>
 
 <Modal title={t.homebrewTitle} onescape={onclose} closeLabel={t.close} wide>
