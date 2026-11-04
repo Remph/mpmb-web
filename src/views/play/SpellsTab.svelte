@@ -9,7 +9,9 @@
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import Modal from '../../popups/Modal.svelte';
-  import { ABILITIES, isOn, readSpellSlotUse } from '../../play/read.ts';
+  import { spellLevelName } from '../../play/labels.ts';
+  import { ABILITIES, readSpellSlotUse } from '../../play/read.ts';
+  import { slotClicks } from '../../play/rules.ts';
   import {
     checkboxField,
     freeRow,
@@ -81,7 +83,7 @@
   // https://regex101.com/?regex=%5Cs%2BSpells%24&testString=Evoker%20Spells
   const shortTitle = (source: SpellSource): string => source.title.replace(/\s+Spells$/, '');
 
-  const levelName = (level: number): string => (level === 0 ? t.cantrips : fill(t.slotLevel, { count: level }));
+  const levelName = (level: number): string => spellLevelName(level, t);
 
   /** An option's name without its spell's initials: "AH: Clenched Fist" is "Clenched Fist". */
   // Try it: https://regex101.com/?regex=%5E%5B%5E%3A%5D%2B%3A%5Cs*&testString=AH%3A%20Clenched%20Fist ("Web" stays).
@@ -176,9 +178,8 @@
     return '';
   }
 
-  /** Slot boxes ticked in order, clicking only those that differ (as on the Combat tab). */
   function setSlots(boxes: string[], used: number) {
-    change(boxes.filter((box, i) => isOn(fields, box) !== i < used).map((click) => ({ click })));
+    change(slotClicks(fields, boxes, used).map((click) => ({ click })));
   }
 </script>
 

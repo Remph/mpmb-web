@@ -19,7 +19,7 @@ export const rowsOf = (known: KnownClass[]): ClassRow[] =>
 export const totalLevel = (rows: ClassRow[]): number => rows.reduce((sum, row) => sum + row.level, 0);
 
 /** "Paladin (Oath of Devotion)", or "Paladin" without a subclass; the key itself for a class MPMB lost. */
-export function className(row: Pick<ClassRow, 'key' | 'subclass'>, catalog: ClassInfo[]): string {
+function className(row: Pick<ClassRow, 'key' | 'subclass'>, catalog: ClassInfo[]): string {
   const info = catalog.filter((c) => c.key === row.key)[0];
   if (!info) return row.key;
   const sub = info.subclasses.filter((s) => s.key === row.subclass)[0];

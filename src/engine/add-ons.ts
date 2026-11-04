@@ -58,7 +58,7 @@ export interface ScriptChanges {
 }
 
 /** MPMB's dialog for script files (ImportScriptFileDialog), "IMPORT CUSTOM SCRIPT DIALOG". */
-export const FILES_DIALOG = 'IMPORT CUSTOM SCRIPT DIALOG';
+const FILES_DIALOG = 'IMPORT CUSTOM SCRIPT DIALOG';
 /** Runs that dialog, as MPMB's "Add Extra Materials" menu does for "Import a file with additional material". */
 export const FILES_DIALOG_SCRIPT = 'ImportScriptFileDialog()';
 /** MPMB's dialog for pasted code, as the same menu does for "Add material manually (copy-paste)". */

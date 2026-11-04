@@ -5,12 +5,12 @@
 import type { ScoreChange, ScoreColumn, ScoresInfo } from '../engine/scores.ts';
 
 /** Strength … Charisma. */
-export const ABILITY_COUNT = 6;
+const ABILITY_COUNT = 6;
 /** The 2024 rules' standard array, highest first. */
 export const STANDARD_ARRAY: readonly number[] = '15 14 13 12 10 8'.split(' ').map(Number);
 export const POINT_BUDGET = 27;
 export const POINT_MIN = 8;
-export const POINT_MAX = 15;
+const POINT_MAX = 15;
 /** From this score on, each point buy step costs two points. */
 const POINT_DOUBLE_FROM = 13;
 /** What a typed-in score may be (MPMB's own fields take anything; the rules know 1 to 30). */

@@ -34,8 +34,10 @@ In the repo root: `pnpm install`, `pnpm test` (Vitest), `pnpm check` (svelte-che
 ## Checks (no CI on pull requests)
 
 GitHub doesn't check pull requests here. Before reporting done, run `pnpm test`, `pnpm check`,
-`pnpm build` and `pnpm format:check`, and list each with its result in the PR description (and anything
-that could not run, with the reason). A review runs them again on the branch.
+`pnpm build`, `pnpm format:check` and `pnpm e2e`, and list each with its result in the PR description (and
+anything that could not run, with the reason). A review runs them again on the branch. `pnpm e2e` needs
+Firefox for Playwright once (`pnpm exec playwright install firefox`); the deploy runs it too, so a red
+browser test stops the upload.
 
 ## Reviews
 

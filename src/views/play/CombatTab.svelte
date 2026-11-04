@@ -11,15 +11,15 @@
   import type { Step } from '../../session.svelte.ts';
   import {
     attacksPerAction,
-    isOn,
     readActions,
     readAttacks,
     readLimitedFeatures,
     readRollMarks,
     readSpellSlotUse,
-    recoveryKind,
   } from '../../play/read.ts';
   import type { LimitedFeature } from '../../play/read.ts';
+  import { recoveryText } from '../../play/labels.ts';
+  import { slotClicks, usedText } from '../../play/rules.ts';
   import type { FieldViews } from '../../worker/views.ts';
   import AmmoPanel from './AmmoPanel.svelte';
   import Dots from './Dots.svelte';
@@ -61,8 +61,6 @@
     markFrom = null;
   }
 
-  /** MPMB leaves "used" empty rather than 0. */
-  const usedText = (used: number): string => (used > 0 ? String(used) : '');
   const setUsed = (feature: LimitedFeature, used: number) =>
     change([{ edit: `Limited Feature Used ${feature.row}`, text: usedText(used) }]);
 
@@ -74,21 +72,8 @@
     if (feature?.max != null) setUsed(feature, Math.min(feature.max, feature.used + amount));
   }
 
-  /** MPMB's usual recovery texts in the page's language, any other as MPMB wrote it. */
-  function recoveryText(recovery: string): string {
-    const kind = recoveryKind(recovery);
-    if (kind === 'long') return t.recoveryLong;
-    if (kind === 'short') return t.recoveryShort;
-    if (kind === 'dawn') return t.recoveryDawn;
-    return recovery;
-  }
-
-  /**
-   * Leaves the first `used` slot boxes ticked and the rest unticked, clicking only those that differ:
-   * boxes ticked out of order in Acrobat end up in the sheet's order.
-   */
   function setSlots(boxes: string[], used: number) {
-    change(boxes.filter((box, i) => isOn(fields, box) !== i < used).map((click) => ({ click })));
+    change(slotClicks(fields, boxes, used).map((click) => ({ click })));
   }
 
   /** "Attack / Magic / Utilize" reads as a list. */
@@ -179,7 +164,7 @@
     </div>
     {#each features as feature (feature.row)}
       <div class="uses">
-        <span class="name">{feature.name} <small>{recoveryText(feature.recovery)}</small></span>
+        <span class="name">{feature.name} <small>{recoveryText(feature.recovery, t)}</small></span>
         {#if feature.max === null}
           <span class="muted">{feature.maxText}</span>
         {:else if feature.pool}

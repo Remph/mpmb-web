@@ -34,6 +34,7 @@
   import type { SpellInfo, SpellPicks, SpellSheetPicks, SpellSource, SpellsInfo } from '../../engine/spells.ts';
   import { counted, fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
+  import { spellLevelName } from '../../play/labels.ts';
   import { ABILITIES } from '../../play/read.ts';
   import { readSpells } from '../../play/spells.ts';
   import Modal from '../../popups/Modal.svelte';
@@ -118,7 +119,7 @@
   /** The save DC and attack bonus MPMB put on the sheet for this source, once there is a sheet. */
   const numbers = $derived(source ? readSpells(fields).find((s) => s.key === source.key) : undefined);
 
-  const levelName = (level: number): string => (level === 0 ? t.cantrips : fill(t.slotLevel, { count: level }));
+  const levelName = (level: number): string => spellLevelName(level, t);
 
   const TIMES: Record<string, keyof Texts> = { Act: 'action', Bns: 'bonusAction', React: 'reaction' };
   const WORDS: Record<string, keyof Texts> = { Self: 'spellSelf', Touch: 'spellTouch', Instantaneous: 'spellInstant' };
