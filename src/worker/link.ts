@@ -19,6 +19,14 @@ const EMPTY = 0;
 const READY = 1;
 /** 1 MiB per piece: most answers are a few bytes; the large ones are rare and may take a few pieces. */
 export const LINK_BYTES = 1_048_576;
+/**
+ * How long the asking side waits for a piece. An answer takes milliseconds; a worker that never answers has
+ * died (out of memory on an iPad, say), and without a limit the asking worker would sleep forever.
+ */
+export const REPLY_TIMEOUT_MS = 60_000;
+
+/** The answering side didn't answer in time. */
+export class LinkTimeout extends Error {}
 
 export interface Link {
   buffer: SharedArrayBuffer;
@@ -46,12 +54,16 @@ export function sendReply(link: Link, text: string): void {
   });
 }
 
-/** Asking side: sleeps until every piece of the answer came, and returns it. */
-export function waitForReply(link: Link): string {
+/**
+ * Asking side: sleeps until every piece of the answer came, and returns it. Throws LinkTimeout when a piece
+ * doesn't come within `timeout` milliseconds.
+ */
+export function waitForReply(link: Link, timeout = REPLY_TIMEOUT_MS): string {
   const header = new Int32Array(link.buffer, 0, HEADER_INTS);
   const pieces: Uint8Array[] = [];
   const takePiece = (): boolean => {
-    Atomics.wait(header, STATE, EMPTY);
+    if (Atomics.wait(header, STATE, EMPTY, timeout) === 'timed-out')
+      throw new LinkTimeout(`No answer from the other worker within ${timeout} ms`);
     const length = Atomics.load(header, LENGTH);
     const more = Atomics.load(header, MORE) === 1;
     // TextDecoder can't read shared memory, and a later piece overwrites this one: copied out.
