@@ -164,6 +164,20 @@ test('a new character gets a class, armour and a weapon, and the play view shows
   await homebrewSwitch();
   await expect(ult).toHaveCount(0);
 
+  // "No ammunition counting" hides the ammunition on the Combat tab, and switching it off brings it back.
+  const ammoSwitch = async () => {
+    await page.getByRole('button', { name: 'Sheet menu' }).click();
+    await page.getByRole('button', { name: 'Homebrew rules' }).click();
+    await page.getByRole('switch', { name: 'No ammunition counting' }).click();
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+  };
+  const ammo = page.getByRole('button', { name: '+ Ammunition' });
+  await expect(ammo).toBeVisible();
+  await ammoSwitch();
+  await expect(ammo).toHaveCount(0);
+  await ammoSwitch();
+  await expect(ammo).toBeVisible();
+
   expect(errors).toEqual([]);
 });
 

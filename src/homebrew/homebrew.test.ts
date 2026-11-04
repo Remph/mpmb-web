@@ -28,9 +28,12 @@ describe('ult charges', () => {
 
 describe('homebrew switches', () => {
   test('everything is off until turned on; unknown or broken storage is ignored', () => {
-    expect(parseSwitches(null)).toEqual({ ultCharges: false });
-    expect(parseSwitches('not json')).toEqual({ ultCharges: false });
-    expect(parseSwitches('{"ultCharges":"yes","other":true}')).toEqual({ ultCharges: false });
-    expect(parseSwitches('{"ultCharges":true}')).toEqual({ ultCharges: true });
+    const off = { ultCharges: false, noAmmo: false };
+    expect(parseSwitches(null)).toEqual(off);
+    expect(parseSwitches('not json')).toEqual(off);
+    expect(parseSwitches('{"ultCharges":"yes","other":true}')).toEqual(off);
+    // A browser that stored only the first switch (before "no ammunition counting" came) keeps it.
+    expect(parseSwitches('{"ultCharges":true}')).toEqual({ ...off, ultCharges: true });
+    expect(parseSwitches('{"noAmmo":true}')).toEqual({ ...off, noAmmo: true });
   });
 });

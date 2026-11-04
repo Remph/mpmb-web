@@ -21,6 +21,7 @@
   import { recoveryText } from '../../play/labels.ts';
   import { slotClicks, usedText } from '../../play/rules.ts';
   import type { FieldViews } from '../../worker/views.ts';
+  import { homebrew } from '../../homebrew/switches.svelte.ts';
   import AmmoPanel from './AmmoPanel.svelte';
   import Dots from './Dots.svelte';
   import EdgePopUp from './EdgePopUp.svelte';
@@ -132,7 +133,10 @@
   />
 {/if}
 
-<AmmoPanel {fields} {disabled} {change} {t} />
+<!-- Hidden for tables that don't count ammunition (homebrew switch); MPMB's counters stay as they are. -->
+{#if !homebrew.switches.noAmmo}
+  <AmmoPanel {fields} {disabled} {change} {t} />
+{/if}
 
 {#if slots.length}
   <section class="panel" aria-labelledby="slots-title">

@@ -1,12 +1,15 @@
 // The homebrew switches: house rules the app can add on top of MPMB's sheet. They count for this browser
 // (Nick, 2026-11-04), like the language, so they sit in localStorage and not with a character.
 
-export type HomebrewKey = 'ultCharges';
+export type HomebrewKey = 'ultCharges' | 'noAmmo';
 export type HomebrewSwitches = Record<HomebrewKey, boolean>;
 
-/** Every switch, in the order the Homebrew window lists them. All are off until a player turns them on. */
-export const HOMEBREW_KEYS: readonly HomebrewKey[] = ['ultCharges'];
-const OFF: HomebrewSwitches = { ultCharges: false };
+/**
+ * Every switch, in the order the Homebrew window lists them. All are off until a player turns them on, so a
+ * switch that takes something away is named for the house rule ("no ammunition counting"), not for the part.
+ */
+export const HOMEBREW_KEYS: readonly HomebrewKey[] = ['ultCharges', 'noAmmo'];
+const OFF: HomebrewSwitches = { ultCharges: false, noAmmo: false };
 const STORAGE_KEY = 'mpmb-web.homebrew';
 
 /** Reads the stored switches; unknown keys are dropped and missing ones are off. */
