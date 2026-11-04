@@ -9,9 +9,9 @@ import type { Step } from '../session.svelte.ts';
 import { viewsOf } from '../worker/views.ts';
 import { ammoChoices, collectSteps, countSteps, freeAmmoSide, half, pickSteps, readAmmo } from './ammo.ts';
 import type { Ammo } from './ammo.ts';
-import { edgeOf, markSteps } from './edge.ts';
+import { edgeOf, isAttackRoll, markSteps } from './edge.ts';
 import { addExperienceSteps, readExperience } from './experience.ts';
-import { readRollMarks, valueOf } from './read.ts';
+import { readAttacks, readRollMarks, valueOf } from './read.ts';
 
 /** Plays the steps as the worker does: typing into a field, or a click. */
 function play(engine: Engine, steps: Step[]): void {
@@ -147,5 +147,18 @@ describe('advantage on initiative and attacks', () => {
     expect(edgeOf(both)).toBe('');
     expect(markSteps(both, 'Init', '')).toEqual([{ click: 'Init Adv' }, { click: 'Init Dis' }]);
     expect(markSteps({ advantage: false, disadvantage: false }, 'Att', '')).toEqual([]);
+  });
+
+  it('leaves attacks with a saving throw DC out of the attack roll mark', () => {
+    expect(isAttackRoll('+8')).toBe(true);
+    expect(isAttackRoll('-1')).toBe(true);
+    expect(isAttackRoll('DC 14')).toBe(false);
+    expect(isAttackRoll('')).toBe(false);
+    // MPMB's own format: Sacred Flame is a Dexterity save, so its "To Hit" is the DC.
+    const engine = openSheet(referenceSheet('paladin8-warlock2'));
+    engine.edit('Attack.3.Weapon Selection', 'Sacred Flame');
+    const flame = readAttacks(viewsOf(engine.doc)).filter((a) => a.name === 'Sacred Flame')[0];
+    expect(flame?.toHit).toMatch(/^DC \d+$/);
+    expect(isAttackRoll(flame?.toHit ?? '')).toBe(false);
   });
 });

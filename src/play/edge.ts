@@ -22,5 +22,11 @@ export function markSteps(state: Advantage, boxes: string, to: Edge): Step[] {
   return steps;
 }
 
+/**
+ * Whether an attack's "To Hit" is an attack roll. MPMB writes "DC 14" for attacks the target saves
+ * against (a breath weapon, Sacred Flame); no attack roll, so the "Att Adv"/"Att Dis" mark doesn't apply.
+ */
+export const isAttackRoll = (toHit: string): boolean => toHit !== '' && !/^DC\b/i.test(toHit.trim());
+
 /** The small arrows that show a mark next to a roll. */
 export const ARROW = { adv: '▲', dis: '▼' } as const;

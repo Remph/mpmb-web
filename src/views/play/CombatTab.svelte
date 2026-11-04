@@ -4,7 +4,7 @@
 -->
 <script lang="ts">
   import { tick } from 'svelte';
-  import { ARROW, edgeOf } from '../../play/edge.ts';
+  import { ARROW, edgeOf, isAttackRoll } from '../../play/edge.ts';
   import { gearHref } from '../../build/choose-link.ts';
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
@@ -106,7 +106,7 @@
     <div class="attack">
       <span class="name">{attack.name}</span>
       <span class="hit">
-        {#if attack.toHit}
+        {#if isAttackRoll(attack.toHit)}
           <button
             type="button"
             class="badge"
@@ -118,6 +118,9 @@
                 >{ARROW[attackEdge]} {edgeLabel(attackEdge)}</small
               >{/if}</button
           >
+        {:else if attack.toHit}
+          <!-- A saving throw DC ("DC 14"): no attack roll, so no advantage mark and no pop-up. -->
+          <span class="badge">{attack.toHit}</span>
         {/if}
         {#if attack.damage}
           <span class="badge damage">{attack.damage} <small>{attack.damageType}</small></span>
