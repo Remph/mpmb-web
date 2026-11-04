@@ -97,6 +97,20 @@ test('a new character gets a class, armour and a weapon, and the play view shows
   await expect(page.getByText('100 XP', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Combat' }).click();
 
+  // Session fixes (2026-11-04): the Actions card folds MPMB's basic actions away and opens a feature's rule
+  // on a tap; the top bar folds away and the name pill in the tab row brings it back.
+  const actionsCard = page.locator('section[aria-labelledby=actions-title]');
+  await expect(actionsCard.getByRole('button', { name: '+ 13 basic actions' })).toBeVisible();
+  await expect(actionsCard.getByText('Dash', { exact: true })).toHaveCount(0);
+  await actionsCard.getByRole('button', { name: 'Second Wind: show the rule' }).click();
+  await expect(actionsCard.locator('.rule')).toContainText('Second Wind');
+  await actionsCard.getByRole('button', { name: 'Second Wind: show the rule' }).click();
+  await expect(actionsCard.locator('.rule')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Fold the bar away' }).click();
+  await expect(page.getByRole('button', { name: 'Short rest' })).toHaveCount(0);
+  await page.getByRole('button', { name: /^Show the bar/ }).click();
+  await expect(page.getByRole('button', { name: 'Short rest' })).toBeVisible();
+
   // Homebrew: the ult charges card shows only with its switch on. A quick double tap at one short of full
   // fills the meter but doesn't use the ult at once, and a double tap on "Use ult" leaves it empty.
   const ult = page.locator('.ult');
