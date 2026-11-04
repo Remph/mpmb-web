@@ -54,7 +54,7 @@ export function isShown(fields: FieldViews, name: string): boolean {
  * The row numbers of a numbered field, in order: rows(fields, 'Attack.', '.Weapon Selection') finds
  * "Attack.1.Weapon Selection", "Attack.2.Weapon Selection" and so on.
  */
-function rows(fields: FieldViews, before: string, after = ''): number[] {
+export function rows(fields: FieldViews, before: string, after = ''): number[] {
   return (
     Object.keys(fields)
       .filter((key) => key.startsWith(before) && key.endsWith(after))
@@ -86,6 +86,11 @@ export interface HitPoints {
   /** Empty on the sheet means not hurt yet: the view shows the maximum then. */
   current: number | null;
   max: number | null;
+  /**
+   * The maximum while an attack has lowered it (Life Drain and the like, until a long rest): MPMB's
+   * "current maximum" box next to the maximum. Null when it is empty or not below the maximum.
+   */
+  lowered: number | null;
   temp: number | null;
   hitDice: HitDice[];
   deathSaves: { successes: number; failures: number };
@@ -100,9 +105,13 @@ export function readHitPoints(fields: FieldViews): HitPoints {
   })).filter((hd) => hd.total > 0);
   const ticked = (kind: string): number =>
     DEATH_SAVE_BOXES.filter((n) => isOn(fields, `Death Save ${kind}${n}`)).length;
+  const max = numberOf(fields, 'HP Max');
+  const lowered = numberOf(fields, 'HP Max Current');
   return {
     current: numberOf(fields, 'HP Current'),
-    max: numberOf(fields, 'HP Max'),
+    max,
+    // Some players copy the maximum into the box in Acrobat: only a smaller number is a lowered maximum.
+    lowered: max !== null && lowered !== null && lowered >= 0 && lowered < max ? lowered : null,
     temp: numberOf(fields, 'HP Temp'),
     hitDice,
     deathSaves: { successes: ticked('Success'), failures: ticked('Fail') },

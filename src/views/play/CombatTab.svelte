@@ -9,9 +9,10 @@
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import type { Step } from '../../session.svelte.ts';
+  import { readActionList, ruleFor, ruleIndex } from '../../play/actions.ts';
+  import type { ActionItem, ActionRule } from '../../play/actions.ts';
   import {
     attacksPerAction,
-    readActions,
     readAttacks,
     readLimitedFeatures,
     readRollMarks,
@@ -43,7 +44,8 @@
   const perAction = $derived(attacksPerAction(fields));
   const slots = $derived(readSpellSlotUse(fields));
   const features = $derived(readLimitedFeatures(fields));
-  const actions = $derived(readActions(fields));
+  const actions = $derived(readActionList(fields));
+  const rules = $derived(ruleIndex(fields));
   const attackMark = $derived(readRollMarks(fields).attacks);
   const attackEdge = $derived(edgeOf(attackMark));
   const edgeLabel = (e: 'adv' | 'dis'): string => (e === 'adv' ? t.advantage : t.disadvantage);
@@ -77,8 +79,34 @@
     change(slotClicks(fields, boxes, used).map((click) => ({ click })));
   }
 
-  /** "Attack / Magic / Utilize" reads as a list. */
-  const list = (items: string[]): string => items.map((item) => item.replaceAll(' / ', ', ')).join(', ');
+  // The Actions card (session feedback, 2026-11-04): chips by kind, the basic actions folded away, and a tap
+  // on an action opens its rule text under its row. One rule open at a time.
+  interface ActionGroup {
+    kind: 'action' | 'bonus' | 'reaction';
+    label: string;
+    items: { item: ActionItem; rule: ActionRule | null }[];
+    basic: string[];
+  }
+  const groups = $derived(
+    (
+      [
+        ['action', t.action, actions.action, actions.basic.filter((b) => b !== 'Opportunity Attack')],
+        ['bonus', t.bonusAction, actions.bonusAction, []],
+        ['reaction', t.reaction, actions.reaction, actions.basic.filter((b) => b === 'Opportunity Attack')],
+      ] as const
+    )
+      .map(([kind, label, items, basic]): ActionGroup => ({
+        kind,
+        label,
+        items: items.map((item) => ({ item, rule: ruleFor(rules, item) })),
+        basic: [...basic],
+      }))
+      .filter((group) => group.items.length || group.basic.length),
+  );
+  const anyRule = $derived(groups.some((g) => g.items.some((i) => i.rule)));
+  let ruleOpen: string | null = $state(null);
+  let basicOpen = $state(false);
+  const ruleKey = (group: ActionGroup, i: number): string => `${group.kind}-${i}`;
   const POOL_STEP = 1;
 </script>
 
@@ -210,17 +238,56 @@
   />
 {/if}
 
-{#if actions.action.length || actions.bonusAction.length || actions.reaction.length}
+{#if groups.length}
   <section class="panel" aria-labelledby="actions-title">
-    <h2 id="actions-title">{t.actions}</h2>
-    <dl>
-      {#if actions.bonusAction.length}<dt>{t.bonusAction}</dt>
-        <dd>{list(actions.bonusAction)}</dd>{/if}
-      {#if actions.reaction.length}<dt>{t.reaction}</dt>
-        <dd>{list(actions.reaction)}</dd>{/if}
-      {#if actions.action.length}<dt>{t.action}</dt>
-        <dd>{list(actions.action)}</dd>{/if}
-    </dl>
+    <div class="head">
+      <h2 id="actions-title">{t.actions}</h2>
+      {#if anyRule}<span class="muted">{t.actionsTapToRead}</span>{/if}
+    </div>
+    {#each groups as group (group.kind)}
+      {@const shown = group.items.findIndex((_, i) => ruleOpen === ruleKey(group, i))}
+      {@const rule = shown >= 0 ? group.items[shown]?.rule : null}
+      <div class="group {group.kind}">
+        <span class="kind">{group.label}</span>
+        <div class="chips">
+          {#each group.items as { item, rule: itemRule }, i (i)}
+            {#if itemRule}
+              <button
+                type="button"
+                class="chip"
+                aria-expanded={ruleOpen === ruleKey(group, i)}
+                aria-controls={`rule-${group.kind}`}
+                aria-label={fill(t.actionRuleOf, { name: item.note ? `${item.name} (${item.note})` : item.name })}
+                onclick={() => (ruleOpen = ruleOpen === ruleKey(group, i) ? null : ruleKey(group, i))}
+                >{item.name}{#if item.note}<small>{item.note}</small>{/if}</button
+              >
+            {:else}
+              <span class="chip"
+                >{item.name}{#if item.note}<small>{item.note}</small>{/if}</span
+              >
+            {/if}
+          {/each}
+          {#if group.kind === 'action' && group.basic.length}
+            {#if basicOpen}
+              {#each group.basic as name (name)}<span class="chip basic">{name}</span>{/each}
+            {/if}
+            <button type="button" class="chip more" aria-expanded={basicOpen} onclick={() => (basicOpen = !basicOpen)}
+              >{basicOpen ? t.basicActionsHide : fill(t.basicActionsShow, { count: group.basic.length })}</button
+            >
+          {:else}
+            {#each group.basic as name (name)}<span class="chip basic">{name}</span>{/each}
+          {/if}
+        </div>
+        {#if rule}
+          <div class="rule" id={`rule-${group.kind}`}>
+            <b
+              >{rule.title}{#if rule.source}{' '}<small>· {rule.source}</small>{/if}</b
+            >
+            {#each rule.lines as line, i (i)}<p>{line}</p>{/each}
+          </div>
+        {/if}
+      </div>
+    {/each}
   </section>
 {/if}
 
@@ -378,19 +445,147 @@
     font-size: 0.8125rem;
   }
 
-  dl {
+  /*
+   * Actions: one row per kind, the kind's name above, its actions as even tiles tinted in the kind's colour
+   * (Remph picked the tiles, 2026-11-04). Action purple, bonus action amber, reaction teal: the stat cards'
+   * colour family; every name and note keeps 4.5:1 on its tint in both themes.
+   */
+  .group {
+    --k: #4b3fa0;
+    --ks: #ece9fa;
     display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: 0.25rem 0.75rem;
-    margin: 0;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    gap: 0.25rem 0.5rem;
+    align-items: start;
+    padding: 0.375rem 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .group.bonus {
+    --k: #8a5300;
+    --ks: #fbf0da;
+  }
+
+  .group.reaction {
+    --k: #0d6767;
+    --ks: #ddf2f0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .group {
+      --k: #b3aaf5;
+      --ks: #2c2843;
+    }
+
+    .group.bonus {
+      --k: #f2c066;
+      --ks: #33290f;
+    }
+
+    .group.reaction {
+      --k: #7fd6d3;
+      --ks: #14302f;
+    }
+  }
+
+  .head + .group {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  /* Beside the tiles, level with the first row; above them in a narrow column (below). */
+  .kind {
+    padding-top: 0.8125rem;
+    color: var(--k);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .chips {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+    gap: 0.25rem;
+  }
+
+  /* Compact (Remph, 2026-11-04): one 44 px line, the note right after the name, wrapping only when long. */
+  .chip {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: center;
+    align-items: baseline;
+    gap: 0 0.25rem;
+    min-height: 44px;
+    padding: 0.375rem 0.625rem;
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    background: var(--ks);
+    color: var(--ink);
+    font: inherit;
     font-size: 0.9375rem;
+    font-weight: 700;
+    line-height: 1.2;
+    text-align: left;
   }
 
-  dt {
+  .chip small {
+    color: var(--k);
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  button.chip:not(:disabled):hover {
+    background: var(--ks);
+    border-color: var(--k);
+  }
+
+  /* The open one: filled in the kind's colour, its rule right under the row. */
+  button.chip:not(.more)[aria-expanded='true'],
+  button.chip:not(.more)[aria-expanded='true']:not(:disabled):hover {
+    background: var(--k);
+    color: var(--surface);
+  }
+
+  button.chip:not(.more)[aria-expanded='true'] small {
+    color: var(--surface);
+  }
+
+  /* What every creature can do: quieter than the character's own. */
+  .chip.basic {
+    border-color: var(--line);
+    background: none;
     color: var(--ink-muted);
+    font-weight: 500;
   }
 
-  dd {
-    margin: 0;
+  .chip.more,
+  .chip.more:not(:disabled):hover {
+    border: 1px dashed var(--line);
+    background: none;
+    color: var(--accent);
+  }
+
+  .rule {
+    grid-column: 1 / -1;
+    padding: 0.625rem 0.75rem;
+    border-radius: 0.5rem;
+    background: var(--paper);
+    font-size: 0.9375rem;
+    line-height: 1.4;
+  }
+
+  .rule p {
+    margin: 0.25rem 0 0;
+  }
+
+  @container (max-width: 520px) {
+    .group {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .kind {
+      padding-top: 0;
+    }
   }
 </style>

@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
   import type { Texts } from '../i18n.ts';
-  import { longRest, shortRest } from '../play/rules.ts';
+  import { dawn, dawnFeatures, longRest, pactSlots, shortRest } from '../play/rules.ts';
   import type { RestEdits } from '../play/rules.ts';
   import { readOnly } from '../session.svelte.ts';
   import type { OpenCharacter, Session, Step } from '../session.svelte.ts';
@@ -23,6 +23,8 @@
   import { readSpells } from '../play/spells.ts';
   import Vitals from './play/Vitals.svelte';
   import CompanionBar from './play/CompanionBar.svelte';
+  import DawnWindow from './play/DawnWindow.svelte';
+  import UnfoldBar from './play/UnfoldBar.svelte';
   import CompanionChecks from './play/CompanionChecks.svelte';
   import CompanionTab from './play/CompanionTab.svelte';
   import CompanionVitals from './play/CompanionVitals.svelte';
@@ -155,12 +157,15 @@
     ...edits.untick.map((click) => ({ click })),
   ];
 
-  /**
-   * MPMB adds Pact Magic slots to the other slots of their level, so the boxes can't tell which ones a
-   * short rest gives back; a warlock is told to do it by hand.
-   */
+  /** What a short rest gives back: Pact Magic slots for a warlock, half the hit points with the house rule. */
   const shortRestText = (): string =>
-    /warlock/i.test(open.meta.classes) ? `${t.shortRestText} ${t.shortRestPactMagic}` : t.shortRestText;
+    [
+      t.shortRestText,
+      pactSlots(open.fields) ? t.shortRestPactMagic : '',
+      homebrew.switches.shortRestHalfHp ? t.shortRestHalfHp : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
 
   // After a sheet update (M11): the line until the player keeps or undoes it; after an undo, the line that
   // offers the update again.
@@ -202,31 +207,68 @@
     flushSync(() => (printing = true));
   }
 
+  // The top bar folds away for more room on a 13-inch laptop in a browser window (session feedback,
+  // 2026-11-04). Kept per browser, like the language. Only where the tab row is there to bring it back.
+  const FOLD_KEY = 'mpmb-web.topBar';
+  let folded = $state(readFolded());
+  function readFolded(): boolean {
+    try {
+      return localStorage.getItem(FOLD_KEY) === 'folded';
+    } catch {
+      return false;
+    }
+  }
+  function setFolded(value: boolean) {
+    folded = value;
+    try {
+      localStorage.setItem(FOLD_KEY, value ? 'folded' : 'shown');
+    } catch {
+      // Storage blocked (private mode): the bar still folds until the page is closed.
+    }
+  }
+  const canFold = $derived(!elsewhereOnly && !(companion && isEmptyCompanion(companion)));
+  const barFolded = $derived(folded && canFold);
+
+  // Magic items that come back at dawn get their own button: dawn and a long rest often fall together,
+  // but not always, so the player says when (session feedback, 2026-11-04).
+  const dawnList = $derived(open.status === 'opening' ? [] : dawnFeatures(fields));
+  let dawnOpen = $state(false);
+  function applyDawn(regained: Record<number, number>) {
+    dawnOpen = false;
+    change(restSteps(dawn(fields, regained)));
+  }
+
   async function rest(kind: 'short' | 'long') {
     const long = kind === 'long';
     const answer = await session.popUps.choose({
       title: long ? t.longRestTitle : t.shortRestTitle,
-      message: long ? t.longRestText : shortRestText(),
+      message: long ? (dawnList.length ? `${t.longRestText} ${t.longRestDawn}` : t.longRestText) : shortRestText(),
       buttons: [
         { value: 'cancel', label: t.cancel },
         { value: 'rest', label: long ? t.longRest : t.shortRest, primary: true },
       ],
       cancel: 'cancel',
     });
-    if (answer === 'rest') change(restSteps(long ? longRest(open.fields) : shortRest(open.fields)));
+    if (answer === 'rest')
+      change(restSteps(long ? longRest(open.fields) : shortRest(open.fields, homebrew.switches.shortRestHalfHp)));
   }
 </script>
 
 <svelte:window bind:innerWidth={width} onbeforeprint={beforePrint} onafterprint={() => (printing = false)} />
 
 <div class="screen-only">
-  <TopBar {open} back={{ href: '#/', label: t.backToList }} {t}>
-    {#if !noClass}
-      <button type="button" {disabled} onclick={() => rest('short')}>{t.shortRest}</button>
-      <button type="button" {disabled} onclick={() => rest('long')}>{t.longRest}</button>
-    {/if}
-    <button type="button" onclick={() => (menuOpen = true)}>☰ {t.sheetMenu}</button>
-  </TopBar>
+  {#if !barFolded}
+    <TopBar {open} back={{ href: '#/', label: t.backToList }} {t} onfold={canFold ? () => setFolded(true) : undefined}>
+      {#if !noClass}
+        <button type="button" {disabled} onclick={() => rest('short')}>{t.shortRest}</button>
+        <button type="button" {disabled} onclick={() => rest('long')}>{t.longRest}</button>
+      {/if}
+      {#if dawnList.length}
+        <button type="button" {disabled} onclick={() => (dawnOpen = true)}>{t.dawn}</button>
+      {/if}
+      <button type="button" onclick={() => (menuOpen = true)}>☰ {t.sheetMenu}</button>
+    </TopBar>
+  {/if}
 
   {#if listed.length && !elsewhereOnly}
     <CompanionBar
@@ -273,17 +315,27 @@
         <!-- An empty page has nothing to show yet but the way to fill it, on the left. -->
         {#if !isEmptyCompanion(companion)}
           <div class="middle">
-            <div class="tabs" role="tablist">
-              {#each companionTabs as [key, label] (key)}
-                <button
-                  type="button"
-                  role="tab"
-                  id={`tab-${key}`}
-                  aria-selected={shownCompanionTab === key}
-                  aria-controls="tab-panel"
-                  onclick={() => (companionTab = key)}>{label}</button
-                >
-              {/each}
+            <div class="tabrow">
+              <div class="tabs" role="tablist">
+                {#each companionTabs as [key, label] (key)}
+                  <button
+                    type="button"
+                    role="tab"
+                    id={`tab-${key}`}
+                    aria-selected={shownCompanionTab === key}
+                    aria-controls="tab-panel"
+                    onclick={() => (companionTab = key)}>{label}</button
+                  >
+                {/each}
+              </div>
+              {#if barFolded}
+                <UnfoldBar
+                  name={open.meta.name || t.unnamed}
+                  busy={open.status !== 'saved'}
+                  onunfold={() => setFolded(false)}
+                  {t}
+                />
+              {/if}
             </div>
             <div id="tab-panel" role="tabpanel" aria-labelledby={`tab-${shownCompanionTab}`}>
               {#if shownCompanionTab === 'checks'}
@@ -315,17 +367,27 @@
         </div>
 
         <div class="middle">
-          <div class="tabs" role="tablist">
-            {#each tabs as [key, label] (key)}
-              <button
-                type="button"
-                role="tab"
-                id={`tab-${key}`}
-                aria-selected={shownTab === key}
-                aria-controls="tab-panel"
-                onclick={() => (tab = key)}>{label}</button
-              >
-            {/each}
+          <div class="tabrow">
+            <div class="tabs" role="tablist">
+              {#each tabs as [key, label] (key)}
+                <button
+                  type="button"
+                  role="tab"
+                  id={`tab-${key}`}
+                  aria-selected={shownTab === key}
+                  aria-controls="tab-panel"
+                  onclick={() => (tab = key)}>{label}</button
+                >
+              {/each}
+            </div>
+            {#if barFolded}
+              <UnfoldBar
+                name={open.meta.name || t.unnamed}
+                busy={open.status !== 'saved'}
+                onunfold={() => setFolded(false)}
+                {t}
+              />
+            {/if}
           </div>
           <div id="tab-panel" role="tabpanel" aria-labelledby={`tab-${shownTab}`}>
             {#if shownTab === 'combat'}
@@ -335,7 +397,7 @@
             {:else if shownTab === 'checks'}
               <Checks {fields} {disabled} {change} {t} />
             {:else if shownTab === 'inventory'}
-              <InventoryTab {fields} {disabled} {change} {t} />
+              <InventoryTab {fields} {disabled} {change} load={() => session.builderInfo()} {t} />
             {:else if shownTab === 'features'}
               <FeaturesTab {fields} characterId={open.meta.id} {t} />
             {:else if shownTab === 'profile'}
@@ -360,6 +422,10 @@
         {/if}
       </div>
     {/if}
+  {/if}
+
+  {#if dawnOpen}
+    <DawnWindow features={dawnList} onapply={applyDawn} onclose={() => (dawnOpen = false)} {t} />
   {/if}
 
   {#if menuOpen}
@@ -461,11 +527,21 @@
     top: 0.75rem;
   }
 
-  .tabs {
+  /* The tabs, and at their end the way back to a folded top bar. */
+  .tabrow {
     display: flex;
-    gap: 0.25rem;
+    align-items: center;
+    gap: 0.5rem;
     margin-bottom: 0.75rem;
     border-bottom: 1px solid var(--line);
+  }
+
+  .tabs {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-self: stretch;
+    gap: 0.25rem;
     overflow-x: auto;
     scrollbar-width: none;
   }
@@ -500,6 +576,19 @@
     }
 
     .tabs button {
+      padding: 0 0.25rem;
+      font-size: 0.9375rem;
+    }
+  }
+
+  /* With the folded bar's pill at the row's end, the tabs go compact a little earlier (review of #56: at
+   * 1280 px the pill pushed "Notes" out of sight). */
+  @container (max-width: 720px) {
+    .tabrow:has(:global(.unfold)) .tabs {
+      gap: 0;
+    }
+
+    .tabrow:has(:global(.unfold)) .tabs button {
       padding: 0 0.25rem;
       font-size: 0.9375rem;
     }

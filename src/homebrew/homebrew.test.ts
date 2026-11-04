@@ -28,7 +28,7 @@ describe('ult charges', () => {
 
 describe('homebrew switches', () => {
   test('everything is off until turned on; unknown or broken storage is ignored', () => {
-    const off = { ultCharges: false, noAmmo: false };
+    const off = { ultCharges: false, noAmmo: false, shortRestHalfHp: false };
     expect(parseSwitches(null)).toEqual(off);
     expect(parseSwitches('not json')).toEqual(off);
     expect(parseSwitches('{"ultCharges":"yes","other":true}')).toEqual(off);

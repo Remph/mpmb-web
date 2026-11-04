@@ -95,7 +95,41 @@ test('a new character gets a class, armour and a weapon, and the play view shows
   await xpPad.getByRole('button', { name: '0', exact: true }).click();
   await xpPad.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(page.getByText('100 XP', { exact: true })).toBeVisible();
+  // Magic items in place (session fixes, 2026-11-04): added from MPMB's list on the Inventory tab, then removed.
+  await page.getByRole('tab', { name: 'Inventory' }).click();
+  await page.getByRole('button', { name: 'Change magic items' }).click();
+  const magicWindow = page.getByRole('dialog', { name: 'Magic items' });
+  await magicWindow.getByRole('button', { name: '+ Add a magic item' }).click({ timeout: STARTUP });
+  const magicPick = page.getByRole('dialog', { name: 'Add a magic item' });
+  await magicPick.getByRole('searchbox').fill('Bag of Holding');
+  await magicPick.getByRole('button', { name: /^Bag of Holding/ }).click();
+  await expect(magicWindow.getByText('Bag of Holding')).toBeVisible();
+  // On the card, a tap on the item's tile opens its text under the tiles, and a second tap closes it.
+  await magicWindow.getByRole('button', { name: 'Close', exact: true }).last().click();
+  const magicCard = page.locator('section[aria-labelledby=magic-title]');
+  await magicCard.getByRole('button', { name: 'Bag of Holding' }).click();
+  await expect(magicCard.locator('#magic-text')).toContainText('Bag of Holding');
+  await magicCard.getByRole('button', { name: 'Bag of Holding' }).click();
+  await expect(magicCard.locator('#magic-text')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Change magic items' }).click();
+  await magicWindow.getByRole('button', { name: 'Remove Bag of Holding' }).click();
+  await expect(magicWindow.getByText('Bag of Holding')).toHaveCount(0);
+  await magicWindow.getByRole('button', { name: 'Close', exact: true }).last().click();
   await page.getByRole('tab', { name: 'Combat' }).click();
+
+  // Session fixes (2026-11-04): the Actions card folds MPMB's basic actions away and opens a feature's rule
+  // on a tap; the top bar folds away and the name pill in the tab row brings it back.
+  const actionsCard = page.locator('section[aria-labelledby=actions-title]');
+  await expect(actionsCard.getByRole('button', { name: '+ 13 basic actions' })).toBeVisible();
+  await expect(actionsCard.getByText('Dash', { exact: true })).toHaveCount(0);
+  await actionsCard.getByRole('button', { name: 'Second Wind: show the rule' }).click();
+  await expect(actionsCard.locator('.rule')).toContainText('Second Wind');
+  await actionsCard.getByRole('button', { name: 'Second Wind: show the rule' }).click();
+  await expect(actionsCard.locator('.rule')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Fold the bar away' }).click();
+  await expect(page.getByRole('button', { name: 'Short rest' })).toHaveCount(0);
+  await page.getByRole('button', { name: /^Show the bar/ }).click();
+  await expect(page.getByRole('button', { name: 'Short rest' })).toBeVisible();
 
   // Homebrew: the ult charges card shows only with its switch on. A quick double tap at one short of full
   // fills the meter but doesn't use the ult at once, and a double tap on "Use ult" leaves it empty.
@@ -303,6 +337,16 @@ test('a character saved on an older sheet is updated when it opens, and the vers
     };
   })`);
   expect(wizardName).toBe('Test Wizard');
+  // A hit that lowers the maximum too (Life Drain, session fixes 2026-11-04): the card says so, and Restore
+  // makes it whole again.
+  await page.getByRole('button', { name: 'Damage', exact: true }).click();
+  const damagePad = page.getByRole('dialog', { name: 'Take damage' });
+  await damagePad.getByRole('button', { name: '3', exact: true }).click();
+  await damagePad.getByRole('checkbox', { name: /^Lowers max HP too/ }).check();
+  await damagePad.getByRole('button', { name: 'Take damage' }).click();
+  await expect(page.getByText('Max lowered by 3')).toBeVisible();
+  await page.getByRole('button', { name: /^Restore max HP to/ }).click();
+  await expect(page.getByText(/^Max lowered by/)).toHaveCount(0);
   // The next opening of the paladin tries again.
   await page.getByRole('link', { name: /Characters/ }).click();
   await page.getByRole('link', { name: /Test Paladin/ }).click();

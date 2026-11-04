@@ -17,7 +17,7 @@
     readToggles,
   } from '../../play/read.ts';
   import type { Condition } from '../../play/read.ts';
-  import { applyDamage, applyHealing, tickedDeathSaves } from '../../play/rules.ts';
+  import { applyDamage, applyHealing, maxNow, tickedDeathSaves } from '../../play/rules.ts';
   import type { FieldViews } from '../../worker/views.ts';
   import Modal from '../../popups/Modal.svelte';
   import NumberPad from './NumberPad.svelte';
@@ -43,13 +43,17 @@
   const numbers = $derived(readNumbers(fields));
   const conditions = $derived(readConditions(fields));
   const toggles = $derived(readToggles(fields));
-  const current = $derived(hp.current ?? hp.max ?? 0);
+  const top = $derived(maxNow(hp));
+  const current = $derived(hp.current ?? top ?? 0);
   const temp = $derived(hp.temp ?? 0);
-  /** The bar shows hit points of the maximum; temporary ones get their own blue end. */
+  /** The bar shows hit points of the whole maximum; a lowered part is hatched at its end. */
   const percent = (n: number): string => `${hp.max ? Math.min(100, (n / hp.max) * 100) : 0}%`;
+  const lost = $derived(hp.lowered !== null && hp.max !== null ? hp.max - hp.lowered : 0);
   const dying = $derived(current === 0 || hp.deathSaves.successes > 0 || hp.deathSaves.failures > 0);
 
   let pad: 'damage' | 'heal' | 'temp' | null = $state(null);
+  /** The damage window's switch: this hit lowers the maximum too (Life Drain). Off each time it opens. */
+  let lowersMax = $state(false);
   let picking = $state(false);
 
   /** An empty field stays empty when the result is full health, like a fresh MPMB sheet. */
@@ -60,12 +64,22 @@
     const kind = pad;
     pad = null;
     if (kind === 'temp') return change([{ edit: 'HP Temp', text: tempText(amount) }]);
-    const next = kind === 'damage' ? applyDamage(hp, amount) : applyHealing(hp, amount);
+    const next = kind === 'damage' ? applyDamage(hp, amount, lowersMax) : applyHealing(hp, amount);
     const steps: Step[] = [];
-    if (next.current !== current) steps.push({ edit: 'HP Current', text: hpText(next.current) });
+    // MPMB's "current maximum" box; the hit points get written as a number then, as empty means the full maximum.
+    if (next.lowered !== hp.lowered) steps.push({ edit: 'HP Max Current', text: String(next.lowered ?? '') });
+    if (next.current !== current || (next.lowered !== null && hp.current === null))
+      steps.push({ edit: 'HP Current', text: hpText(next.current) });
     if (next.temp !== temp) steps.push({ edit: 'HP Temp', text: tempText(next.temp) });
     // Back above 0 hit points: the death saves start over.
     if (current === 0 && next.current > 0) steps.push(...tickedDeathSaves(fields).map((click) => ({ click })));
+    change(steps);
+  }
+
+  /** Restore: the maximum is whole again; hit points stay where they are. */
+  function restoreMax() {
+    const steps: Step[] = [{ edit: 'HP Max Current', text: '' }];
+    if (hp.current === null) steps.push({ edit: 'HP Current', text: hpText(current) });
     change(steps);
   }
 
@@ -101,13 +115,30 @@
   </div>
   <p class="numbers">
     <span class="now">{current}</span>
-    {#if hp.max !== null}<span class="max">/ {hp.max}</span>{/if}
+    {#if top !== null}<span class="max">/ {top}</span>{/if}
   </p>
   <div class="bar" aria-hidden="true">
     <i style:width={percent(current)}></i>
+    {#if lost > 0}<b style:width={percent(lost)}></b>{/if}
   </div>
+  {#if lost > 0}
+    <div class="lowered">
+      <span>{fill(t.hpMaxLowered, { count: lost })} <s>{hp.max}</s></span>
+      <button type="button" {disabled} aria-label={fill(t.hpMaxRestoreLabel, { max: hp.max ?? 0 })} onclick={restoreMax}
+        >{t.hpMaxRestore}</button
+      >
+    </div>
+  {/if}
   <div class="buttons">
-    <button type="button" class="primary" {disabled} onclick={() => (pad = 'damage')}>{t.damage}</button>
+    <button
+      type="button"
+      class="primary"
+      {disabled}
+      onclick={() => {
+        lowersMax = false;
+        pad = 'damage';
+      }}>{t.damage}</button
+    >
     <button type="button" {disabled} onclick={() => (pad = 'heal')}>{t.heal}</button>
     <button type="button" {disabled} onclick={() => (pad = 'temp')}>{t.tempHpButton}</button>
   </div>
@@ -250,7 +281,12 @@
     onapply={applyPad}
     onclose={() => (pad = null)}
     {t}
-  />
+  >
+    <label class="lowers">
+      <input type="checkbox" bind:checked={lowersMax} />
+      <span>{t.lowersMax}<small>{t.lowersMaxHint}</small></span>
+    </label>
+  </NumberPad>
 {:else if pad === 'heal'}
   <NumberPad title={t.healTitle} applyLabel={t.heal} onapply={applyPad} onclose={() => (pad = null)} {t} />
 {:else if pad === 'temp'}
@@ -374,6 +410,68 @@
     inset: 0 auto 0 0;
     border-radius: 0.25rem;
     background: var(--hp);
+  }
+
+  /* The part of the maximum an attack took: hatched, so it reads as gone for now, not as damage. */
+  .bar b {
+    position: absolute;
+    inset: 0 0 0 auto;
+    border-left: 2px solid var(--surface);
+    background: repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--ink-muted) 55%, transparent) 0 3px,
+      transparent 3px 6px
+    );
+  }
+
+  .lowered {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: -0.25rem 0 0.5rem;
+    color: var(--hp);
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+
+  .lowered s {
+    color: var(--ink-muted);
+    font-weight: 500;
+  }
+
+  .lowered button {
+    padding: 0 0.625rem;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .lowers {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    min-height: 44px;
+    margin-top: 0.5rem;
+    padding: 0.25rem 0.625rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .lowers small {
+    display: block;
+    color: var(--ink-muted);
+    font-size: 0.8125rem;
+    font-weight: 400;
+  }
+
+  .lowers input {
+    flex: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin: 0;
+    accent-color: var(--hp);
   }
 
   /* Each button as wide as its word plus padding, the rest shared out ("Temp HP" is the longest). */

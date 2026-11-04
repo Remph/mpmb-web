@@ -12,17 +12,25 @@
   import type { FieldViews } from '../../worker/views.ts';
   import Modal from '../../popups/Modal.svelte';
   import Stepper from './Stepper.svelte';
+  import MagicItemsWindow from './MagicItemsWindow.svelte';
+  import type { BuilderInfo } from '../../engine/builder.ts';
 
   interface Props {
     fields: FieldViews;
     disabled: boolean;
     change: (steps: Step[]) => void;
+    /** MPMB's lists, for "Change magic items" (session feedback, 2026-11-04). */
+    load: () => Promise<BuilderInfo | null>;
     t: Texts;
   }
 
-  let { fields, disabled, change, t }: Props = $props();
+  let { fields, disabled, change, load, t }: Props = $props();
+  let changingMagic = $state(false);
   const inventory = $derived(readInventory(fields));
   const attuned = $derived(inventory.magicItems.filter((item) => item.attuned).length);
+  /** The magic item whose text is open under the tiles, by row: one at a time, like the Actions card. */
+  let itemOpen: number | null = $state(null);
+  const openItem = $derived(inventory.magicItems.find((item) => item.row === itemOpen) ?? null);
 
   const COIN_NAMES = {
     pp: ['coinPp', 'coinPpShort'],
@@ -151,26 +159,48 @@
   }
 </script>
 
+{#if changingMagic}
+  <MagicItemsWindow {fields} {disabled} {change} {load} onclose={() => (changingMagic = false)} {t} />
+{/if}
+
 <div class="columns">
   <section class="panel" aria-labelledby="magic-title">
     <div class="head">
       <h2 id="magic-title">{t.magicItems}</h2>
       {#if attuned}<span class="muted">{attuned} {t.attuned}</span>{/if}
+      <button type="button" class="change" aria-label={t.magicItemsChangeLabel} onclick={() => (changingMagic = true)}
+        >{t.magicItemsChange}</button
+      >
     </div>
-    <ul>
-      {#each inventory.magicItems as item (item.row)}
-        <li>
-          <details>
-            <summary
-              >{item.name}{#if item.attuned}<span class="tag">{t.attuned}</span>{/if}</summary
+    <!-- Tiles like the Actions card (Remph, 2026-11-04), in one quiet tint: the kind colours mean actions there. -->
+    {#if inventory.magicItems.length}
+      <div class="items">
+        {#each inventory.magicItems as item (item.row)}
+          {#if item.description}
+            <button
+              type="button"
+              class="item"
+              aria-expanded={itemOpen === item.row}
+              aria-controls="magic-text"
+              onclick={() => (itemOpen = itemOpen === item.row ? null : item.row)}
+              >{item.name}{#if item.attuned}<span class="tag">{t.attuned}</span>{/if}</button
             >
-            <p>{item.description}</p>
-          </details>
-        </li>
-      {:else}
-        <li class="muted">{t.noItems}</li>
-      {/each}
-    </ul>
+          {:else}
+            <span class="item"
+              >{item.name}{#if item.attuned}<span class="tag">{t.attuned}</span>{/if}</span
+            >
+          {/if}
+        {/each}
+        {#if openItem}
+          <div class="text" id="magic-text">
+            <b>{openItem.name}</b>
+            <p>{openItem.description}</p>
+          </div>
+        {/if}
+      </div>
+    {:else}
+      <p class="muted">{t.noItems}</p>
+    {/if}
   </section>
 
   <section class="panel" aria-labelledby="gear-title">
@@ -381,6 +411,23 @@
     gap: 0.5rem;
   }
 
+  /* Like "Change weapons" on the Combat tab: quiet, the panel's own content comes first. */
+  .change {
+    margin-left: auto;
+    padding: 0 0.75rem;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .head:has(.change) {
+    align-items: center;
+    margin-bottom: 0.25rem;
+  }
+
+  .head:has(.change) h2 {
+    margin: 0;
+  }
+
   h2 {
     margin: 0 0 0.5rem;
     font-size: 1rem;
@@ -440,34 +487,63 @@
     min-height: 44px;
   }
 
-  summary {
-    list-style: none;
+  .items {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    gap: 0.25rem;
+  }
+
+  /* One 44 px line like an action tile; long names wrap and push the tag below. */
+  .item {
     display: flex;
-    align-items: center;
-    gap: 0.375rem;
+    flex-wrap: wrap;
+    align-content: center;
+    align-items: baseline;
+    gap: 0.125rem 0.375rem;
     min-height: 44px;
-    cursor: pointer;
-  }
-
-  summary::-webkit-details-marker {
-    display: none;
-  }
-
-  /* The flex summary loses the browser's triangle; this one says the row opens. */
-  summary::before {
-    content: '▸';
-    color: var(--ink-muted);
-    transition: transform 0.15s;
-  }
-
-  details[open] summary::before {
-    transform: rotate(90deg);
-  }
-
-  details p {
-    margin: 0 0 0.5rem;
-    color: var(--ink-muted);
+    padding: 0.375rem 0.625rem;
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    background: color-mix(in srgb, var(--ink) 6%, var(--surface));
+    color: var(--ink);
+    font: inherit;
     font-size: 0.9375rem;
+    font-weight: 700;
+    text-align: left;
+  }
+
+  button.item:not(:disabled):hover {
+    background: color-mix(in srgb, var(--ink) 6%, var(--surface));
+    border-color: var(--ink-muted);
+  }
+
+  button.item[aria-expanded='true'],
+  button.item[aria-expanded='true']:not(:disabled):hover {
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  .item .tag {
+    margin: 0;
+  }
+
+  button.item[aria-expanded='true'] .tag {
+    background: color-mix(in srgb, var(--surface) 20%, transparent);
+    color: var(--surface);
+  }
+
+  .text {
+    grid-column: 1 / -1;
+    padding: 0.625rem 0.75rem;
+    border-radius: 0.5rem;
+    background: var(--paper);
+    font-size: 0.9375rem;
+    line-height: 1.45;
+  }
+
+  .text p {
+    margin: 0.25rem 0 0;
+    white-space: pre-line;
   }
 
   h3 {
