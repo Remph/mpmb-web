@@ -12,9 +12,9 @@ import type { AlertReply, AlertRequest, DialogReply, DialogView, Host, MenuItem 
 import { ALERT_ANSWER } from './host.ts';
 
 /** The dialog in which MPMB asks for the path of the PDF to import from. */
-export const IMPORT_DIALOG = 'IMPORT FROM PDF DIALOG';
+const IMPORT_DIALOG = 'IMPORT FROM PDF DIALOG';
 /** The title of MPMB's pop-up at the end of an import. */
-export const IMPORT_SUMMARY_TITLE = 'Things to consider about the import';
+const IMPORT_SUMMARY_TITLE = 'Things to consider about the import';
 /** The file name MPMB is told; it only shows up in its progress text. */
 const SOURCE_FILE = 'old-version.pdf';
 

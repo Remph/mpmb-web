@@ -30,11 +30,11 @@
     readSkills,
     readSpellSlotUse,
     readTool,
-    recoveryKind,
     textRuns,
     valueOf,
     MAX_DOTS,
   } from '../../play/read.ts';
+  import { recoveryText, spellLevelName } from '../../play/labels.ts';
   import { readSpells } from '../../play/spells.ts';
   import type { Spell } from '../../play/spells.ts';
   import type { FieldViews } from '../../worker/views.ts';
@@ -103,14 +103,6 @@
   );
 
   const circles = (total: number, used: number): boolean[] => marks(total, used, blank);
-
-  function recoveryText(recovery: string): string {
-    const kind = recoveryKind(recovery);
-    if (kind === 'long') return t.recoveryLong;
-    if (kind === 'short') return t.recoveryShort;
-    if (kind === 'dawn') return t.recoveryDawn;
-    return recovery;
-  }
 
   const FACTS = $derived([
     ['Age', t.age],
@@ -346,7 +338,7 @@
             <ul class="limited">
               {#each limited as feature (feature.row)}
                 <li>
-                  <span class="name">{feature.name} <small>{recoveryText(feature.recovery)}</small></span>
+                  <span class="name">{feature.name} <small>{recoveryText(feature.recovery, t)}</small></span>
                   {#if feature.pool || feature.max === null || feature.max > MAX_DOTS}
                     <span class="pool"
                       ><span class="line">{poolLeft(feature.max, feature.used, blank)}</span> / {feature.maxText}</span
@@ -427,7 +419,7 @@
             {#each source.levels as lvl (lvl.level)}
               <tbody>
                 <tr class="level-row">
-                  <th colspan="7">{lvl.level === 0 ? t.cantrips : fill(t.slotLevel, { count: lvl.level })}</th>
+                  <th colspan="7">{spellLevelName(lvl.level, t)}</th>
                 </tr>
                 {#each lvl.spells as spell (spell.row)}
                   <tr>

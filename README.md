@@ -75,7 +75,7 @@ How to take a new upstream version: `vendor/README.md`, "Updating".
 ## Deploy
 
 The live app is at <https://remph.de/mpmb/>. Every push to `main` (a merged pull request) runs
-`.github/workflows/deploy.yml`: install, test, type check, build, then `scripts/deploy.sh` uploads
+`.github/workflows/deploy.yml`: install, unit tests, type check, browser tests, build, then `scripts/deploy.sh` uploads
 `dist/` into that folder over FTP with TLS. The folder then equals the build; characters are not on
 the server (they live in each player's browser), so a deploy never touches them.
 

@@ -1,22 +1,13 @@
 /* eslint-disable ts-patterns/no-magic-numbers -- hit points and counts are the test data */
 import { describe, expect, it } from 'vitest';
 import { openSheet, referenceSheet } from '../../test/characters.ts';
+import { withValues } from '../../test/fields.ts';
 import { viewsOf } from '../worker/views.ts';
-import type { FieldViews } from '../worker/views.ts';
-import { applyDamage, applyHealing, longRest, shortRest, tickedDeathSaves } from './rules.ts';
+import { readSpellSlotUse } from './read.ts';
+import { applyDamage, applyHealing, longRest, shortRest, slotClicks, tickedDeathSaves, usedText } from './rules.ts';
 
 const paladin = viewsOf(openSheet(referenceSheet('paladin8-warlock2')).doc);
 const wizard = viewsOf(openSheet(referenceSheet('wizard10-evoker')).doc);
-
-function withValues(fields: FieldViews, values: Record<string, string>): FieldViews {
-  const copy = { ...fields };
-  Object.entries(values).forEach(([name, value]) => {
-    const view = copy[name];
-    if (!view) throw new Error(`no field ${name}`);
-    copy[name] = { ...view, value, text: undefined };
-  });
-  return copy;
-}
 
 describe('hit points', () => {
   it('takes damage from temporary hit points first', () => {
@@ -87,5 +78,23 @@ describe('rests', () => {
     expect(shortRest(cast).untick).toEqual([]);
     const shortCast = withValues(paladin, { 'P6.SSfront.spells.check.8': 'oncesr_used' });
     expect(shortRest(shortCast).untick).toEqual(['P6.SSfront.spells.checkbox.8']);
+  });
+});
+
+describe('marks the player sets', () => {
+  it('leaves "used" empty rather than 0, as MPMB does', () => {
+    expect(usedText(0)).toBe('');
+    expect(usedText(3)).toBe('3');
+  });
+
+  it('clicks only the slot boxes that differ, so the used ones end up first', () => {
+    const boxes = readSpellSlotUse(wizard)[0]?.boxes ?? [];
+    expect(boxes.length).toBeGreaterThanOrEqual(3);
+    const [first = '', second = '', third = ''] = boxes;
+    expect(slotClicks(wizard, boxes, 2)).toEqual([first, second]);
+    // Ticked out of order (the third box): untick it, tick the first.
+    const outOfOrder = withValues(wizard, { [third]: 'Yes' });
+    expect(slotClicks(outOfOrder, boxes, 1)).toEqual([first, third]);
+    expect(slotClicks(withValues(wizard, { [first]: 'Yes', [second]: 'Yes' }), boxes, 2)).toEqual([]);
   });
 });

@@ -6,7 +6,7 @@ import type { Texts } from '../../i18n.ts';
 const SIZE_KEYS = ['buildSize0', 'buildSize1', 'buildSize2', 'buildSize3', 'buildSize4', 'buildSize5'] as const;
 
 /** MPMB's size numbers in words: [3, 4] is "Medium or Small". */
-export function sizeText(sizes: number[], t: Texts): string {
+function sizeText(sizes: number[], t: Texts): string {
   const words = sizes.map((n) => {
     const key = SIZE_KEYS[n];
     return key ? t[key] : '';

@@ -96,4 +96,11 @@ export function shortRest(fields: FieldViews): RestEdits {
 }
 
 /** MPMB leaves "used" empty rather than 0. */
-const usedText = (used: number): string => (used > 0 ? String(used) : '');
+export const usedText = (used: number): string => (used > 0 ? String(used) : '');
+
+/**
+ * The slot boxes to click so that the first `used` boxes are ticked and the rest unticked: only those that
+ * differ, so boxes ticked out of order in Acrobat end up in the sheet's order.
+ */
+export const slotClicks = (fields: FieldViews, boxes: string[], used: number): string[] =>
+  boxes.filter((box, i) => isOn(fields, box) !== i < used);

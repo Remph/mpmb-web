@@ -72,10 +72,6 @@ export function compareSheets(
   return out;
 }
 
-export function byPage(diffs: Difference[]): Record<number, number> {
-  return diffs.reduce<Record<number, number>>((acc, d) => ({ ...acc, [d.page]: (acc[d.page] ?? 0) + 1 }), {});
-}
-
 export const show = (diffs: Difference[], max = SHOWN_DIFFS): string =>
   diffs
     .slice(0, max)

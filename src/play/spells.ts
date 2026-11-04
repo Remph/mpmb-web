@@ -3,7 +3,7 @@
 // "remember" field: a class header, a level divider, a column caption, an empty line or a spell. The play
 // view reads those rows in the sheet's order and leaves choosing spells to MPMB's own Spells menu.
 // MPMB's code for it: GenerateSpellSheet and ApplySpell in vendor/mpmb/_functions/FunctionsSpells.js.
-import { valueOf } from './read.ts';
+import { isShown, valueOf } from './read.ts';
 import type { FieldViews } from '../worker/views.ts';
 
 /** Rows on a page: SSfront has room for 67, SSmore (no title block) for 78. */
@@ -197,7 +197,7 @@ export function readSpells(fields: FieldViews): SpellSource[] {
       dc: head('dc'),
       attack: head('attack'),
       // MPMB hides the prepare box when the source doesn't prepare (it then holds 0).
-      prepareMax: prepare > 0 && isShownField(fields, `${page}spellshead.prepare.${i}`) ? prepare : null,
+      prepareMax: prepare > 0 && isShown(fields, `${page}spellshead.prepare.${i}`) ? prepare : null,
       levels: [],
     });
     level = undefined;
@@ -268,14 +268,6 @@ export function spellText(text: string): SpellText {
     // The first line after the marker is MPMB's "The above original has been changed as follows:".
     changes: lines(changes).slice(1),
   };
-}
-
-/** Whether the sheet shows a field (a header's prepare box is hidden when there is nothing to prepare). */
-function isShownField(fields: FieldViews, name: string): boolean {
-  // Acrobat's widget flag 2 is "hidden" (PDF 1.7, 12.5.3).
-  const HIDDEN = 2;
-  const flags = fields[name]?.widgets[0]?.flags ?? HIDDEN;
-  return (flags & HIDDEN) === 0;
 }
 
 /** For a tick the player makes: MPMB's toggle on the check box ("checkbox" ↔ "checkedbox", once-box ↔ "_used"). */

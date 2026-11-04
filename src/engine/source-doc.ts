@@ -25,7 +25,7 @@ const nonFinite = (value: unknown): WireValue | null =>
   typeof value === 'number' && !Number.isFinite(value) ? { number: String(value) } : null;
 
 /** Reference 0 is the source document itself (the global object of its realm, as in Acrobat). */
-export const DOCUMENT_REF = 0;
+const DOCUMENT_REF = 0;
 
 export type SourceRequest =
   | { op: 'get'; ref: number; key: string }

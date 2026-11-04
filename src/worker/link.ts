@@ -18,12 +18,12 @@ const HEADER_BYTES = HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
 const EMPTY = 0;
 const READY = 1;
 /** 1 MiB per piece: most answers are a few bytes; the large ones are rare and may take a few pieces. */
-export const LINK_BYTES = 1_048_576;
+const LINK_BYTES = 1_048_576;
 /**
  * How long the asking side waits for a piece. An answer takes milliseconds; a worker that never answers has
  * died (out of memory on an iPad, say), and without a limit the asking worker would sleep forever.
  */
-export const REPLY_TIMEOUT_MS = 60_000;
+const REPLY_TIMEOUT_MS = 60_000;
 
 /** The answering side didn't answer in time. */
 export class LinkTimeout extends Error {}

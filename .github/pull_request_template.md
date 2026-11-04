@@ -16,6 +16,7 @@
 - [ ] `pnpm check`:
 - [ ] `pnpm build`:
 - [ ] `pnpm format:check`:
+- [ ] `pnpm e2e`:
 
 ## Screenshots
 

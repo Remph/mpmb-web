@@ -74,7 +74,7 @@ export function isSet(fields: FieldViews, modifier: Modifier): boolean {
 }
 
 /** Every blue field of the step, for the count next to the step's name. */
-export function allModifiers(fields: FieldViews): Modifier[] {
+function allModifiers(fields: FieldViews): Modifier[] {
   return [
     ...ARMOR_CLASS,
     INITIATIVE,

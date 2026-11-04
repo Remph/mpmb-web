@@ -1,8 +1,8 @@
 /* eslint-disable ts-patterns/no-magic-numbers -- hit points, counts and slots are the test data */
 import { describe, expect, it } from 'vitest';
 import { openSheet, referenceSheet } from '../../test/characters.ts';
+import { withValues } from '../../test/fields.ts';
 import { viewsOf } from '../worker/views.ts';
-import type { FieldViews } from '../worker/views.ts';
 import {
   choicesOf,
   featureLine,
@@ -29,17 +29,6 @@ import {
 // The values below are what Acrobat shows on page 1 of the reference characters.
 const paladin = viewsOf(openSheet(referenceSheet('paladin8-warlock2')).doc);
 const wizard = viewsOf(openSheet(referenceSheet('wizard10-evoker')).doc);
-
-/** A copy with some fields' values changed, as after the player's edits. */
-function withValues(fields: FieldViews, values: Record<string, string>): FieldViews {
-  const copy = { ...fields };
-  Object.entries(values).forEach(([name, value]) => {
-    const view = copy[name];
-    if (!view) throw new Error(`no field ${name}`);
-    copy[name] = { ...view, value, text: undefined };
-  });
-  return copy;
-}
 
 describe('play view values', () => {
   it('reads hit points and hit dice', () => {
