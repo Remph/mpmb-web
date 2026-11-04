@@ -10,7 +10,7 @@ import type { SourceLink, SourceRequest } from './source-doc.ts';
 function linked(sourceCode: string): { run: (code: string) => unknown; requests: SourceRequest[] } {
   const source = vmRealm();
   source.evaluate(sourceCode);
-  const serve = serveDocument(source.global);
+  const serve = serveDocument(source.global, realmTools(source).copy);
   const requests: SourceRequest[] = [];
   // Through JSON both ways, as between two workers.
   const link: SourceLink = (request) => {
@@ -39,6 +39,8 @@ const OLD_SHEET = `
   function getField(name) { return fields[name]; }
   var counter = 0;
   function bump(by) { counter += by; return counter; }
+  var notANumber = NaN;
+  function kind(value) { return (value instanceof Array) + ' ' + value; }
   var info = {};
   Object.defineProperty(info, 'title', { get: function () { return 'MPMB sheet'; } });
 `;
@@ -65,6 +67,18 @@ describe('the old document seen from the importing realm', () => {
     expect(run('typeof docFrom.getField("HP Max").getArray')).toBe('function');
     expect(run('docFrom.getField("HP Max").getArray()[0].value')).toBe(HP_MAX);
     expect(run('docFrom.getField("HP Max") === docFrom.getField("HP Max")')).toBe(true);
+  });
+
+  test('NaN and the infinities stay numbers, both ways', () => {
+    const { run } = linked(OLD_SHEET);
+    expect(run('typeof docFrom.notANumber === "number" && isNaN(docFrom.notANumber)')).toBe(true);
+    expect(run('docFrom.kind(-1 / 0)')).toBe('false -Infinity');
+  });
+
+  test("arguments arrive made by the old document's realm", () => {
+    const { run } = linked(OLD_SHEET);
+    // MPMB changes its realm's Array.prototype; an argument array must be that realm's own.
+    expect(run('docFrom.kind(["a", "b"])')).toBe('true a,b');
   });
 
   test('getters are read on the source side (info.title)', () => {
