@@ -104,6 +104,14 @@ test('a new character gets a class, armour and a weapon, and the play view shows
   await magicPick.getByRole('searchbox').fill('Bag of Holding');
   await magicPick.getByRole('button', { name: /^Bag of Holding/ }).click();
   await expect(magicWindow.getByText('Bag of Holding')).toBeVisible();
+  // On the card, a tap on the item's tile opens its text under the tiles, and a second tap closes it.
+  await magicWindow.getByRole('button', { name: 'Close', exact: true }).last().click();
+  const magicCard = page.locator('section[aria-labelledby=magic-title]');
+  await magicCard.getByRole('button', { name: 'Bag of Holding' }).click();
+  await expect(magicCard.locator('#magic-text')).toContainText('Bag of Holding');
+  await magicCard.getByRole('button', { name: 'Bag of Holding' }).click();
+  await expect(magicCard.locator('#magic-text')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Change magic items' }).click();
   await magicWindow.getByRole('button', { name: 'Remove Bag of Holding' }).click();
   await expect(magicWindow.getByText('Bag of Holding')).toHaveCount(0);
   await magicWindow.getByRole('button', { name: 'Close', exact: true }).last().click();
