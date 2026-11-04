@@ -18,12 +18,21 @@ import { fitImages, fitPicture } from './play/pictures.ts';
 import type { Texts } from './i18n.ts';
 import { counted, fill } from './i18n.ts';
 import { PopUpStack } from './popups/popups.svelte.ts';
-import { BackupError, backupFileName, filledPdfName, makeBackup, planRestore, readBackup } from './store/backup.ts';
+import { backupFileName, filledPdfName, makeBackup, planRestore, readBackup } from './store/backup.ts';
+import {
+  UpdateLeft,
+  UpdateStopped,
+  backupFailureText,
+  errorText,
+  failureText,
+  restoreLines,
+  sameNamed,
+} from './session-texts.ts';
 import { CharacterStore, copyHomebrew, describeCharacter, keepStorage } from './store/characters.ts';
 import type { UltCharges } from './homebrew/ult.ts';
 import type { CharacterMeta, PreviousVersion, StoredCharacter } from './store/characters.ts';
 import { EngineClient, EngineError } from './worker/client.ts';
-import type { Done, PopUps } from './worker/client.ts';
+import type { Done, PopUps, WorkerLike } from './worker/client.ts';
 import { createLink } from './worker/link.ts';
 import { newEngineWorker } from './worker/start.ts';
 import type { FieldViews } from './worker/views.ts';
@@ -84,14 +93,6 @@ export function expected(fields: FieldViews, steps: Step[]): FieldViews {
   return next;
 }
 
-const errorText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
-
-/** Why an update failed although every command worked: MPMB's import stopped after its own pop-up. */
-class UpdateStopped extends Error {}
-
-/** An update stopped because the player left the character (or opened another) while it ran. */
-class UpdateLeft extends Error {}
-
 const closed = (): Promise<never> => Promise.reject(new Error('closed'));
 /**
  * The old sheet's pop-ups during an update, answered as closed (EngineClient answers a failed pop-up with
@@ -113,7 +114,7 @@ async function settled(work: Promise<void>): Promise<void> {
 
 export class Session {
   readonly popUps = new PopUpStack();
-  readonly client = new EngineClient(this.popUps, newEngineWorker);
+  readonly client: EngineClient;
   characters: CharacterMeta[] = $state([]);
   notes: Note[] = $state([]);
   /** The character on screen, or null for the list. */
@@ -137,7 +138,12 @@ export class Session {
   /** Whether the browser was asked to keep the data during this visit. */
   private askedToKeep = false;
 
-  constructor(private readonly texts: () => Texts) {
+  constructor(
+    private readonly texts: () => Texts,
+    /** Starts an engine worker: newEngineWorker in the app, a stand-in in tests. */
+    private readonly newWorker: () => WorkerLike = newEngineWorker,
+  ) {
+    this.client = new EngineClient(this.popUps, newWorker);
     this.client.onFields = () => {
       this.dirty = true;
       if (this.current) this.current.fields = this.shownFields();
@@ -266,7 +272,7 @@ export class Session {
     openOld: (source: EngineClient) => Promise<unknown>,
     wanted: () => boolean = () => true,
   ): Promise<{ migrated: Done<Migrated>; before: FieldValues }> {
-    const source = new EngineClient(CLOSED_POP_UPS, newEngineWorker);
+    const source = new EngineClient(CLOSED_POP_UPS, this.newWorker);
     try {
       await openOld(source);
       // The import leaves out the pictures (the app carries them), so they come from the old sheet.
@@ -295,7 +301,7 @@ export class Session {
    */
   private async sameAs(data: CharacterData, addOns: AddOns): Promise<CharacterMeta | null | 'cancel'> {
     const fresh = describeCharacter(data, addOns, null);
-    const same = this.characters.filter((c) => c.name !== '' && c.name === fresh.name)[0];
+    const same = sameNamed(this.characters, fresh.name);
     if (!same) return null;
     const answer = await this.popUps.choose({
       title: this.t.sameCharacterTitle,
@@ -312,14 +318,7 @@ export class Session {
   }
 
   private explain(err: unknown): string {
-    if (err instanceof UpdateStopped) return err.message;
-    if (err instanceof EngineError && err.code === 'unreadable-pdf') return this.t.unreadablePdf;
-    if (err instanceof EngineError && err.code === 'wrong-sheet') {
-      const found = err.detail ? fill(this.t.wrongSheetFound, { what: err.detail }) : '';
-      return fill(this.t.wrongSheet, { version: SHEET_ID.version, found });
-    }
-    if (err instanceof EngineError) return fill(this.t.engineFailed, { reason: err.message });
-    return fill(this.t.storageFailed, { reason: errorText(err) });
+    return failureText(err, this.t);
   }
 
   private async save(...characters: StoredCharacter[]): Promise<void> {
@@ -841,11 +840,7 @@ export class Session {
       const answer = await this.popUps.choose({
         title: this.t.restoreTitle,
         message: fill(this.t.restoreFrom, { date }),
-        lines: plan.map(({ character, replaces, older }) => {
-          const name = character.meta.name || this.t.unnamed;
-          if (older) return fill(this.t.restoreOlder, { name });
-          return fill(replaces ? this.t.restoreReplaces : this.t.restoreNew, { name });
-        }),
+        lines: restoreLines(plan, this.t),
         buttons: [
           { value: 'cancel', label: this.t.cancel },
           { value: 'restore', label: this.t.restoreButton, primary: true },
@@ -857,16 +852,8 @@ export class Session {
       await this.refresh();
       this.note('ok', counted(this.t.restoredOne, this.t.restored, backup.characters.length));
     } catch (err) {
-      this.note('error', this.explainBackup(err));
+      this.note('error', backupFailureText(err, this.t));
     }
-  }
-
-  private explainBackup(err: unknown): string {
-    if (!(err instanceof BackupError)) return fill(this.t.storageFailed, { reason: errorText(err) });
-    if (err.problem === 'newer-backup') return this.t.newerBackup;
-    if (err.problem === 'wrong-sheet')
-      return fill(this.t.wrongSheetBackup, { what: err.detail, version: `${SHEET_ID.type} v${SHEET_ID.version}` });
-    return this.t.notABackup;
   }
 }
 
