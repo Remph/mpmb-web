@@ -8,6 +8,7 @@
   import { counted, fill } from '../../i18n.ts';
   import type { PreviousVersion, SheetUpdate } from '../../store/characters.ts';
   import { changeLabel } from './labels.ts';
+  import { mpmbNotes } from './mpmb-notes.ts';
 
   interface Props {
     update: SheetUpdate;
@@ -25,18 +26,7 @@
   const MAX_ROWS = 60;
   const changes = $derived(details?.changes ?? []);
   const rows = $derived(changes.slice(0, MAX_ROWS));
-  /**
-   * MPMB's summary as its separate points; it starts with a sentence about the import itself. Matches the
-   * line breaks between points in "a\n\n- b"; rejects nothing else of note.
-   * Try it: https://regex101.com/?regex=%5Cn%2B&testString=a%0A%0A-+b
-   */
-  const LINES = /\n+/;
-  const notes = $derived(
-    (details?.summary ?? '')
-      .split(LINES)
-      .map((line) => line.trim())
-      .filter(Boolean),
-  );
+  const notes = $derived(mpmbNotes(details?.summary ?? ''));
   /** Long texts (notes, class features) show their start; the sheet has the rest. */
   const CLIP = 300;
   const shown = (value: string): string =>
@@ -74,9 +64,12 @@
       >{mpmbOpen ? '▾' : '▸'} {t.updMpmbNotes}</button
     >
     {#if mpmbOpen}
-      <ul class="mpmb" lang="en">
-        {#each notes as note, i (i)}<li>{note}</li>{/each}
-      </ul>
+      <div class="mpmb" lang="en">
+        {#each notes as note, i (i)}
+          {#if note.kind === 'heading'}<h3>{note.text}</h3>
+          {:else}<p class:point={note.kind === 'point'}>{note.text}</p>{/if}
+        {/each}
+      </div>
     {/if}
   {/if}
   {#if details}<p class="muted">{fill(t.updKept, { from: update.from })}</p>{/if}
@@ -118,6 +111,9 @@
   tbody th {
     font-weight: 600;
     width: 30%;
+    /* Long German names ("Anwendungen") break at a syllable, with a hyphen, before any letter would do. The
+       values are MPMB's English text, so they keep breaking only where they must. */
+    hyphens: auto;
   }
   .empty {
     color: var(--ink-muted);
@@ -132,6 +128,22 @@
   .mpmb {
     margin: 0.25rem 0 0.75rem;
     color: var(--ink-muted);
+  }
+  .mpmb h3 {
+    font-size: 1rem;
+    margin: 0.75rem 0 0.25rem;
+    color: var(--ink);
+  }
+  .mpmb p {
+    margin: 0.25rem 0;
+  }
+  /* MPMB's own bullet points, hanging like a list's. */
+  .mpmb .point {
+    padding-left: 1.25rem;
+    text-indent: -0.75rem;
+  }
+  .mpmb .point::before {
+    content: '• ';
   }
   .muted {
     color: var(--ink-muted);
