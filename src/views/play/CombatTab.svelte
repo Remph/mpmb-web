@@ -447,7 +447,7 @@
 
   /*
    * Actions: one row per kind, the kind's name above, its actions as even tiles tinted in the kind's colour
-   * (Nick picked the tiles, 2026-11-04). Action purple, bonus action amber, reaction teal: the stat cards'
+   * (Remph picked the tiles, 2026-11-04). Action purple, bonus action amber, reaction teal: the stat cards'
    * colour family; every name and note keeps 4.5:1 on its tint in both themes.
    */
   .group {
@@ -509,7 +509,7 @@
     gap: 0.25rem;
   }
 
-  /* Compact (Nick, 2026-11-04): one 44 px line, the note right after the name, wrapping only when long. */
+  /* Compact (Remph, 2026-11-04): one 44 px line, the note right after the name, wrapping only when long. */
   .chip {
     display: flex;
     flex-wrap: wrap;

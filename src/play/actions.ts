@@ -1,11 +1,11 @@
 // The Actions card (session feedback, 2026-11-04: "one long line"). MPMB fills Action, Bonus Action and
 // Reaction rows; the first rows always hold the basic actions every creature has ("Attack / Magic /
-// Utilize", "Opportunity Attack"), and features sometimes land twice ("Embolden Allies" and "Embolden Allies
-// (Embolden Allies)"). The card shows the character's own actions as chips and folds the basic ones away.
+// Utilize", "Opportunity Attack"), and features sometimes land twice ("Rallying Cry" and "Rallying Cry
+// (Rallying Cry)"). The card shows the character's own actions as chips and folds the basic ones away.
 import type { FieldViews } from '../worker/views.ts';
 import { featureLine, linesOf, readActions, readFeatures, readInventory, textRuns } from './read.ts';
 
-/** One action: "Sensory Stone (record)" is the name "Sensory Stone" with the note "record". */
+/** One action: "Gem of Brightness (light)" is the name "Gem of Brightness" with the note "light". */
 export interface ActionItem {
   name: string;
   note: string;
@@ -37,8 +37,8 @@ const BASIC = new Set([
   'Opportunity Attack',
 ]);
 
-// A note in brackets at the end: "Sensory Stone (destroy to end charmed/frightened)". Try it:
-// https://regex101.com/?regex=%5E(.%2B%3F)%5Cs*%5C((.%2B)%5C)%24&testString=Sensory%20Stone%20(destroy%20to%20end%20charmed%2Ffrightened)
+// A note in brackets at the end: "Gem of Brightness (blinding flash)". Try it:
+// https://regex101.com/?regex=%5E(.%2B%3F)%5Cs*%5C((.%2B)%5C)%24&testString=Gem%20of%20Brightness%20(blinding%20flash)
 const NOTE = /^(.+?)\s*\((.+)\)$/;
 
 export function actionItem(text: string): ActionItem {
@@ -46,7 +46,7 @@ export function actionItem(text: string): ActionItem {
   if (!m) return { name: text.trim(), note: '' };
   const name = m[1] ?? '';
   const note = m[2] ?? '';
-  // "Embolden Allies (Embolden Allies)": a note that only repeats the name says nothing.
+  // "Rallying Cry (Rallying Cry)": a note that only repeats the name says nothing.
   return { name, note: note.toLowerCase() === name.toLowerCase() ? '' : note };
 }
 
@@ -82,7 +82,7 @@ export function readActionList(fields: FieldViews): ActionList {
 /** The rule text behind an action, to read on the Combat tab without opening Features. */
 export interface ActionRule {
   title: string;
-  /** Where it comes from, as MPMB writes it: "Illrigger 6, IR 13", or "Magic item". */
+  /** Where it comes from, as MPMB writes it: "Paladin 1, SRD'24 53", or "Magic item". */
   source: string;
   /** Plain lines, MPMB's bold and italic marks taken off. */
   lines: string[];
@@ -92,8 +92,8 @@ const plain = (line: string): string =>
   textRuns(line)
     .map((run) => run.text)
     .join('');
-// A species trait some add-on scripts write as "• Chameleon Carapace: My base AC is …". Try it:
-// https://regex101.com/?regex=%5E%E2%80%A2%5Cs*(%5B%5E%3A%5D%2B)%3A%5Cs*(.*)%24&testString=%E2%80%A2%20Chameleon%20Carapace%3A%20My%20base%20AC
+// A species trait some add-on scripts write as "• Stone Hide: My base AC is …". Try it:
+// https://regex101.com/?regex=%5E%E2%80%A2%5Cs*(%5B%5E%3A%5D%2B)%3A%5Cs*(.*)%24&testString=%E2%80%A2%20Stone%20Hide%3A%20My%20base%20AC
 const BULLET = /^•\s*([^:]+):\s*(.*)$/;
 const key = (name: string): string => name.replace(/^◆\s*/, '').trim().toLowerCase();
 
@@ -143,7 +143,7 @@ export function ruleIndex(fields: FieldViews): Map<string, ActionRule> {
 }
 
 /**
- * The rule for an action, found by name: "Infernal Conduit" is the class feature of that name. A few
+ * The rule for an action, found by name: "Lay on Hands" is the class feature of that name. A few
  * actions name their feature differently: "Baleful Interdict - Seals" is under "Baleful Interdict", and
  * "Divine Sense (Channel Divinity)" may only exist as its note.
  */

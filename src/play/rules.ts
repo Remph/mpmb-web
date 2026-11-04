@@ -156,7 +156,7 @@ export function pactSlots(fields: FieldViews): { level: number; count: number } 
  * has 4 + 2 first-level boxes), so the boxes can't say which used ones were the warlock's: up to that many
  * of the used boxes at the pact level come back, as a player spends pact slots first between short rests.
  *
- * `halfHp` is the house rule switch (Nick, 2026-11-04): half the maximum hit points back, rounded down.
+ * `halfHp` is the house rule switch (Remph, 2026-11-04): half the maximum hit points back, rounded down.
  */
 export function shortRest(fields: FieldViews, halfHp = false): RestEdits {
   const values: Record<string, string> = {};

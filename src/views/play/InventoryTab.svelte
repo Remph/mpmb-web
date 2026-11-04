@@ -172,7 +172,7 @@
         >{t.magicItemsChange}</button
       >
     </div>
-    <!-- Tiles like the Actions card (Nick, 2026-11-04), in one quiet tint: the kind colours mean actions there. -->
+    <!-- Tiles like the Actions card (Remph, 2026-11-04), in one quiet tint: the kind colours mean actions there. -->
     {#if inventory.magicItems.length}
       <div class="items">
         {#each inventory.magicItems as item (item.row)}
