@@ -537,7 +537,7 @@
   }
 
   .tabs {
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 0;
     display: flex;
     align-self: stretch;
@@ -576,6 +576,19 @@
     }
 
     .tabs button {
+      padding: 0 0.25rem;
+      font-size: 0.9375rem;
+    }
+  }
+
+  /* With the folded bar's pill at the row's end, the tabs go compact a little earlier (review of #56: at
+   * 1280 px the pill pushed "Notes" out of sight). */
+  @container (max-width: 720px) {
+    .tabrow:has(:global(.unfold)) .tabs {
+      gap: 0;
+    }
+
+    .tabrow:has(:global(.unfold)) .tabs button {
       padding: 0 0.25rem;
       font-size: 0.9375rem;
     }

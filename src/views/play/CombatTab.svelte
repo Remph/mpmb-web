@@ -281,7 +281,7 @@
         {#if rule}
           <div class="rule" id={`rule-${group.kind}`}>
             <b
-              >{rule.title}{#if rule.source}<small> · {rule.source}</small>{/if}</b
+              >{rule.title}{#if rule.source}{' '}<small>· {rule.source}</small>{/if}</b
             >
             {#each rule.lines as line, i (i)}<p>{line}</p>{/each}
           </div>

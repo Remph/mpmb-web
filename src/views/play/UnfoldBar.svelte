@@ -24,8 +24,13 @@
 </button>
 
 <style>
+  /*
+   * The pill gives way first: it shrinks to its arrow (the name cut short) long before the tabs have to scroll,
+   * so a wide name never hides the last tab (review of #56: "Notes" was out of sight in the 1440 px laptop's
+   * middle column).
+   */
   .unfold {
-    flex: none;
+    flex: 0 1000 auto;
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;

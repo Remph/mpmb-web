@@ -144,7 +144,7 @@ export function ruleIndex(fields: FieldViews): Map<string, ActionRule> {
 
 /**
  * The rule for an action, found by name: "Lay on Hands" is the class feature of that name. A few
- * actions name their feature differently: "Baleful Interdict - Seals" is under "Baleful Interdict", and
+ * actions name their feature differently: "Lay on Hands - Poison" is under "Lay on Hands", and
  * "Divine Sense (Channel Divinity)" may only exist as its note.
  */
 export function ruleFor(index: Map<string, ActionRule>, item: ActionItem): ActionRule | null {
