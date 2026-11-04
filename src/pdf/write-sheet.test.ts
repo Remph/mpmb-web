@@ -4,7 +4,7 @@
 // sheet runs too when MPMB_BLANK_PDF names a blank Colorful A4 v24.2.0 PDF: the app doesn't ship MPMB's
 // PDF, so neither does the repo. Then both reference characters must come back field for field.
 import fs from 'node:fs';
-import { PDFDict, PDFDocument, PDFName, PDFString } from '@cantoo/pdf-lib';
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFNumber, PDFString } from '@cantoo/pdf-lib';
 import { describe, expect, test } from 'vitest';
 import { REFERENCE_CHARACTERS, referenceSheet } from '../../test/characters.ts';
 import type { SheetSnapshot } from '../engine/types.ts';
@@ -13,7 +13,10 @@ import { encodePng } from './png.ts';
 import { readSheetPdf } from './read-sheet.ts';
 import { WrongSheetError, writeSheetPdf } from './write-sheet.ts';
 
-/** One page with a name and a check box, and template "Spells" with field "Spell" on its hidden page. */
+/**
+ * One page with a name, a check box and a species drop-down you can also type into, and template "Spells"
+ * with field "Spell" on its hidden page.
+ */
 async function makeSheet(): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const page = doc.addPage([200, 200]);
@@ -21,6 +24,12 @@ async function makeSheet(): Promise<Uint8Array> {
   form.createTextField('Name').addToPage(page, { x: 10, y: 150, width: 100, height: 20, borderWidth: 0 });
   form.createCheckBox('Inspired').addToPage(page, { x: 10, y: 120, width: 10, height: 10 });
   form.createButton('Portrait').addToPage('', page, { x: 120, y: 100, width: 60, height: 80 });
+  const species = form.createDropdown('Species');
+  species.addOptions(['', 'Dwarf', 'Elf']);
+  species.enableEditing();
+  species.addToPage(page, { x: 10, y: 90, width: 100, height: 20, borderWidth: 0 });
+  // As on MPMB's blank sheet: the empty first entry marked as chosen.
+  species.acroField.dict.set(PDFName.of('I'), doc.context.obj([0]));
 
   // The template's field goes on page 1 first; its widget then moves to the template page.
   form.createTextField('Spell').addToPage(page, { x: 10, y: 50, width: 100, height: 20, borderWidth: 0 });
@@ -64,6 +73,18 @@ const shape = (sheet: SheetSnapshot): unknown =>
     ]),
   );
 
+/**
+ * The entries the Species drop-down marks as chosen (/I). Firefox shows these, not the value, so they must
+ * agree with it.
+ */
+async function speciesMarks(pdf: Uint8Array): Promise<number[] | undefined> {
+  const dict = (await PDFDocument.load(pdf)).getForm().getDropdown('Species').acroField.dict;
+  return dict
+    .lookupMaybe(PDFName.of('I'), PDFArray)
+    ?.asArray()
+    .map((n) => (n as PDFNumber).asNumber());
+}
+
 describe('writing a character into a sheet PDF', () => {
   test('values, a check box and a page spawned from a template come back as written', async () => {
     const blank = await makeSheet();
@@ -81,6 +102,26 @@ describe('writing a character into a sheet PDF', () => {
     expect(pages[1]?.node.get(PDFName.of('TemplateInstantiated'))).toBe(PDFName.of('Spells'));
     // The template stays as it was, for MPMB to spawn from again.
     expect(back.templates).toEqual(given.templates);
+  });
+
+  test('a drop-down marks the entry its value names, or none for a typed value', async () => {
+    const blank = await makeSheet();
+    const given = await readSheetPdf(blank);
+    const chosen = async (value: string): Promise<number[] | undefined> => {
+      const target = { ...given, fields: { ...given.fields, Species: { ...given.fields.Species!, value } } };
+      return speciesMarks(await writeSheetPdf(blank, target));
+    };
+    expect(await chosen('Elf')).toEqual([2]);
+    expect(await chosen('')).toEqual([0]);
+    expect(await chosen('Thri-kreen')).toBeUndefined();
+  });
+
+  test('a stale mark is fixed even when the value stays: a PDF filled before the fix, picked as the base', async () => {
+    // Such a PDF has the value Elf but still marks the empty first entry.
+    const old = await PDFDocument.load(await makeSheet());
+    old.getForm().getDropdown('Species').acroField.dict.set(PDFName.of('V'), PDFString.of('Elf'));
+    const base = await old.save();
+    expect(await speciesMarks(await writeSheetPdf(base, await readSheetPdf(base)))).toEqual([2]);
   });
 
   test('the original bytes stay in front: the PDF grows by an update, as Acrobat saves', async () => {
