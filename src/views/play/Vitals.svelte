@@ -25,6 +25,7 @@
   import EdgePopUp from './EdgePopUp.svelte';
   import UltCharges from './UltCharges.svelte';
   import type { UltCharges as Ult } from '../../homebrew/ult.ts';
+  import { shownTiles, statColor, statSoft } from '../../play/stat-colors.ts';
 
   interface Props {
     fields: FieldViews;
@@ -81,14 +82,14 @@
     initiativeTile?.focus();
   }
   const tiles = $derived(
-    [
-      { label: t.acLabel, value: numbers.armorClass },
-      { label: t.initiative, value: numbers.initiative, initiative: true },
-      { label: t.speed, value: numbers.speed },
-      { label: t.proficiency, value: numbers.proficiency },
-      ...numbers.spellSaveDcs.map((dc) => ({ label: t.spellSaveDc, value: dc })),
-      { label: t.passivePerception, value: numbers.passivePerception },
-    ].filter((tile) => tile.value !== ''),
+    shownTiles([
+      { label: t.acLabel, value: numbers.armorClass, kind: 'ac' },
+      { label: t.initiative, value: numbers.initiative, kind: 'init', initiative: true },
+      { label: t.speed, value: numbers.speed, kind: 'speed' },
+      { label: t.proficiency, value: numbers.proficiency, kind: 'prof' },
+      ...numbers.spellSaveDcs.map((dc) => ({ label: t.spellSaveDc, value: dc, kind: 'dc' as const })),
+      { label: t.passivePerception, value: numbers.passivePerception, kind: 'pp' },
+    ]),
   );
   const exhaustionText = (n: number): string => (n > 0 ? String(n) : '');
 </script>
@@ -160,6 +161,8 @@
       <button
         type="button"
         class="tile"
+        style:--stat={statColor(tile.kind)}
+        style:--stat-soft={statSoft(tile.kind)}
         aria-haspopup="dialog"
         aria-label={`${tile.label} ${tile.value}${initiativeEdge ? `, ${initiativeEdge === 'adv' ? t.advantage : t.disadvantage}` : ''}`}
         bind:this={initiativeTile}
@@ -171,7 +174,9 @@
         ></button
       >
     {:else}
-      <div class="tile"><span class="k">{tile.label}</span><span class="v">{tile.value}</span></div>
+      <div class="tile" style:--stat={statColor(tile.kind)} style:--stat-soft={statSoft(tile.kind)}>
+        <span class="k">{tile.label}</span><span class="v">{tile.value}</span>
+      </div>
     {/if}
   {/each}
 </div>
@@ -461,23 +466,28 @@
     justify-content: space-between;
     min-height: 56px;
     padding: 0.375rem 0.5rem;
-    border: 1px solid var(--line);
+    /* Each number in its own colour (--stat, set per tile), on a pale wash of it, so the row stands out. */
+    border: 1px solid color-mix(in srgb, var(--stat) 35%, transparent);
     border-radius: 0.5rem;
-    background: var(--surface);
+    background: var(--stat-soft);
+    color: var(--stat);
   }
 
   /* Initiative's tile is a button (it opens the advantage pop-up) but looks like the others. */
   button.tile {
     align-items: stretch;
     min-height: 56px;
-    color: var(--ink);
+    color: var(--stat);
     font: inherit;
     text-align: left;
   }
 
-  button.tile:hover,
+  /* Under the pointer the wash deepens a little; the shared hover rule's grey would hide the colour. */
+  button.tile:not(:disabled):hover,
   button.tile:focus-visible {
-    background: var(--hover);
+    border-color: color-mix(in srgb, var(--stat) 35%, transparent);
+    background: color-mix(in srgb, var(--stat) 10%, var(--stat-soft));
+    color: var(--stat);
   }
 
   .edge {
@@ -494,7 +504,6 @@
   .k {
     font-size: 0.8125rem;
     line-height: 1.2;
-    color: var(--ink-muted);
   }
 
   .v {

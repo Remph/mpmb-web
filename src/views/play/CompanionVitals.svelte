@@ -11,6 +11,8 @@
   import type { Companion } from '../../play/companions.ts';
   import { applyDamage, applyHealing } from '../../play/rules.ts';
   import NumberPad from './NumberPad.svelte';
+  import { shownTiles, statColor, statSoft } from '../../play/stat-colors.ts';
+  import type { StatKind } from '../../play/stat-colors.ts';
 
   interface Props {
     companion: Companion;
@@ -56,18 +58,19 @@
 
   const options = () => change([{ click: companionMenu(companion.prefix), menuTitle: t.companionMenuTitle }]);
 
+  // The same colours as the character's numbers. Speed is a line of text here, coloured like its tile there.
   const tiles = $derived(
-    [
-      { label: t.acLabel, value: companion.armorClass },
-      { label: t.initiative, value: companion.initiative },
-      { label: t.proficiency, value: companion.proficiency },
-      { label: t.passivePerception, value: companion.passivePerception },
-    ].filter((tile) => tile.value !== ''),
+    shownTiles([
+      { label: t.acLabel, value: companion.armorClass, kind: 'ac' },
+      { label: t.initiative, value: companion.initiative, kind: 'init' },
+      { label: t.proficiency, value: companion.proficiency, kind: 'prof' },
+      { label: t.passivePerception, value: companion.passivePerception, kind: 'pp' },
+    ]),
   );
   const lines = $derived(
     [
-      { label: t.speed, value: companion.speed },
-      { label: t.companionSenses, value: companion.senses },
+      { label: t.speed, value: companion.speed, kind: 'speed' as StatKind },
+      { label: t.companionSenses, value: companion.senses, kind: null },
     ].filter((line) => line.value !== ''),
   );
 </script>
@@ -99,12 +102,21 @@
 {#if tiles.length}
   <div class="tiles">
     {#each tiles as tile (tile.label)}
-      <div class="tile"><span class="k">{tile.label}</span><span class="v">{tile.value}</span></div>
+      <div class="tile stat" style:--stat={statColor(tile.kind)} style:--stat-soft={statSoft(tile.kind)}>
+        <span class="k">{tile.label}</span><span class="v">{tile.value}</span>
+      </div>
     {/each}
   </div>
 {/if}
 {#each lines as line (line.label)}
-  <div class="tile line"><span class="k">{line.label}</span><span class="text">{line.value}</span></div>
+  <div
+    class="tile line"
+    class:stat={line.kind !== null}
+    style:--stat={line.kind && statColor(line.kind)}
+    style:--stat-soft={line.kind && statSoft(line.kind)}
+  >
+    <span class="k">{line.label}</span><span class="text">{line.value}</span>
+  </div>
 {/each}
 
 {#if pad === 'damage'}
@@ -270,6 +282,17 @@
     border: 1px solid var(--line);
     border-radius: 0.5rem;
     background: var(--surface);
+  }
+
+  /* A coloured number: its own colour on a pale wash of it (--stat, set per tile; app.css has the pairs). */
+  .tile.stat {
+    border-color: color-mix(in srgb, var(--stat) 35%, transparent);
+    background: var(--stat-soft);
+    color: var(--stat);
+  }
+
+  .stat .k {
+    color: var(--stat);
   }
 
   .k {
