@@ -959,6 +959,9 @@ export const ui = {
       'Regeln eurer Runde, die die App zu MPMBs Bogen hinzufügt. Sie gelten für alle Charaktere in diesem Browser und bleiben in der App: Drucken und „MPMB-PDF ausfüllen“ lassen sie weg.',
     homebrewUltTitle: 'Ult-Ladungen',
     homebrewUltLine: 'Eine Leiste links in der Spielansicht, die mit deinen Zügen und Angriffen steigt.',
+    homebrewNoAmmoTitle: 'Munition nicht zählen',
+    homebrewNoAmmoLine:
+      'Blendet die Munition im Kampf-Reiter aus. Der Bogen behält die Zähler, auch für „MPMB-PDF ausfüllen“.',
     homebrewOnCount: 'An: {count}',
     switchOn: 'An',
     switchOff: 'Aus',
@@ -1917,6 +1920,8 @@ export const ui = {
       "Your group's rules that the app adds on top of MPMB's sheet. They count for every character in this browser and stay in the app: printing and Fill MPMB PDF leave them out.",
     homebrewUltTitle: 'Ult charges',
     homebrewUltLine: 'A meter on the left of the play view that goes up with your turns and attacks.',
+    homebrewNoAmmoTitle: 'No ammunition counting',
+    homebrewNoAmmoLine: 'Hides ammunition on the Combat tab. The sheet keeps its counters, for Fill MPMB PDF too.',
     homebrewOnCount: 'On: {count}',
     switchOn: 'On',
     switchOff: 'Off',
