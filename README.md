@@ -54,7 +54,10 @@ Sheet data from a PDF (Node 22 runs the TypeScript directly):
 ```sh
 node tools/extract-sheet.ts <blank Colorful A4.pdf>            # src/engine/data/colorful-a4.json
 node tools/extract-character.ts <filled sheet.pdf> <out.json>  # a character as differences from it
+node tools/update-mpmb.ts <upstream checkout>                  # MPMB's newer scripts into vendor/mpmb/
 ```
+
+How to take a new upstream version: `vendor/README.md`, "Updating".
 
 ## Deploy
 
