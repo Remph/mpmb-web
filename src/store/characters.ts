@@ -6,6 +6,7 @@
 import type { AddOns } from '../engine/add-ons.ts';
 import type { SheetChange } from '../engine/sheet-changes.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
+import type { UltCharges } from '../homebrew/ult.ts';
 
 export interface CharacterMeta {
   id: string;
@@ -21,6 +22,13 @@ export interface CharacterMeta {
   updated: string;
   /** The last update of the character to a new release of MPMB's sheet, when it had one. */
   sheetUpdate?: SheetUpdate;
+  /** Homebrew the app adds on top of MPMB's sheet (never in a PDF); see src/homebrew/. */
+  homebrew?: CharacterHomebrew;
+}
+
+/** A character's homebrew values. Kept even while its switch is off, so turning it on again finds them. */
+export interface CharacterHomebrew {
+  ult?: UltCharges;
 }
 
 /** A character moved to a new release of MPMB's sheet with MPMB's own import (M11). */
@@ -189,14 +197,17 @@ function classLine(data: CharacterData): string {
 export function describeCharacter(
   data: CharacterData,
   addOns: AddOns,
-  before: Pick<CharacterMeta, 'id' | 'created' | 'sheetUpdate'> | null,
+  before: Pick<CharacterMeta, 'id' | 'created' | 'sheetUpdate' | 'homebrew'> | null,
   now = new Date(),
 ): CharacterMeta {
   const portrait = data.images?.portrait?.thumb;
   const sheetUpdate = before?.sheetUpdate;
+  const homebrew = before?.homebrew;
   return {
     ...(portrait ? { portrait } : {}),
     ...(sheetUpdate ? { sheetUpdate: { ...sheetUpdate } } : {}),
+    // A copy, for the same reason as the add-ons below.
+    ...(homebrew ? { homebrew: copyHomebrew(homebrew) } : {}),
     id: before?.id ?? crypto.randomUUID(),
     name: textOf(data, 'PC Name'),
     classes: classLine(data),
@@ -206,6 +217,11 @@ export function describeCharacter(
     created: before?.created ?? now.toISOString(),
     updated: now.toISOString(),
   };
+}
+
+/** A plain copy (the page's values can be reactive proxies, which IndexedDB can't store). */
+export function copyHomebrew(homebrew: CharacterHomebrew): CharacterHomebrew {
+  return homebrew.ult ? { ult: { ...homebrew.ult } } : {};
 }
 
 /**

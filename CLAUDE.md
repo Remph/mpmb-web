@@ -16,7 +16,7 @@ TypeScript, built with pnpm. Public repo, GPL-3.0-or-later.
 
 In the repo root: `pnpm install`, `pnpm test` (Vitest), `pnpm check` (svelte-check and tsc),
 `pnpm build`, `pnpm format:check` (`pnpm format` fixes; Prettier, config in `.prettierrc.json`).
-`pnpm dev` serves the app locally.
+`pnpm e2e` runs the browser tests (Playwright, Firefox; it builds first). `pnpm dev` serves the app locally.
 
 ## Git (human in the loop)
 
@@ -27,7 +27,8 @@ In the repo root: `pnpm install`, `pnpm test` (Vitest), `pnpm check` (svelte-che
 - One thread pushes to a branch at a time: the review thread during the review, the building thread
   again afterwards. After a merge, new work goes on a new branch. If the owner merged a PR before its review
   finished, further fixes go on a new branch with a new PR.
-- No deploy yet. From M5 on, `main` deploys to a folder on the owner's website; this section will say how.
+- A push to `main` (a merged pull request) deploys to <https://remph.de/mpmb/> in about a minute
+  (`.github/workflows/deploy.yml`; setup and safety nets in `README.md`, "Deploy"). Other branches never deploy.
 - The private repo `mpmb-web-dev` has its own rules (Claude merges there itself); see its `CLAUDE.md`.
 
 ## Checks (no CI on pull requests)
