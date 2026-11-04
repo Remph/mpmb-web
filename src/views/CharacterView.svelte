@@ -28,9 +28,11 @@
   import CompanionVitals from './play/CompanionVitals.svelte';
   import {
     ADD_COMPANION_PAGE,
+    ADD_FIRST_COMPANION_PAGE,
     addedPage,
     companionMenu,
     isEmptyCompanion,
+    PAGES_LAYOUT_BOOKMARK,
     readCompanions,
     stillShown,
   } from '../play/companions.ts';
@@ -80,7 +82,7 @@
   const hasSpells = $derived(readSpells(open.fields).length > 0);
   const shownTab = $derived((wide && tab === 'checks') || (tab === 'spells' && !hasSpells) ? 'combat' : tab);
 
-  // Companion pages (Nick picked B, 2026-11-04): the bar under the top bar switches all three columns to a
+  // Companion pages (the owner picked B, 2026-11-04): the bar under the top bar switches all three columns to a
   // companion. Which one is shown belongs to this view and this character; it isn't saved.
   const companions = $derived(readCompanions(open.fields));
   let showing = $state<{ id: string; prefix: string } | null>(null);
@@ -115,14 +117,17 @@
 
   /**
    * "+ Companion": an empty page if the sheet has one (MPMB makes one with every new sheet), else MPMB's
-   * "Add extra companion page" on the last page's menu (or the template's own, with no page left).
+   * "Add extra companion page" on the last page's menu (or MPMB's pages layout menu, with no page left).
    */
   async function addCompanion() {
     menuOpen = false;
     const empty = companions.find(isEmptyCompanion);
     if (empty) return showCompanion(empty.prefix);
     const before = companions.map((c) => c.prefix);
-    await session.pick(companionMenu(before[before.length - 1] ?? ''), ADD_COMPANION_PAGE);
+    const last = before[before.length - 1];
+    await (last
+      ? session.pick(companionMenu(last), ADD_COMPANION_PAGE)
+      : session.pickBookmark(PAGES_LAYOUT_BOOKMARK, ADD_FIRST_COMPANION_PAGE));
     const added = addedPage(
       before,
       readCompanions(open.fields).map((c) => c.prefix),

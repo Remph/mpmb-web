@@ -1,5 +1,5 @@
 <!--
-  The bar under the top bar on a sheet with companions (Nick picked "switch the whole view", 2026-11-04).
+  The bar under the top bar on a sheet with companions (the owner picked "switch the whole view", 2026-11-04).
   Closed it is one line: who is shown, the way back to the character and the button that opens the list.
   Open it lists the character and every companion with its hit points, plus "+ Companion". Whether the
   list is open is kept for this browser, like the language.

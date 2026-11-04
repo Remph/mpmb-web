@@ -2,9 +2,39 @@
 // and the play view reads it back. The creature is the SRD owl from Find Familiar, so the test carries no
 // content beyond the SRD.
 import { describe, expect, test } from 'vitest';
-import { addedPage, companionPrefixes, isEmptyCompanion, readCompanions, stillShown } from '../src/play/companions.ts';
+import { offers } from '../src/engine/choices.ts';
+import type { MenuItem } from '../src/engine/host.ts';
+import {
+  ADD_FIRST_COMPANION_PAGE,
+  addedPage,
+  companionMenu,
+  companionPrefixes,
+  isEmptyCompanion,
+  PAGES_LAYOUT_BOOKMARK,
+  readCompanions,
+  REMOVE_COMPANION_PAGE,
+  stillShown,
+} from '../src/play/companions.ts';
 import { viewsOf } from '../src/worker/views.ts';
 import { openSheet, referenceSheet } from './characters.ts';
+import { ScriptedHost } from './hosts.ts';
+
+/** Answers the next menu with a cReturn, as the worker's `pick` does, and says yes to MPMB's alerts. */
+class Picking extends ScriptedHost {
+  answer: string | null = null;
+  picked = false;
+
+  constructor() {
+    super({ alerts: { 'Are you sure': 4 } });
+  }
+
+  override popUpMenu(items: MenuItem[]): string | null {
+    const answer = this.answer;
+    this.answer = null;
+    this.picked = answer !== null && offers(items, answer);
+    return this.picked ? answer : null;
+  }
+}
 
 describe('companion pages', () => {
   test('a Find Familiar owl shows with its numbers, skills and rules text', () => {
@@ -44,6 +74,23 @@ describe('companion pages', () => {
     const prefixes = companionPrefixes(viewsOf(engine.doc));
     expect(prefixes[0]).toBe('P4.AScomp.');
     expect(prefixes.slice(1)).toEqual([expect.stringMatching(/\.AScomp\.$/)]);
+  });
+
+  test('with every page removed, the first new one comes from the pages layout menu', () => {
+    const host = new Picking();
+    const engine = openSheet(referenceSheet('wizard10-evoker'), host);
+    host.answer = REMOVE_COMPANION_PAGE;
+    engine.click(companionMenu('P4.AScomp.'));
+    expect(host.picked).toBe(true);
+    expect(companionPrefixes(viewsOf(engine.doc))).toEqual([]);
+
+    host.answer = ADD_FIRST_COMPANION_PAGE;
+    engine.clickBookmark(PAGES_LAYOUT_BOOKMARK);
+    expect(host.picked).toBe(true);
+    expect(engine.stats.errors).toEqual([]);
+    const pages = readCompanions(viewsOf(engine.doc));
+    expect(pages).toHaveLength(1);
+    expect(isEmptyCompanion(pages[0]!)).toBe(true);
   });
 });
 

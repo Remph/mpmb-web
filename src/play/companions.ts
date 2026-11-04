@@ -21,6 +21,12 @@ export const companionMenu = (prefix: string): string => `${prefix}Companion.Opt
 /** MPMB's menu answers on that button (its cReturn texts) for adding and removing a page. */
 export const ADD_COMPANION_PAGE = 'companion#add_page';
 export const REMOVE_COMPANION_PAGE = 'companion#remove_page';
+/**
+ * With no companion page left, the template's own button fails (MPMB's menu reads the creature of the page
+ * it sits on, and the template has none), so the first page comes from MPMB's "Set Pages Layout" menu.
+ */
+export const PAGES_LAYOUT_BOOKMARK = ['Functions', 'Set Pages Layout'];
+export const ADD_FIRST_COMPANION_PAGE = 'template#AScomp#add';
 
 /** How MPMB marks a companion's skill ("Text.Comp.Use.Skills.Arc.Prof"). */
 export type SkillMark = 'nothing' | 'proficient' | 'expertise';
@@ -51,7 +57,7 @@ export interface CompanionAttack {
 
 export interface Companion {
   prefix: string;
-  /** The player's name for it ("Nyx"); may be empty. */
+  /** The player's name for it ("Hoot"); may be empty. */
   name: string;
   /** The creature, as typed or picked ("Owl"). */
   creature: string;

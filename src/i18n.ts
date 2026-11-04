@@ -289,6 +289,7 @@ export const ui = {
     companionOptions: 'Begleiter-Optionen',
     companionEmpty:
       'Auf dieser Seite steht noch keine Kreatur. Wähle eine über die Begleiter-Optionen, zum Beispiel einen Vertrauten von „Vertrauten finden“.',
+    companionNoNotes: 'Auf dieser Seite stehen weder Regeltext noch Notizen.',
     companionSenses: 'Sinne',
     companionTraits: 'Merkmale und Fähigkeiten',
     companionRules: 'Regeln für diesen Begleiter',
@@ -1278,6 +1279,7 @@ export const ui = {
     companionOptions: 'Companion options',
     companionEmpty:
       'No creature on this page yet. Pick one with Companion options, for example a familiar from Find Familiar.',
+    companionNoNotes: 'No rules text or notes on this page.',
     companionSenses: 'Senses',
     companionTraits: 'Traits and features',
     companionRules: 'Rules for this companion',

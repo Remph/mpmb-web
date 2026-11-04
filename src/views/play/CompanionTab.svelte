@@ -62,7 +62,8 @@
     </section>
   {/if}
   {#if !companion.rules.length && !companion.notes.length}
-    <p class="muted">{t.companionEmpty}</p>
+    <!-- The tabs only show for a page with a creature, so "pick a creature" (companionEmpty) is wrong here. -->
+    <p class="muted">{t.companionNoNotes}</p>
   {/if}
 {/if}
 
