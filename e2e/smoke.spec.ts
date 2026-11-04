@@ -97,6 +97,29 @@ test('a new character gets a class, armour and a weapon, and the play view shows
   await expect(page.getByText('100 XP', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Combat' }).click();
 
+  // Homebrew: the ult charges card shows only with its switch on. A quick double tap at one short of full
+  // fills the meter but doesn't use the ult at once, and a double tap on "Use ult" leaves it empty.
+  const ult = page.locator('.ult');
+  await expect(ult).toHaveCount(0);
+  const homebrewSwitch = async () => {
+    await page.getByRole('button', { name: 'Sheet menu' }).click();
+    await page.getByRole('button', { name: 'Homebrew rules' }).click();
+    await page.getByRole('switch', { name: 'Ult charges' }).click();
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+  };
+  await homebrewSwitch();
+  await ult.getByRole('button', { name: '+1 charge' }).click();
+  await ult.getByRole('button', { name: 'Ult charges: 1 of 30' }).click();
+  const ultPad = page.getByRole('dialog', { name: 'Ult charges' });
+  await ultPad.getByRole('button', { name: '2', exact: true }).click();
+  await ultPad.getByRole('button', { name: '9', exact: true }).click();
+  await ultPad.getByRole('button', { name: 'Apply' }).click();
+  await ult.getByRole('button', { name: '+1 charge' }).dblclick();
+  await expect(ult.getByRole('button', { name: 'Ult charges: 30 of 30' })).toBeVisible();
+  await expect(ult.getByText('Ready')).toBeVisible();
+  await ult.getByRole('button', { name: 'Use ult' }).dblclick();
+  await expect(ult.getByRole('button', { name: 'Ult charges: 0 of 30' })).toBeVisible();
+
   // Print (M10): the print window offers the parts this fighter has (no spells, no notes), and the print
   // sheet appears for the browser's print with the attack on it. window.print() itself would wait for a
   // dialog the test can't answer, so the test fires the browser's "beforeprint" the way printing does.
@@ -110,6 +133,8 @@ test('a new character gets a class, armour and a weapon, and the play view shows
   await page.evaluate("window.dispatchEvent(new Event('beforeprint'))");
   const sheet = page.locator('.print-sheet');
   await expect(sheet.locator('.attacks')).toContainText('Longsword');
+  // Homebrew stays in the app.
+  await expect(sheet).not.toContainText('Ult charges');
   await page.evaluate("window.dispatchEvent(new Event('afterprint'))");
   await expect(sheet).toHaveCount(0);
 
@@ -134,6 +159,10 @@ test('a new character gets a class, armour and a weapon, and the play view shows
     .last()
     .click();
   await expect(fillWindow).toHaveCount(0);
+
+  // The switch off again: the card goes.
+  await homebrewSwitch();
+  await expect(ult).toHaveCount(0);
 
   expect(errors).toEqual([]);
 });

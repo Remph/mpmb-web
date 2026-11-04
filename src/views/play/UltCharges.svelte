@@ -26,11 +26,18 @@
   const percent = $derived(`${Math.min(100, (ult.charges / ult.max) * 100)}%`);
   /**
    * "Use ult" takes the place of "+1 charge" under the same finger, so a quick double tap at one short of
-   * full would fill the meter and empty it at once. It waits a moment before it answers.
+   * full would fill the meter and empty it at once. The same the other way: a double tap on "Use ult" would
+   * empty it and count the first charge again. So whichever button just took the other's place waits a
+   * moment before it answers. Not when the card first shows with charges to go: nothing was swapped.
    */
-  let armed = $state(false);
+  let armed = $state(true);
+  let shown = false;
   $effect(() => {
-    if (!full) return;
+    // `full` read first, on every run: the effect runs again only when what it read changes.
+    const isFull = full;
+    const swapped = shown || isFull;
+    shown = true;
+    if (!swapped) return;
     armed = false;
     const timer = setTimeout(() => (armed = true), 800);
     return () => clearTimeout(timer);
@@ -84,8 +91,11 @@
           onclick={() => onchange(withCharges(ult, 0))}>{t.ultUse}</button
         >
       {:else}
-        <button type="button" class="primary" {disabled} onclick={() => onchange(withCharges(ult, ult.charges + 1))}
-          >{t.ultMore}</button
+        <button
+          type="button"
+          class="primary"
+          disabled={disabled || !armed}
+          onclick={() => onchange(withCharges(ult, ult.charges + 1))}>{t.ultMore}</button
         >
       {/if}
     </span>
