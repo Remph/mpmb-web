@@ -14,8 +14,15 @@ import type { RealmTools } from './realm.ts';
 /** JSON data. */
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 
-/** A value on the wire: plain data, undefined, or a reference to a source-side object or function. */
-export type WireValue = { data: Json } | { undefined: true } | { ref: number; callable: boolean };
+/**
+ * A value on the wire: plain data, undefined, a number JSON can't carry (NaN, Infinity, -Infinity), or a
+ * reference to a source-side object or function.
+ */
+export type WireValue = { data: Json } | { undefined: true } | { number: string } | { ref: number; callable: boolean };
+
+/** NaN and the infinities as text: JSON would turn them into null, and a reference would make them objects. */
+const nonFinite = (value: unknown): WireValue | null =>
+  typeof value === 'number' && !Number.isFinite(value) ? { number: String(value) } : null;
 
 /** Reference 0 is the source document itself (the global object of its realm, as in Acrobat). */
 export const DOCUMENT_REF = 0;
@@ -59,13 +66,17 @@ function isPlainData(value: unknown): boolean {
 
 /**
  * The source side: answers requests about the objects of one realm. `doc` is what the importing side gets
- * from `app.openDoc` (the source engine's global object).
+ * from `app.openDoc` (the source engine's global object). `copy` makes plain data arriving from the other
+ * side (arguments, written values) in this realm, as `RealmTools.copy` does; in the app's worker the
+ * realm is the worker's own, so the default (no copy) is the same.
  */
-export function serveDocument(doc: object): SourceLink {
+export function serveDocument(doc: object, copy: <T>(value: T) => T = (value) => value): SourceLink {
   const refs: unknown[] = [doc];
   const index = new Map<unknown, number>([[doc, DOCUMENT_REF]]);
   const toWire = (value: unknown): WireValue => {
     if (value === undefined) return { undefined: true };
+    const special = nonFinite(value);
+    if (special) return special;
     if (isPlainData(value)) return { data: JSON.parse(JSON.stringify(value)) as Json };
     let ref = index.get(value);
     if (ref === undefined) {
@@ -76,7 +87,8 @@ export function serveDocument(doc: object): SourceLink {
   };
   const fromWire = (wire: WireValue): unknown => {
     if ('ref' in wire) return refs[wire.ref];
-    return 'data' in wire ? wire.data : undefined;
+    if ('number' in wire) return Number(wire.number);
+    return 'data' in wire ? copy(wire.data) : undefined;
   };
   const target = (ref: number): Record<string, unknown> => refs[ref] as Record<string, unknown>;
   const handlers: { [Op in SourceRequest['op']]: (request: Extract<SourceRequest, { op: Op }>) => unknown } = {
@@ -115,6 +127,8 @@ export function sourceDocument(tools: RealmTools, link: SourceLink): object {
   };
   const toWire = (value: unknown): WireValue => {
     if (value === undefined) return { undefined: true };
+    const special = nonFinite(value);
+    if (special) return special;
     const ref = typeof value === 'object' || typeof value === 'function' ? refOf.get(value as object) : undefined;
     if (ref !== undefined) return { ref, callable: typeof value === 'function' };
     if (typeof value === 'function') throw new RealmError('A function can not be handed to the other document');
@@ -123,6 +137,7 @@ export function sourceDocument(tools: RealmTools, link: SourceLink): object {
   const fromWire = (wire: WireValue): unknown => {
     if ('data' in wire) return tools.copy(wire.data);
     if ('undefined' in wire) return undefined;
+    if ('number' in wire) return Number(wire.number);
     return proxyFor(wire.ref, wire.callable);
   };
   // Symbols (Symbol.toPrimitive, Symbol.iterator, ...) never cross over: the realm then falls back to

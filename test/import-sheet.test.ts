@@ -72,7 +72,7 @@ describe.each(REFERENCE_CHARACTERS)('%s imported into a blank sheet', (name) => 
   const host = new ImportHost(player);
   const fresh = openSheet(blankSheet(), host);
   const asked = player.asked.length;
-  const { link, count } = jsonLink(serveDocument(old.tools.realm.global));
+  const { link, count } = jsonLink(serveDocument(old.tools.realm.global, old.tools.copy));
   const summary = importSheet(fresh, sourceDocument(fresh.tools, link), host);
 
   test('runs without script errors or questions to the player, and ends with MPMB summary', () => {
@@ -139,10 +139,15 @@ test("a sheet's add-on scripts come along, and what they added is set again", ()
   old.edit('Extra.Magic Item 1', 'Lantern of Testing');
   const host = new ImportHost(new ScriptedHost());
   const fresh = openSheet(blankSheet(), host);
-  importSheet(fresh, sourceDocument(fresh.tools, jsonLink(serveDocument(old.tools.realm.global)).link), host);
+  importSheet(
+    fresh,
+    sourceDocument(fresh.tools, jsonLink(serveDocument(old.tools.realm.global, old.tools.copy)).link),
+    host,
+  );
 
   expect(fresh.stats.errors).toEqual([]);
   expect(addOnsOf(fresh)).toEqual({ files: [LANTERN_FILE], manual: true });
+  expect(fresh.doc.states.get('User Script')?.value).toBe(PASTED);
   expect(fresh.doc.states.get('Extra.Magic Item 1')?.value).toBe('Lantern of Testing');
   expect(fresh.doc.states.get('Extra.Magic Item Description 1')?.value).toBe(
     'This lantern glows whenever an import passes.',
