@@ -31,10 +31,11 @@ may already use fields that only the next PDF has.
    a field the sheet lacks. If it does, the scripts need the next PDF: wait for the release.
 4. A pull request as usual, with the tool's summary.
 
-**A new release** (new PDF): the same steps for the release's tag, and also
+**A new release** (new PDF): first `node tools/keep-version.ts`, which keeps the current version in
+`vendor/versions/` so characters saved on it still open and get updated (see `vendor/versions/README.md`).
+Then the same steps for the release's tag, and also
 
 - new sheet data from MPMB's new blank Colorful A4 PDF: `node tools/extract-sheet.ts <blank sheet.pdf>`,
   and the new version in `src/engine/sheet-id.ts`;
 - new reference characters: the old reference PDFs imported into the new blank sheet in Acrobat
-  (MPMB's "Import from another sheet"), then `node tools/extract-character.ts` for each;
-- characters saved on the old version must still open (being built).
+  (MPMB's "Import from another sheet"), then `node tools/extract-character.ts` for each.
