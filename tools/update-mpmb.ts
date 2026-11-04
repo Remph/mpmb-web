@@ -44,6 +44,17 @@ function readScripts(root: string): Map<string, string> {
 
 const lineCount = (text: string | undefined): number => (text === undefined ? 0 : text.split('\n').length);
 
+// Ask for the release tag before anything is copied: a shallow clone (`git clone --depth 1`) has no tags,
+// and `git describe` would fail only after the scripts had already been replaced.
+let release: string;
+try {
+  // The last release tag before the commit: "v24.2.0" -> "24.2.0".
+  release = git('describe', '--tags', '--abbrev=0').replace(/^v/, '');
+} catch {
+  console.error(`${upstream} has no release tags (a shallow clone?): run "git fetch --unshallow" there first.`);
+  process.exit(1);
+}
+
 const before = readScripts(VENDOR);
 const after = readScripts(upstream);
 const commit = git('log', '-1', '--format=%H');
@@ -92,8 +103,7 @@ if (newUnknown.length) {
   console.log(`Fields the scripts now use that sheet v${SHEET_ID.version} doesn't have (a newer PDF needed?):`);
   newUnknown.forEach(([field, users]) => console.log(`  ${field} (${users.join(', ')})`));
 }
-// The last release tag before the commit ("v24.2.0") against the sheet the app ships.
-const release = git('describe', '--tags', '--abbrev=0').slice('v'.length);
+// The upstream release against the sheet the app ships.
 if (release !== SHEET_ID.version) {
   console.log(`Upstream release is v${release}, the sheet data is v${SHEET_ID.version}: new sheet data needed.`);
 }

@@ -10,18 +10,19 @@ export interface NamedScript {
 }
 
 // A call that takes a field name as its first argument: MPMB's helpers (`What`, `Value`, `Hide`, ...)
-// and Acrobat's `getField`. Only a plain string literal counts; names built at run time ("Text." + x)
-// can't be checked without running the code. Matches `Value("HP Max", 5)` and `getField("Race")`
-// (group 1 is the name); rejects `What("Text." + x)` and `Value(name)`.
-// Try it: https://regex101.com/?regex=%5Cb(%3F%3AWhat%7CValue%7CgetField%7CHide%7CShow)%5C(%5Cs*%22(%5B%5E%22%5C%5C%5D%2B)%22%5Cs*%5B%2C)%5D&testString=Value(%22HP+Max%22,+5);+tDoc.getField(%22Race%22).value;+What(%22Text.%22+%2B+x)
+// and Acrobat's `getField`. Only a plain string literal counts, in double or single quotes (the class
+// lists write `What('Wis Mod')`); names built at run time ("Text." + x) can't be checked without running
+// the code. Matches `Value("HP Max", 5)`, `getField("Race")` and `How('Proficiency Bonus')` (group 2 is
+// the name); rejects `What("Text." + x)`, `Value(name)` and `getField('" + name + ".1')`.
+// Try it: https://regex101.com/?regex=%5Cb(%3F%3AWhat%7CValue%7CgetField%7CHide%7CShow%7CHow)%5C(%5Cs*(%5B%22%27%5D)(%5B%5E%22%27%5C%5C%5D%2B)%5C1%5Cs*%5B%2C)%5D&testString=Value(%22HP+Max%22,+5);+tDoc.getField(%22Race%22).value;+How(%27Proficiency+Bonus%27);+What(%22Text.%22+%2B+x);+getField(%27%22+%2B+name+%2B+%22.1%27)
 // prettier-ignore
-const FIELD_CALL = /\b(?:What|Value|getField|Hide|Show|DontPrint|ReadOnly|Editable|AddTooltip|Who|How|Checkbox)\(\s*"([^"\\]+)"\s*[,)]/g;
+const FIELD_CALL = /\b(?:What|Value|getField|Hide|Show|DontPrint|ReadOnly|Editable|AddTooltip|Who|How|Checkbox)\(\s*(["'])([^"'\\]+)\1\s*[,)]/g;
 
 /** Every field name the scripts spell out, with the scripts that use it. */
 export function scriptFieldNames(scripts: readonly NamedScript[]): Map<string, string[]> {
   const out = new Map<string, string[]>();
   scripts
-    .flatMap(({ name, code }) => [...code.matchAll(FIELD_CALL)].map((m) => [m[1] as string, name] as const))
+    .flatMap(({ name, code }) => [...code.matchAll(FIELD_CALL)].map((m) => [m[2] as string, name] as const))
     .forEach(([field, script]) => {
       const users = out.get(field) ?? [];
       if (!users.includes(script)) out.set(field, [...users, script]);

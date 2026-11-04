@@ -58,4 +58,9 @@ describe('field names in the scripts', () => {
     const script = { name: 'Test', code: 'What("A.B"); getField("A"); Value("C", 1); Hide("D")' };
     expect([...unknownFields([script], ['A.B.C', 'C']).keys()]).toEqual(['D']);
   });
+
+  test("single quotes count too, a name built at run time doesn't", () => {
+    const code = `How('Wis Mod'); getField('" + event.target.name + ".1'); What("Text." + x)`;
+    expect([...scriptFieldNames([{ name: 'Test', code }]).keys()]).toEqual(['Wis Mod']);
+  });
 });
