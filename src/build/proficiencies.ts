@@ -169,7 +169,7 @@ export const openSkillPicks = (choices: SkillChoice[]): number =>
   choices.reduce((sum, c) => sum + Math.max(0, c.choose - c.chosen), 0);
 
 /** MPMB has eight rows each for languages and tools (FieldNumbers.langstools). */
-export const LANG_TOOL_ROWS = 8;
+const LANG_TOOL_ROWS = 8;
 export type LangToolKind = 'Language' | 'Tool';
 
 /** One language or tool row. */

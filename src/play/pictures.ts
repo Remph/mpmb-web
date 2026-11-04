@@ -6,7 +6,7 @@ import type { SheetImage, SheetImages } from '../engine/types.ts';
 /** The long side of the picture the Profile tab shows (twice its size there, for sharp screens). */
 export const PICTURE_SIZE = 640;
 /** The long side of the character list's small picture. */
-export const THUMB_SIZE = 160;
+const THUMB_SIZE = 160;
 const JPEG_QUALITY = 0.85;
 /**
  * Below this alpha a pixel counts as see-through. Not 255: WebKit's smooth downscaling leaves the edge pixels

@@ -135,7 +135,7 @@ export interface SpellSheetPicks {
 }
 
 /** MPMB's dialogs on the way to a spell sheet, by their description names. */
-export const SPELL_DIALOGS = {
+const SPELL_DIALOGS = {
   select: 'SPELL SELECTION DIALOG',
   book: 'EXTRA SPELLBOOK SPELLS DIALOG',
   prepared: 'PREPARED SPELLS DIALOG',
@@ -289,7 +289,7 @@ const BOOK_ROWS = 20;
  * cantrips or spells than MPMB gives raise the dialog's number box (the offset), as typing a bigger number
  * there would. `counts` are SpellsInfo's numbers for the same sources.
  */
-export function spellPicksScript(
+function spellPicksScript(
   picks: SpellPicks[],
   counts: Record<string, { cantrips: number; spells: number }>,
   sheet: SpellSheetPicks | null = null,
@@ -360,7 +360,7 @@ export function spellPicksScript(
 }
 
 /** MPMB's Spells menu entry "(Re)generate a Spell Sheet", as the menu itself calls it. */
-export const GENERATE_SCRIPT = 'MakeSpellMenu_SpellOptions(["ssheet", "generate"])';
+const GENERATE_SCRIPT = 'MakeSpellMenu_SpellOptions(["ssheet", "generate"])';
 
 /** A spell on the sheet, by its source and key: what stays the same spell across a new spell sheet. */
 const preparedOnSheet = (engine: Engine): Set<string> =>
@@ -402,9 +402,9 @@ export function applySpellPicks(
 }
 
 /** MPMB's cReturn for "Insert empty rows" > "1 empty row" in a spell row's menu. */
-export const INSERT_ONE_ROW = 'insert#1#';
+const INSERT_ONE_ROW = 'insert#1#';
 /** MPMB's cReturn for "Delete row" in a spell row's menu (moves the rows below it up). */
-export const DELETE_ROW = 'delete';
+const DELETE_ROW = 'delete';
 
 /** Row menu picks that only make sense on a row that is already there (newSpellRow skips them). */
 const NOT_ON_A_NEW_ROW = ['move up', 'move down', 'clear', DELETE_ROW];

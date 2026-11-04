@@ -5,7 +5,7 @@
 import { valueOf } from './read.ts';
 import type { FieldViews } from '../worker/views.ts';
 
-export const NOTES_PAGES_FIELD = 'Template.extras.ASnotes';
+const NOTES_PAGES_FIELD = 'Template.extras.ASnotes';
 /** MPMB's default title of a notes page, which the app shows in the page's language. */
 export const DEFAULT_NOTES_TITLE = 'Notes';
 

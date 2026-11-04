@@ -7,8 +7,8 @@ import { CHARACTER_FORMAT, FORMAT_VERSION } from '../engine/sheet-data.ts';
 import type { SheetId } from '../engine/sheet-id.ts';
 import type { StoredCharacter } from './characters.ts';
 
-export const BACKUP_FORMAT = 'mpmb-web-backup';
-export const BACKUP_VERSION = 1;
+const BACKUP_FORMAT = 'mpmb-web-backup';
+const BACKUP_VERSION = 1;
 
 export interface Backup {
   format: typeof BACKUP_FORMAT;

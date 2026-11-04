@@ -31,7 +31,7 @@ export const draftOf = (source: SpellSource): SpellDraft => ({
 });
 
 /** MPMB's "What spells to show?" choice that puts only the prepared spells on the sheet. */
-export const PREPARED_ONLY = 3;
+const PREPARED_ONLY = 3;
 
 /** Whether the step shows the source's prepared spells to choose: "Prepared spells only" is on. */
 export const preparing = (source: SpellSource, draft: SpellDraft): boolean =>

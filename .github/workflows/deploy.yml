@@ -52,6 +52,15 @@ jobs:
       - name: Type check
         run: pnpm check
 
+      # The browser tests (e2e/) are the only ones that run the worker, the page's headers, the pop-ups and
+      # the update of saved characters together. They make a test build of their own (playwright.config.ts),
+      # so they run before the real build below, which replaces it.
+      - name: Install Firefox for the browser tests
+        run: pnpm exec playwright install --with-deps firefox
+
+      - name: Browser tests
+        run: pnpm e2e
+
       # The build names its commit on the start page and links to that source (src/version.ts).
       - name: Build
         run: pnpm build
