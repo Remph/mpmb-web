@@ -137,7 +137,10 @@
     return [ok];
   });
 
-  /** A plain button with Acrobat's own ids works like the closing buttons. */
+  /**
+   * A plain button with Acrobat's own ids works like the closing buttons. Its text comes from MPMB's own name
+   * through closerLabel, which decodes it: `label` is decoded already, and decoding "&&" twice drops its "&".
+   */
   const CLOSING_IDS = ['ok', 'cancel', 'other'];
 </script>
 
@@ -206,7 +209,7 @@
     </label>
   {:else if type === 'button'}
     <button type="button" class:fill {disabled} onclick={() => (CLOSING_IDS.includes(id) ? onclose(id) : onevent(id))}
-      >{CLOSING_IDS.includes(id) && label ? closerLabel(label, t) : label || id}</button
+      >{CLOSING_IDS.includes(id) && label ? closerLabel(String(element.name), t) : label || id}</button
     >
   {:else if type === 'popup' || type === 'list_box'}
     {@const entries = listEntries(state[id])}

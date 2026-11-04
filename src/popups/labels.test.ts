@@ -17,6 +17,8 @@ describe('closing buttons', () => {
     ['Close', 'Schließen', 'Close'],
     ['Continue to Next Dialog >>', 'Weiter zum nächsten Dialog >>', 'Continue to next dialog >>'],
     ['Generate the Spell Sheet', 'Generate the Spell Sheet', 'Generate the Spell Sheet'],
+    // MPMB's raw name, decoded once: "&&" shows one "&".
+    ['Save && Close', 'Save & Close', 'Save & Close'],
   ])('%s', (name, de, en) => {
     expect(closerLabel(name, ui.de)).toBe(de);
     expect(closerLabel(name, ui.en)).toBe(en);
