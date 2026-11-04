@@ -24,6 +24,8 @@
   import { ABILITIES, numberOf, shown, valueOf } from '../../play/read.ts';
   import type { Step } from '../../session.svelte.ts';
   import type { FieldViews } from '../../worker/views.ts';
+  import { addExperienceSteps } from '../../play/experience.ts';
+  import NumberPad from '../play/NumberPad.svelte';
   import PickList from './PickList.svelte';
 
   interface Props {
@@ -54,6 +56,12 @@
   const proficiency = $derived(shown(fields, 'Proficiency Bonus'));
 
   let picking: { kind: 'class' | 'subclass' | 'add'; index: number } | null = $state(null);
+  /**
+   * The number pad for experience points. MPMB's button adds what its "Add Experience" box holds and
+   * does nothing while it is empty, so the pad asks first (the same as in the play view).
+   */
+  let addingXp = $state(false);
+  const XP_DIGITS = 6;
 
   const classInfo = (key: string) => info.classes.filter((c) => c.key === key)[0];
 
@@ -260,12 +268,25 @@
             >{fill(t.buildNextLevelAt, { level: level + 1, xp: nextXp.toLocaleString(t.locale) })}</small
           >{/if}
       </p>
-      <button type="button" {disabled} onclick={() => change([{ click: 'Add Experience Button' }])}
-        >{t.buildAddXp}</button
-      >
+      <button type="button" {disabled} onclick={() => (addingXp = true)}>{t.buildAddXp}</button>
     </div>
   </section>
 </div>
+
+{#if addingXp}
+  <NumberPad
+    title={t.xpAddTitle}
+    hint={fill(t.buildXp, { xp: xp.toLocaleString(t.locale) })}
+    applyLabel={t.xpAdd}
+    maxDigits={XP_DIGITS}
+    onapply={(amount) => {
+      addingXp = false;
+      if (amount > 0) change(addExperienceSteps(amount));
+    }}
+    onclose={() => (addingXp = false)}
+    {t}
+  />
+{/if}
 
 {#if picking}
   <PickList

@@ -13,19 +13,20 @@
     applyLabel: string;
     /** Red for damage, accent otherwise. */
     danger?: boolean;
+    /** How long a number can get: 4 digits for hit points, more for experience points. */
+    maxDigits?: number;
     onapply: (amount: number) => void;
     onclose: () => void;
     t: Texts;
   }
 
-  let { title, hint = '', applyLabel, danger = false, onapply, onclose, t }: Props = $props();
+  let { title, hint = '', applyLabel, danger = false, maxDigits = 4, onapply, onclose, t }: Props = $props();
   let digits = $state('');
   const amount = $derived(digits === '' ? 0 : Number(digits));
-  const MAX_DIGITS = 4;
   const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
   function press(key: string) {
-    if (digits.length < MAX_DIGITS) digits = digits === '0' ? key : digits + key;
+    if (digits.length < maxDigits) digits = digits === '0' ? key : digits + key;
   }
 
   function apply() {

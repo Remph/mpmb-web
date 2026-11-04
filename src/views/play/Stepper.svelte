@@ -16,17 +16,35 @@
     onpick?: () => void;
     /** The number button's label for screen readers. */
     pickLabel?: string;
+    /** The number stays a button when nothing is left: a counter at 0 can still be typed (ammunition). */
+    pickAlways?: boolean;
     t: Texts;
   }
 
-  let { text, name, canLess, canMore, disabled = false, onless, onmore, onpick, pickLabel, t }: Props = $props();
+  let {
+    text,
+    name,
+    canLess,
+    canMore,
+    disabled = false,
+    onless,
+    onmore,
+    onpick,
+    pickLabel,
+    pickAlways = false,
+    t,
+  }: Props = $props();
 </script>
 
 <span class="stepper" role="group" aria-label={name}>
   <button type="button" aria-label={`${name}: ${t.fewer}`} disabled={disabled || !canLess} onclick={onless}>−</button>
   {#if onpick}
-    <button type="button" class="pick" aria-label={pickLabel} disabled={disabled || !canLess} onclick={onpick}
-      ><b aria-live="polite">{text}</b></button
+    <button
+      type="button"
+      class="pick"
+      aria-label={pickLabel}
+      disabled={disabled || (!canLess && !pickAlways)}
+      onclick={onpick}><b aria-live="polite">{text}</b></button
     >
   {:else}
     <b aria-live="polite">{text}</b>

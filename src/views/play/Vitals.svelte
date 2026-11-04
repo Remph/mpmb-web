@@ -6,13 +6,24 @@
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import type { Step } from '../../session.svelte.ts';
-  import { CONDITIONS, readConditions, readHitPoints, readNumbers, readToggles } from '../../play/read.ts';
+  import { tick } from 'svelte';
+  import { ARROW, edgeOf } from '../../play/edge.ts';
+  import {
+    CONDITIONS,
+    readConditions,
+    readHitPoints,
+    readNumbers,
+    readRollMarks,
+    readToggles,
+  } from '../../play/read.ts';
   import type { Condition } from '../../play/read.ts';
   import { applyDamage, applyHealing, tickedDeathSaves } from '../../play/rules.ts';
   import type { FieldViews } from '../../worker/views.ts';
   import Modal from '../../popups/Modal.svelte';
   import NumberPad from './NumberPad.svelte';
   import Stepper from './Stepper.svelte';
+  import EdgePopUp from './EdgePopUp.svelte';
+  import Experience from './Experience.svelte';
 
   interface Props {
     fields: FieldViews;
@@ -54,10 +65,21 @@
   }
 
   const conditionName = (c: Condition): string => t[`condition${c}`];
+  /** Initiative's advantage or disadvantage (the PDF's "Init Adv" and "Init Dis" boxes). */
+  const initiativeMark = $derived(readRollMarks(fields).initiative);
+  const initiativeEdge = $derived(edgeOf(initiativeMark));
+  let marking = $state(false);
+  let initiativeTile: HTMLButtonElement | undefined = $state();
+  /** Focus goes back to the tile once the pop-up is gone (while it is open the page is inert). */
+  async function closeMark() {
+    marking = false;
+    await tick();
+    initiativeTile?.focus();
+  }
   const tiles = $derived(
     [
       { label: t.acLabel, value: numbers.armorClass },
-      { label: t.initiative, value: numbers.initiative },
+      { label: t.initiative, value: numbers.initiative, initiative: true },
       { label: t.speed, value: numbers.speed },
       { label: t.proficiency, value: numbers.proficiency },
       ...numbers.spellSaveDcs.map((dc) => ({ label: t.spellSaveDc, value: dc })),
@@ -129,7 +151,24 @@
 
 <div class="tiles">
   {#each tiles as tile, i (i)}
-    <div class="tile"><span class="k">{tile.label}</span><span class="v">{tile.value}</span></div>
+    {#if tile.initiative}
+      <!-- Tapping initiative marks it with advantage or disadvantage, like a skill. -->
+      <button
+        type="button"
+        class="tile"
+        aria-haspopup="dialog"
+        aria-label={`${tile.label} ${tile.value}${initiativeEdge ? `, ${initiativeEdge === 'adv' ? t.advantage : t.disadvantage}` : ''}`}
+        bind:this={initiativeTile}
+        onclick={() => (marking = true)}
+        ><span class="k">{tile.label}</span><span class="v"
+          >{tile.value}{#if initiativeEdge}<span class="edge {initiativeEdge}" aria-hidden="true"
+              >{ARROW[initiativeEdge]}</span
+            >{/if}</span
+        ></button
+      >
+    {:else}
+      <div class="tile"><span class="k">{tile.label}</span><span class="v">{tile.value}</span></div>
+    {/if}
   {/each}
 </div>
 
@@ -176,6 +215,21 @@
     {t.reactionUsed}
   </label>
 </section>
+
+<Experience {fields} {disabled} {change} {t} />
+
+{#if marking}
+  <EdgePopUp
+    title={t.initiative}
+    roll={`${t.initiative} ${numbers.initiative}`}
+    state={initiativeMark}
+    boxes="Init"
+    {disabled}
+    {change}
+    onclose={() => void closeMark()}
+    {t}
+  />
+{/if}
 
 {#if pad === 'damage'}
   <NumberPad
@@ -404,6 +458,31 @@
     border: 1px solid var(--line);
     border-radius: 0.5rem;
     background: var(--surface);
+  }
+
+  /* Initiative's tile is a button (it opens the advantage pop-up) but looks like the others. */
+  button.tile {
+    align-items: stretch;
+    min-height: 56px;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+  }
+
+  button.tile:hover,
+  button.tile:focus-visible {
+    background: var(--hover);
+  }
+
+  .edge {
+    margin-left: 0.25rem;
+    color: var(--ok);
+    font-size: 0.75rem;
+    vertical-align: 0.2rem;
+  }
+
+  .edge.dis {
+    color: var(--hp);
   }
 
   .k {
