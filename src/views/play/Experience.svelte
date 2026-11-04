@@ -1,6 +1,7 @@
 <!--
-  Experience points in the play view, so adding them after a session needs no Build screen. MPMB adds
-  them (src/play/experience.ts) and asks about a new level itself, as in Acrobat.
+  Experience points in the play view (the Profile tab's first card, the owner's pick of 2026-11-04), so
+  adding them after a session needs no Build screen. MPMB adds them (src/play/experience.ts) and asks
+  about a new level itself, as in Acrobat.
 -->
 <script lang="ts">
   import { fill } from '../../i18n.ts';
@@ -32,9 +33,9 @@
 </script>
 
 <section class="panel" aria-labelledby="xp-title">
+  <h2 id="xp-title">{t.experience}</h2>
   <div class="line">
     <p>
-      <span id="xp-title" class="k">{t.experience}</span>
       <b>{fill(t.xpTotal, { xp: number(xp.total) })}</b>
       {#if xp.next !== null}<small>{fill(t.xpNext, { xp: number(xp.next) })}</small>{/if}
     </p>
@@ -58,8 +59,8 @@
 
 <style>
   .panel {
-    margin-top: 0.625rem;
-    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.625rem;
+    padding: 0.75rem;
     border: 1px solid var(--line);
     border-radius: 0.75rem;
     background: var(--surface);
@@ -80,14 +81,19 @@
     line-height: 1.25;
   }
 
-  .k,
+  h2 {
+    margin: 0 0 0.25rem;
+    font-size: 1rem;
+    font-weight: 800;
+  }
+
   small {
     color: var(--ink-muted);
     font-size: 0.8125rem;
   }
 
   b {
-    font-size: 1.0625rem;
+    font-size: 1.375rem;
     font-weight: 800;
   }
 

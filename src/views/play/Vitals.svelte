@@ -23,7 +23,6 @@
   import NumberPad from './NumberPad.svelte';
   import Stepper from './Stepper.svelte';
   import EdgePopUp from './EdgePopUp.svelte';
-  import Experience from './Experience.svelte';
 
   interface Props {
     fields: FieldViews;
@@ -215,8 +214,6 @@
     {t.reactionUsed}
   </label>
 </section>
-
-<Experience {fields} {disabled} {change} {t} />
 
 {#if marking}
   <EdgePopUp
