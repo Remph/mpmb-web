@@ -23,15 +23,22 @@
   import NumberPad from './NumberPad.svelte';
   import Stepper from './Stepper.svelte';
   import EdgePopUp from './EdgePopUp.svelte';
+  import UltCharges from './UltCharges.svelte';
+  import type { UltCharges as Ult } from '../../homebrew/ult.ts';
 
   interface Props {
     fields: FieldViews;
     disabled: boolean;
     change: (steps: Step[]) => void;
+    /** The ult charges (homebrew), or null while their switch is off. */
+    ult?: Ult | null;
+    onult?: (ult: Ult) => void;
+    /** Mock-up only. */
+    ultLook?: 'plain' | 'use';
     t: Texts;
   }
 
-  let { fields, disabled, change, t }: Props = $props();
+  let { fields, disabled, change, ult = null, onult = () => {}, ultLook = 'plain', t }: Props = $props();
 
   const hp = $derived(readHitPoints(fields));
   const numbers = $derived(readNumbers(fields));
@@ -170,6 +177,10 @@
     {/if}
   {/each}
 </div>
+
+{#if ult}
+  <UltCharges {ult} {disabled} onchange={onult} look={ultLook} {t} />
+{/if}
 
 <section class="panel" aria-labelledby="conditions-title">
   <div class="head">
