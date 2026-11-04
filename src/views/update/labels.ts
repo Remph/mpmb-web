@@ -29,6 +29,12 @@ const RULES: Rule[] = [
     label: (m, t) => fill(t.updBonusAction, { n: m[1] ?? '' }),
   },
   {
+    // Matches "Action 2"; rejects "Bonus Action 2" and "Actions".
+    // Try it: https://regex101.com/?regex=%5EAction+(%5Cd%2B)%24&testString=Action+2%0ABonus+Action+2%0AActions
+    pattern: /^Action (\d+)$/,
+    label: (m, t) => fill(t.updAction, { n: m[1] ?? '' }),
+  },
+  {
     // Matches "Reaction 1"; rejects "Reactions".
     // Try it: https://regex101.com/?regex=%5EReaction+(%5Cd%2B)%24&testString=Reaction+1%0AReactions
     pattern: /^Reaction (\d+)$/,

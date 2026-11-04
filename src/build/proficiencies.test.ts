@@ -13,7 +13,52 @@ import {
   readProficiencies,
   readSkillSources,
   skillChoices,
+  skillText,
 } from './proficiencies.ts';
+import type { SkillSource } from './proficiencies.ts';
+import { ui } from '../i18n.ts';
+import { SKILLS } from '../play/read.ts';
+
+describe("skill texts in the player's language", () => {
+  const source = (text: string, choose: number, skills: SkillSource['skills']): SkillSource => ({
+    source: 'Paladin',
+    text,
+    choose,
+    skills,
+  });
+  const paladin = source('Choose 2: Athletics, Insight, Intimidation, Medicine, Persuasion, or Religion.', 2, [
+    'Ath',
+    'Ins',
+    'Inti',
+    'Med',
+    'Pers',
+    'Rel',
+  ]);
+
+  it("names the app's German skills, and leaves English as MPMB wrote it", () => {
+    expect(skillText(paladin, ui.de)).toEqual({
+      text: 'Wähle 2: Athletik, Motiv erkennen, Einschüchtern, Heilkunde, Überzeugen oder Religion',
+      rest: null,
+    });
+    expect(skillText(source('Insight and Religion.', 0, ['Ins', 'Rel']), ui.de).text).toBe(
+      'Motiv erkennen und Religion',
+    );
+    expect(skillText(paladin, ui.en)).toEqual({ text: paladin.text, rest: null });
+  });
+
+  it('says "any" without listing all eighteen', () => {
+    const all = SKILLS.map(([key]) => key);
+    expect(skillText(source('Choose any 3 skills.', 3, all), ui.de).text).toBe('Wähle 3 beliebige Fertigkeiten');
+    expect(skillText(source('Choose any one skill.', 1, all), ui.de).text).toBe('Wähle eine beliebige Fertigkeit');
+  });
+
+  it("keeps MPMB's words when they say more, and MPMB's text when it names no skills", () => {
+    const more = source('Choose 1: Arcana or History, if not already proficient.', 1, ['Arc', 'His']);
+    expect(skillText(more, ui.de).rest).toBe(more.text);
+    const expertise = source('I gain Expertise in one skill.', 0, []);
+    expect(skillText(expertise, ui.de)).toEqual({ text: expertise.text, rest: null });
+  });
+});
 
 describe('skill sources', () => {
   it("reads MPMB's note on where the paladin's skills come from", () => {

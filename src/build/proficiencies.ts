@@ -2,7 +2,8 @@
 // own fields. MPMB says in a tooltip what each class, species or background gives ("Paladin: Choose 2:
 // Athletics, Insight, …"), keeps languages and tools in eight rows each with the source in their tooltip,
 // and the armour and weapon training in check boxes. The player's changes go into the same fields.
-import { ui } from '../i18n.ts';
+import { counted, fill, ui } from '../i18n.ts';
+import type { Texts } from '../i18n.ts';
 import { SKILLS, isOn, valueOf } from '../play/read.ts';
 import type { SkillKey } from '../play/read.ts';
 import type { FieldViews } from '../worker/views.ts';
@@ -93,6 +94,39 @@ export function readSkillSources(fields: FieldViews): SkillSource[] {
         };
       })
   );
+}
+
+/**
+ * The words of MPMB's skill texts besides the skill names: "Choose any 2 skills from:", "and", "or", commas.
+ * Matches each of them in "Choose 2: Athletics, Insight, or Religion."; leaves "if already proficient".
+ * Try it: https://regex101.com/?regex=%5Cbchoose%5Cb%7C%5Cbany%5Cb%7C%5Cbskills%3F%5Cb%7C%5Cbfrom%5Cb%7C%5Cband%5Cb%7C%5Cbor%5Cb%7C%5Cb(%5Cd%2B%7Cone%7Ctwo%7Cthree%7Cfour%7Cfive%7Csix)%5Cb%7C%5B%3A%2C.%3B%5D&flags=gi&testString=Choose+2%3A+Athletics%2C+Insight%2C+or+Religion.%0Aif+already+proficient
+ */
+const FILLER = /\bchoose\b|\bany\b|\bskills?\b|\bfrom\b|\band\b|\bor\b|\b(\d+|one|two|three|four|five|six)\b|[:,.;]/gi;
+
+/**
+ * A source's skill text in the player's language, built from the app's own skill names, so a German player
+ * finds "Motiv erkennen" among the buttons below instead of MPMB's "Insight" (UI review 2, finding 05).
+ * English keeps MPMB's text. `rest` is MPMB's text when it says more than which skills (a condition, say),
+ * to show after the line; a text without skills (expertise) stays MPMB's.
+ */
+export function skillText(source: SkillSource, t: Texts): { text: string; rest: string | null } {
+  if (t.locale === ui.en.locale || source.skills.length === 0) return { text: source.text, rest: null };
+  const names = source.skills.map((key) => t[`skill${key}`]);
+  const named = SKILL_NAMES.some(([, name]) => new RegExp(`\\b${name}\\b`, 'i').test(source.text));
+  const text =
+    source.choose > 0 && !named
+      ? counted(t.skillsChooseAnyOne, t.skillsChooseAny, source.choose)
+      : source.choose > 0
+        ? fill(t.skillsChooseOf, {
+            n: source.choose,
+            skills: new Intl.ListFormat(t.locale, { type: 'disjunction' }).format(names),
+          })
+        : new Intl.ListFormat(t.locale, { type: 'conjunction' }).format(names);
+  const leftover = SKILL_NAMES.reduce(
+    (rest, [, name]) => rest.replace(new RegExp(`\\b${name}\\b`, 'gi'), ''),
+    source.text,
+  ).replace(FILLER, '');
+  return { text, rest: /\p{L}/u.test(leftover) ? source.text : null };
 }
 
 /** A choice of skills (from a class, say) and how many of them the player has ticked. */

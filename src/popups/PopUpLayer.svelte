@@ -20,7 +20,7 @@
   {#if entry.kind === 'alert'}
     <AlertPopUp request={entry.request} {t} answer={(reply) => popUps.answerAlert(entry.id, reply)} />
   {:else if entry.kind === 'menu'}
-    <MenuPopUp items={entry.items} {t} answer={(picked) => popUps.answerMenu(entry.id, picked)} />
+    <MenuPopUp items={entry.items} title={entry.title} {t} answer={(picked) => popUps.answerMenu(entry.id, picked)} />
   {:else if entry.kind === 'choice'}
     <ChoicePopUp choice={entry.choice} {t} answer={(value) => popUps.answerChoice(entry.id, value)} />
   {:else if entry.kind === 'file'}

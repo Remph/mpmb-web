@@ -66,9 +66,9 @@
   const buildHref = $derived(`#/character/${encodeURIComponent(open.meta.id)}/build`);
 
   /** A menu item runs MPMB's scripts, which may open their own pop-ups: this window steps aside. */
-  function run(path: string[]) {
+  function run(path: string[], menuTitle?: string) {
     onclose();
-    void session.runMenu(path);
+    void session.runMenu(path, menuTitle);
   }
 
   function build(levelUp: boolean) {
@@ -149,7 +149,8 @@
       </div>
       <div class="setting">
         <span>{t.menuSpells}<small>{t.menuSpellsLine}</small></span>
-        <button type="button" disabled={busy} onclick={() => run([MENU_ROOT, 'Spells Options'])}>{t.buildChange}</button
+        <button type="button" disabled={busy} onclick={() => run([MENU_ROOT, 'Spells Options'], t.menuSpells)}
+          >{t.buildChange}</button
         >
       </div>
     </div>

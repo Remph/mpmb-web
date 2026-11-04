@@ -8,7 +8,7 @@
   import type { Texts } from '../i18n.ts';
   import DialogItem from './DialogItem.svelte';
   import { isUnseen } from './closer.ts';
-  import { acrobatLabel } from './labels.ts';
+  import { acrobatLabel, closerLabel } from './labels.ts';
   import type { ListEntry } from './lists.ts';
   import { listEntries, selectEntry } from './lists.ts';
 
@@ -128,7 +128,7 @@
   /** The closing buttons an ok / ok_cancel / ok_cancel_other element stands for, last = main. */
   const closers = $derived.by(() => {
     const name = (key: string, fallback: string) =>
-      typeof element[key] === 'string' ? acrobatLabel(String(element[key])) : fallback;
+      typeof element[key] === 'string' ? closerLabel(String(element[key]), t) : fallback;
     const ok = { result: 'ok', label: name('ok_name', t.ok) };
     const cancel = { result: 'cancel', label: name('cancel_name', t.cancel) };
     const other = { result: 'other', label: name('other_name', t.other) };
@@ -206,7 +206,7 @@
     </label>
   {:else if type === 'button'}
     <button type="button" class:fill {disabled} onclick={() => (CLOSING_IDS.includes(id) ? onclose(id) : onevent(id))}
-      >{label || id}</button
+      >{CLOSING_IDS.includes(id) && label ? closerLabel(label, t) : label || id}</button
     >
   {:else if type === 'popup' || type === 'list_box'}
     {@const entries = listEntries(state[id])}
