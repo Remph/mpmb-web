@@ -85,6 +85,9 @@ const errorText = (err: unknown): string => (err instanceof Error ? err.message 
 /** Why an update failed although every command worked: MPMB's import stopped after its own pop-up. */
 class UpdateStopped extends Error {}
 
+/** An update stopped because the player left the character (or opened another) while it ran. */
+class UpdateLeft extends Error {}
+
 const closed = (): Promise<never> => Promise.reject(new Error('closed'));
 /**
  * The old sheet's pop-ups during an update, answered as closed (EngineClient answers a failed pop-up with
@@ -257,6 +260,7 @@ export class Session {
    */
   private async migrate(
     openOld: (source: EngineClient) => Promise<unknown>,
+    wanted: () => boolean = () => true,
   ): Promise<{ migrated: Done<Migrated>; before: FieldValues }> {
     const source = new EngineClient(CLOSED_POP_UPS, newEngineWorker);
     try {
@@ -268,6 +272,10 @@ export class Session {
       const { port1, port2 } = new MessageChannel();
       const link = createLink();
       await source.serve(port1, link.buffer);
+      // Leaving a character closes only the client's worker, not this one: if the player left while the
+      // old sheet opened here, the client's worker may hold another character by now and must not be
+      // restarted for this update (review of #39).
+      if (!wanted()) throw new UpdateLeft();
       const migrated = await this.client.migrate(port2, link.buffer, images);
       if (migrated.result.summary === null) throw new UpdateStopped(this.t.sheetUpdateStopped);
       return { migrated, before };
@@ -352,10 +360,12 @@ export class Session {
     if (!stored) return false;
     this.waiting.clear();
     this.current = { meta: stored.meta, fields: {}, menu: [], status: 'opening', images: { ...stored.data.images } };
+    // This opening, not a later one of the same character (read back: Svelte's state wraps the object).
+    const shown = this.current;
     try {
       const from = stored.data.info.SheetVersion;
       const pack = from && from !== SHEET_ID.version ? await loadSheetPack(from) : null;
-      if (pack) await this.openOlder(stored, pack);
+      if (pack) await this.openOlder(stored, pack, () => this.current === shown);
       else await this.client.open(stored.data);
       this.dirty = false;
       if (this.current?.meta.id === id) {
@@ -364,6 +374,8 @@ export class Session {
         this.current.status = 'saved';
       }
     } catch (err) {
+      // Left during an update: nothing to say, the next opening tries again.
+      if (err instanceof UpdateLeft) return true;
       if (this.current?.meta.id === id) this.current.status = 'error';
       this.note('error', this.explain(err));
     }
@@ -375,7 +387,9 @@ export class Session {
    * and saved, with the copy from before kept (Nick, 2026-11-04). Without shared memory, or when the
    * update fails, it opens on its own version and stays there until the next try.
    */
-  private async openOlder(stored: StoredCharacter, pack: SheetPack): Promise<void> {
+  private async openOlder(stored: StoredCharacter, pack: SheetPack, shown: () => boolean): Promise<void> {
+    // Loading the older version's pack took a moment: the player may have gone on meanwhile.
+    if (!shown()) throw new UpdateLeft();
     const store = this.store;
     const undone = stored.meta.sheetUpdate?.undone === true && stored.meta.sheetUpdate.to === SHEET_ID.version;
     if (!store || !this.client.answersPopUps || undone) {
@@ -386,7 +400,7 @@ export class Session {
     const texts = { name, from: pack.version, to: SHEET_ID.version };
     const busy = this.note('busy', fill(this.t.sheetUpdating, texts));
     try {
-      const { migrated, before } = await this.migrate((source) => source.open(stored.data, pack));
+      const { migrated, before } = await this.migrate((source) => source.open(stored.data, pack), shown);
       const data = await this.client.save();
       const changes = sheetChanges(before, await this.client.values());
       const sheetUpdate = {
@@ -403,6 +417,13 @@ export class Session {
       // The line under the top bar says the rest (CharacterView).
       this.notes = this.notes.filter((n) => n.id !== busy);
     } catch (err) {
+      // Left meanwhile (back to the list, or another character): the update stopped before it was saved
+      // (putUpdated saves all or none). No fallback sheet for a character no longer shown, and no note
+      // saying it is open; the next opening tries again.
+      if (err instanceof UpdateLeft || !shown()) {
+        this.notes = this.notes.filter((n) => n.id !== busy);
+        throw new UpdateLeft();
+      }
       this.note('error', fill(this.t.sheetUpdateFailed, { ...texts, reason: this.explain(err) }), busy);
       await this.client.open(stored.data, pack);
     }

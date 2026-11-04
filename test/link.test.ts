@@ -3,7 +3,7 @@
 // runs in a Node worker thread, because an answer of several pieces needs both sides at once.
 import { Worker } from 'node:worker_threads';
 import { describe, expect, test } from 'vitest';
-import { createLink, sendReply, waitForReply } from '../src/worker/link.ts';
+import { LinkTimeout, createLink, sendReply, waitForReply } from '../src/worker/link.ts';
 
 /** Sends the text from a worker thread and waits for it here, as the importing worker does. */
 async function throughLink(text: string, bytes: number): Promise<string> {
@@ -31,6 +31,10 @@ describe('the link between two workers', () => {
     // "ë" and "•" take two and three bytes: with 7-byte pieces some are cut in the middle.
     const text = 'Zoë • '.repeat(200);
     expect(await throughLink(text, 7)).toBe(text);
+  });
+
+  test('gives up when the other side never answers (its worker died), instead of sleeping forever', () => {
+    expect(() => waitForReply(createLink(64), 20)).toThrow(LinkTimeout);
   });
 
   test('carries a few MB, as a large add-on file', async () => {
