@@ -43,6 +43,8 @@ The smoke test needs Firefox for Playwright once: `pnpm exec playwright install 
   cross-origin isolated page: `pnpm dev` and `pnpm preview` send the headers, the live site gets them
   from `public/.htaccess`.
 - `src/store/`: characters in the browser (IndexedDB) and backup files.
+- `src/homebrew/`: house rules the app adds on top of MPMB's sheet, each behind a switch in "Homebrew
+  rules" (per browser). They stay in the app and never go into a PDF. So far: ult charges.
 - `src/popups/`: the page's side of MPMB's pop-ups (alerts, menus, dialogs) and the app's own questions.
 - `src/views/`, `src/App.svelte`, `src/session.svelte.ts`: the pages and what they do.
 - `test/`: the reference characters (made in Acrobat, SRD only) and the tests that compare the engine

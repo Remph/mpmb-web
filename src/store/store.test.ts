@@ -58,6 +58,14 @@ describe('describeCharacter', () => {
     expect(meta.addOns.files).not.toBe(addOns.files);
   });
 
+  test('keeps the homebrew values (ult charges) across saves, as a copy', () => {
+    const homebrew = { ult: { name: 'Oathbound Judgement', max: 30, charges: 18 } };
+    const meta = describeCharacter(sheetOf({}), NO_ADD_ONS, { id: 'a', created: '2026-01-01T00:00:00.000Z', homebrew });
+    expect(meta.homebrew).toEqual(homebrew);
+    expect(meta.homebrew?.ult).not.toBe(homebrew.ult);
+    expect(describeCharacter(sheetOf({}), NO_ADD_ONS, null)).not.toHaveProperty('homebrew');
+  });
+
   test('a new character gets a new id; empty fields give empty texts', () => {
     const one = describeCharacter(sheetOf({}), NO_ADD_ONS, null);
     const two = describeCharacter(sheetOf({}), NO_ADD_ONS, null);

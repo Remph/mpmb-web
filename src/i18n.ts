@@ -952,7 +952,7 @@ export const ui = {
     ultMore: '+1 Ladung',
     ultLess: 'Eine Ladung weniger',
     ultReady: 'Bereit',
-    ultUse: 'Ult einsetzen',
+    ultUse: 'Ult nutzen',
     ultTypeLabel: 'Ult-Ladungen: {charges} von {max}, eingeben',
     ultTypeTitle: 'Ult-Ladungen',
     ultTypeHint: 'Wie viele Ladungen hast du? Höchstens {max}.',

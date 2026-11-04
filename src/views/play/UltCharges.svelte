@@ -1,7 +1,8 @@
 <!--
   The ult charges card (homebrew, only while its switch is on): a meter that fills over a fight, one
   charge for each turn and each attack (the group's house rule). + is the big button because it is the
-  one tapped every turn; − undoes a mistap. Tapping the number types it, for jumps after a long fight.
+  one tapped every turn; − undoes a mistap. A full meter turns + into "Use ult", which empties it (Nick
+  picked this over a plain − / +, 2026-11-04). Tapping the number types it, for jumps or fixes.
   Not a sheet field: the charges are saved with the character's list entry and never go into a PDF.
 -->
 <script lang="ts">
@@ -16,15 +17,24 @@
     ult: UltCharges;
     disabled: boolean;
     onchange: (ult: UltCharges) => void;
-    /** Mock-up only: "use" adds a "Use ult" button once the meter is full. */
-    look?: 'plain' | 'use';
     t: Texts;
   }
 
-  let { ult, disabled, onchange, look = 'plain', t }: Props = $props();
+  let { ult, disabled, onchange, t }: Props = $props();
 
   const full = $derived(ult.charges >= ult.max);
   const percent = $derived(`${Math.min(100, (ult.charges / ult.max) * 100)}%`);
+  /**
+   * "Use ult" takes the place of "+1 charge" under the same finger, so a quick double tap at one short of
+   * full would fill the meter and empty it at once. It waits a moment before it answers.
+   */
+  let armed = $state(false);
+  $effect(() => {
+    if (!full) return;
+    armed = false;
+    const timer = setTimeout(() => (armed = true), 800);
+    return () => clearTimeout(timer);
+  });
   let typing = $state(false);
   let editing = $state(false);
   let name = $state('');
@@ -66,16 +76,16 @@
         disabled={disabled || ult.charges <= 0}
         onclick={() => onchange(withCharges(ult, ult.charges - 1))}>−</button
       >
-      {#if look === 'use' && full}
-        <button type="button" class="primary" {disabled} onclick={() => onchange(withCharges(ult, 0))}
-          >{t.ultUse}</button
-        >
-      {:else}
+      {#if full}
         <button
           type="button"
           class="primary"
-          disabled={disabled || full}
-          onclick={() => onchange(withCharges(ult, ult.charges + 1))}>{t.ultMore}</button
+          disabled={disabled || !armed}
+          onclick={() => onchange(withCharges(ult, 0))}>{t.ultUse}</button
+        >
+      {:else}
+        <button type="button" class="primary" {disabled} onclick={() => onchange(withCharges(ult, ult.charges + 1))}
+          >{t.ultMore}</button
         >
       {/if}
     </span>
@@ -146,14 +156,13 @@
     gap: 0.5rem;
   }
 
+  /* A long name wraps rather than being cut: with "Ready" and the German "Ändern" beside it, it may need two lines. */
   h2 {
     min-width: 0;
     margin: 0;
-    overflow: hidden;
     font-size: 1rem;
     font-weight: 800;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 
   /* A quiet text button: editing is rare, the meter is what is tapped. */
@@ -241,6 +250,7 @@
 
   .buttons .primary {
     min-width: 7rem;
+    padding: 0 0.625rem;
     font-size: 1rem;
     font-weight: 700;
   }

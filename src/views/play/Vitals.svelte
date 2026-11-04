@@ -33,12 +33,10 @@
     /** The ult charges (homebrew), or null while their switch is off. */
     ult?: Ult | null;
     onult?: (ult: Ult) => void;
-    /** Mock-up only. */
-    ultLook?: 'plain' | 'use';
     t: Texts;
   }
 
-  let { fields, disabled, change, ult = null, onult = () => {}, ultLook = 'plain', t }: Props = $props();
+  let { fields, disabled, change, ult = null, onult = () => {}, t }: Props = $props();
 
   const hp = $derived(readHitPoints(fields));
   const numbers = $derived(readNumbers(fields));
@@ -179,7 +177,7 @@
 </div>
 
 {#if ult}
-  <UltCharges {ult} {disabled} onchange={onult} look={ultLook} {t} />
+  <UltCharges {ult} {disabled} onchange={onult} {t} />
 {/if}
 
 <section class="panel" aria-labelledby="conditions-title">

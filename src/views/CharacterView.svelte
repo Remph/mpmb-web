@@ -72,8 +72,6 @@
   const change = (steps: Step[]) => void session.change(steps);
   /** The ult charges card only while its homebrew switch is on; the values stay with the character either way. */
   const ult = $derived(homebrew.switches.ultCharges ? readUlt(open.meta.homebrew?.ult) : null);
-  // Mock-ups only: "?ult=use" shows the variant with a "Use ult" button.
-  const ultLook = new URLSearchParams(location.search).get('ult') === 'use' ? 'use' : 'plain';
   /**
    * A new character before its class is chosen: MPMB's sheet has 0 hit points, death saves and empty scores,
    * which looked like a dying character. A card that leads to the Build screen takes the hit point box's
@@ -192,7 +190,7 @@
           <a href={buildHref}>{t.menuBuild}</a>
         </section>
       {:else}
-        <Vitals {fields} {disabled} {change} {ult} onult={(u) => void session.setUlt(u)} {ultLook} {t} />
+        <Vitals {fields} {disabled} {change} {ult} onult={(u) => void session.setUlt(u)} {t} />
       {/if}
     </div>
 
