@@ -59,6 +59,11 @@ export function offline(): Plugin {
         define: {
           __OFFLINE_FILES__: JSON.stringify(files),
           __OFFLINE_BUILD__: JSON.stringify(buildId(outDir, files)),
+          __OFFLINE_PAGE_SHA256__: JSON.stringify(
+            createHash('sha256')
+              .update(readFileSync(path.join(outDir, 'index.html')))
+              .digest('hex'),
+          ),
         },
         build: {
           outDir,

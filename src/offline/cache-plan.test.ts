@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { cacheName, isOldCache, precacheFiles } from './cache-plan.ts';
+import { createHash } from 'node:crypto';
+import { cacheName, hex, isOldCache, precacheFiles } from './cache-plan.ts';
 
 describe('precacheFiles', () => {
   it('keeps the page, the build and the icons, sorted', () => {
@@ -47,5 +48,14 @@ describe('old caches', () => {
   it('never include the current one or another app’s', () => {
     expect(isOldCache(current, current)).toBe(false);
     expect(isOldCache('photos-v2', current)).toBe(false);
+  });
+});
+
+describe('hex', () => {
+  it('writes a digest the way the build does (Node’s digest("hex")), so the page check compares alike', async () => {
+    const page = new TextEncoder().encode('<!doctype html><title>MPMB Web</title>');
+    const inWorker = hex(await crypto.subtle.digest('SHA-256', page));
+    expect(inWorker).toBe(createHash('sha256').update(page).digest('hex'));
+    expect(hex(new Uint8Array([0, 9, 255]).buffer)).toBe('0009ff');
   });
 });

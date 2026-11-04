@@ -36,3 +36,7 @@ export function precacheFiles(paths: readonly string[]): string[] {
 
 /** The service worker's file, next to index.html. Its name never changes, so browsers can find updates. */
 export const SERVICE_WORKER = 'sw.js';
+
+/** Bytes as lowercase hex, as Node's `digest('hex')` writes them, so the build and the worker compare alike. */
+export const hex = (bytes: ArrayBuffer): string =>
+  Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, '0')).join('');
