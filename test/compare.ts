@@ -84,3 +84,39 @@ export const show = (diffs: Difference[], max = SHOWN_DIFFS): string =>
         `p${d.page} ${d.what} ${JSON.stringify(d.field)} acrobat=${JSON.stringify(d.acrobat.slice(0, SHOWN_CHARS))} ours=${JSON.stringify(d.ours.slice(0, SHOWN_CHARS))}`,
     )
     .join('\n');
+
+const EXTRAS = 'Template.extras.';
+
+/**
+ * The sheet with spawned pages named by template and order ("SSfront#0.") instead of the page number
+ * they were made on ("P6.SSfront."). The number is the page count at the time of spawning, so two sheets
+ * with the same pages, spawned in another order, name them differently. MPMB's lists of spawned pages
+ * (the Template.extras fields) are emptied, as they hold those names.
+ */
+export function byTemplateOrder(sheet: SheetSnapshot): SheetSnapshot {
+  const renames = new Map(
+    Object.entries(sheet.fields)
+      .filter(([name]) => name.startsWith(EXTRAS))
+      .flatMap(([name, field]) =>
+        text(field.value)
+          .split(',')
+          .filter(Boolean)
+          .map((prefix, i) => [prefix, `${name.slice(EXTRAS.length)}#${i}.`] as const),
+      ),
+  );
+  // A spawned page's prefix: matches "P6.SSfront." in "P6.SSfront.spells.name.1"; rejects "Spell Slots".
+  // Try it: https://regex101.com/?regex=%5EP%5Cd%2B%5C.%5BA-Za-z%5D%2B%5C.&testString=P6.SSfront.spells.name.1%0ASpell+Slots
+  const PREFIX = /^P\d+\.[A-Za-z]+\./;
+  const rename = (name: string): string => {
+    const prefix = PREFIX.exec(name)?.[0];
+    const to = prefix === undefined ? undefined : renames.get(prefix);
+    return to === undefined ? name : to + name.slice((prefix ?? '').length);
+  };
+  const fields = Object.fromEntries(
+    Object.entries(sheet.fields).map(([name, field]) => [
+      rename(name),
+      name.startsWith(EXTRAS) ? { ...field, value: '' } : field,
+    ]),
+  );
+  return { ...sheet, fields };
+}

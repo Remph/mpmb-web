@@ -7,7 +7,7 @@ import type { CharacterData } from '../engine/sheet-data.ts';
 import { SHEET_ID } from '../engine/sheet-id.ts';
 import { BackupError, backupFileName, filledPdfName, makeBackup, planRestore, readBackup } from './backup.ts';
 import { CharacterStore, describeCharacter } from './characters.ts';
-import type { StoredCharacter } from './characters.ts';
+import type { PreviousVersion, StoredCharacter } from './characters.ts';
 
 const sheetOf = (fields: Record<string, string>): CharacterData => ({
   format: CHARACTER_FORMAT,
@@ -91,6 +91,60 @@ describe('CharacterStore', () => {
     expect((await after.get('anna'))?.data.fields['PC Name']).toEqual({ value: 'Anna' });
   });
 
+  test('an update to a new sheet is saved with the copy from before; deleting takes both', async () => {
+    const store = await fresh();
+    const before = character('Anna', '2026-10-01T00:00:00Z');
+    await store.put(before);
+    const sheetUpdate = { from: '24.2.0', to: '24.3.0', date: '2026-11-04T00:00:00Z', seen: false, changes: 1 };
+    const data = { ...before.data, info: { ...before.data.info, SheetVersion: '24.3.0' } };
+    const after = { meta: describeCharacter(data, NO_ADD_ONS, { ...before.meta, sheetUpdate }), data };
+    const previous: PreviousVersion = {
+      ...before,
+      summary: 'Some things that you adjusted manually …',
+      changes: [{ field: 'Extra.Notes', before: 'Test Notes', now: '' }],
+    };
+    await store.putUpdated(after, previous);
+    expect(await store.get('anna')).toEqual(after);
+    expect((await store.list())[0]?.sheetUpdate).toEqual(sheetUpdate);
+    expect(await store.previous('anna')).toEqual(previous);
+    await store.delete('anna');
+    expect(await store.previous('anna')).toBeUndefined();
+  });
+
+  test('undo puts the copy from before back and drops it; keeping changes only the list entry', async () => {
+    const store = await fresh();
+    const before = character('Anna', '2026-10-01T00:00:00Z');
+    const sheetUpdate = { from: '24.2.0', to: '24.3.0', date: '2026-11-04T00:00:00Z', seen: false, changes: 0 };
+    const after = { meta: { ...before.meta, sheetUpdate }, data: before.data };
+    await store.putUpdated(after, { ...before, summary: '', changes: [] });
+    await store.putMeta({ ...after.meta, sheetUpdate: { ...sheetUpdate, seen: true } });
+    expect((await store.get('anna'))?.meta.sheetUpdate?.seen).toBe(true);
+    expect(await store.previous('anna')).toBeDefined();
+    const undone = { ...before.meta, sheetUpdate: { ...sheetUpdate, seen: true, undone: true } };
+    await store.putBack({ meta: undone, data: before.data });
+    expect(await store.get('anna')).toEqual({ meta: undone, data: before.data });
+    expect(await store.previous('anna')).toBeUndefined();
+  });
+
+  test('a database of the first version (before M11) opens with its characters and gets the new store', async () => {
+    const browser = new IDBFactory();
+    const request = browser.open('mpmb-web', 1);
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore('meta', { keyPath: 'id' });
+      request.result.createObjectStore('data');
+    };
+    const old = await new Promise<IDBDatabase>((resolve) => (request.onsuccess = () => resolve(request.result)));
+    const anna = character('Anna', '2026-10-01T00:00:00Z');
+    const tx = old.transaction(['meta', 'data'], 'readwrite');
+    tx.objectStore('meta').put(anna.meta);
+    tx.objectStore('data').put(anna.data, 'anna');
+    await new Promise((resolve) => (tx.oncomplete = resolve));
+    old.close();
+    const store = await CharacterStore.open(browser);
+    expect(await store.get('anna')).toEqual(anna);
+    expect(await store.previous('anna')).toBeUndefined();
+  });
+
   test('putting a character with a known id replaces it', async () => {
     const store = await fresh();
     await store.put(character('Anna', '2026-10-01T00:00:00Z'));
@@ -107,6 +161,25 @@ describe('backups', () => {
     const read = readBackup(JSON.stringify(backup), SHEET_ID);
     expect(read).toEqual(backup);
     expect(read.sheet).toEqual({ type: 'Colorful - A4', version: '24.2.0' });
+  });
+
+  test('characters of an older sheet the app keeps can be restored; those of an unknown version not', () => {
+    const anna = character('Anna', '2026-10-01T00:00:00Z');
+    const onOlder = (version: string): StoredCharacter => ({
+      ...anna,
+      data: { ...anna.data, info: { ...anna.data.info, SheetVersion: version } },
+    });
+    const made = (sheetVersion: string, ...characters: StoredCharacter[]): string =>
+      JSON.stringify(makeBackup(characters, { type: SHEET_ID.type, version: sheetVersion }, now));
+    const KEPT = ['24.1.0'];
+    // Made by the app before its update to the current version.
+    expect(readBackup(made('24.1.0', onOlder('24.1.0')), SHEET_ID, KEPT).characters).toHaveLength(1);
+    // Made after the update, with a character not opened since.
+    expect(readBackup(made(SHEET_ID.version, anna, onOlder('24.1.0')), SHEET_ID, KEPT).characters).toHaveLength(2);
+    expect(() => readBackup(made('24.1.0', onOlder('24.1.0')), SHEET_ID)).toThrow('wrong-sheet');
+    expect(() => readBackup(made(SHEET_ID.version, onOlder('23.9.0')), SHEET_ID, KEPT)).toThrow(
+      'wrong-sheet: Colorful - A4 v23.9.0',
+    );
   });
 
   test('refuses what it cannot restore, saying why', () => {

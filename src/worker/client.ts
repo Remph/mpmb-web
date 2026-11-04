@@ -3,13 +3,27 @@
 import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem } from '../engine/host.ts';
 import type { AddOns, ScriptChanges, ScriptFiles } from '../engine/add-ons.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
-import type { ImageSlot, SheetImage } from '../engine/types.ts';
+import type { FieldValues } from '../engine/sheet-changes.ts';
+import type { SheetPack } from '../engine/sheet-pack.ts';
+import type { ImageSlot, SheetImage, SheetImages } from '../engine/types.ts';
 import type { BuilderInfo, UnitSystem } from '../engine/builder.ts';
 import type { ScoreChange } from '../engine/scores.ts';
 import type { SpellPicks, SpellSheetPicks, SpellsInfo } from '../engine/spells.ts';
 import { canWait, createChannel, sendAnswer } from './channel.ts';
 import type { Channel } from './channel.ts';
-import type { Answer, Ask, Command, FailureCode, FromWorker, MenuNode, Opened, Summary, ToWorker } from './protocol.ts';
+import type {
+  Answer,
+  Ask,
+  Command,
+  FailureCode,
+  FoundSheet,
+  FromWorker,
+  MenuNode,
+  Migrated,
+  Opened,
+  Summary,
+  ToWorker,
+} from './protocol.ts';
 import type { FieldViews } from './views.ts';
 
 /** How the UI shows Acrobat's pop-ups. Each resolves with the user's answer. */
@@ -42,6 +56,8 @@ export class EngineError extends Error {
     message: string,
     readonly code?: FailureCode,
     readonly detail?: string,
+    /** For 'wrong-sheet': the sheet type and version the PDF says it is. */
+    readonly found?: FoundSheet,
   ) {
     super(message);
   }
@@ -77,14 +93,38 @@ export class EngineClient {
     private readonly makeWorker: () => WorkerLike,
   ) {}
 
-  /** Opens the blank sheet or a saved character, in a fresh worker. */
-  open(character: CharacterData | null = null): Promise<Done<Opened>> {
-    return this.restart({ type: 'open', character }) as Promise<Done<Opened>>;
+  /**
+   * Opens the blank sheet or a saved character, in a fresh worker; on an older sheet version the app keeps
+   * when a pack is given.
+   */
+  open(character: CharacterData | null = null, pack?: SheetPack): Promise<Done<Opened>> {
+    return this.restart({ type: 'open', character, ...(pack ? { pack } : {}) }) as Promise<Done<Opened>>;
   }
 
-  /** Opens a filled MPMB PDF, in a fresh worker. The bytes move to the worker (the buffer empties). */
-  importPdf(bytes: ArrayBuffer): Promise<Done<Opened>> {
-    return this.restart({ type: 'importPdf', bytes }) as Promise<Done<Opened>>;
+  /**
+   * Opens a filled MPMB PDF (of the version of `pack`, when given), in a fresh worker. The bytes move to
+   * the worker (the buffer empties).
+   */
+  importPdf(bytes: ArrayBuffer, pack?: SheetPack): Promise<Done<Opened>> {
+    return this.restart({ type: 'importPdf', bytes, ...(pack ? { pack } : {}) }) as Promise<Done<Opened>>;
+  }
+
+  /** The values a player sees on the open sheet. */
+  async values(): Promise<FieldValues> {
+    return (await this.send({ type: 'values' })).result as FieldValues;
+  }
+
+  /** The open sheet answers another worker's `migrate` from this port (see the worker's `serve`). */
+  serve(port: MessagePort, buffer: SharedArrayBuffer): Promise<Done> {
+    return this.send({ type: 'serve', port, buffer });
+  }
+
+  /**
+   * Updates the character that another client serves onto the current sheet, in a fresh worker, and keeps
+   * it open there (see the worker's `migrate`).
+   */
+  migrate(port: MessagePort, buffer: SharedArrayBuffer, images?: SheetImages): Promise<Done<Migrated>> {
+    return this.restart({ type: 'migrate', port, buffer, ...(images ? { images } : {}) }) as Promise<Done<Migrated>>;
   }
 
   /** The open character in the player's copy of the sheet: the filled PDF. The bytes move to the worker. */
@@ -188,9 +228,7 @@ export class EngineClient {
     const id = this.nextId++;
     return new Promise<Done>((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
-      // A PDF's bytes move to the worker instead of being copied (27 MB for a filled sheet).
-      const transfer = command.type === 'importPdf' || command.type === 'exportPdf' ? [command.bytes] : [];
-      worker.postMessage({ type: 'command', id, command }, transfer);
+      worker.postMessage({ type: 'command', id, command }, transferOf(command));
     });
   }
 
@@ -221,7 +259,8 @@ export class EngineClient {
         this.onFields?.(changed, removed);
       },
       done: ({ id, result, summary }) => this.settle(id, (p) => p.resolve({ result, summary })),
-      failed: ({ id, error, code, detail }) => this.settle(id, (p) => p.reject(new EngineError(error, code, detail))),
+      failed: ({ id, error, code, detail, found }) =>
+        this.settle(id, (p) => p.reject(new EngineError(error, code, detail, found))),
     };
     const handler = handlers[message.type] as (m: FromWorker) => void | Promise<void>;
     await handler(message);
@@ -248,4 +287,14 @@ export class EngineClient {
     this.pending.delete(id);
     how(pending);
   }
+}
+
+/**
+ * What moves to the worker instead of being copied: a PDF's bytes (27 MB for a filled sheet), and the
+ * port of an update's link, which can't be copied at all.
+ */
+function transferOf(command: Command): Transferable[] {
+  if (command.type === 'importPdf' || command.type === 'exportPdf') return [command.bytes];
+  if (command.type === 'serve' || command.type === 'migrate') return [command.port];
+  return [];
 }

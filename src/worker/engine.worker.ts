@@ -10,13 +10,19 @@ import { BUILDER_INFO_SCRIPT, answerUnits, readBuilderInfo } from '../engine/bui
 import { displaySettings, refreshFormats } from '../engine/display-settings.ts';
 import type { UnitSystem } from '../engine/builder.ts';
 import { Engine } from '../engine/engine.ts';
+import type { SheetScript } from '../engine/engine.ts';
 import type { AlertReply, DialogReply, DialogView, Host, MenuItem } from '../engine/host.ts';
+import { ImportHost, importSheet } from '../engine/import-sheet.ts';
 import { currentRealm } from '../engine/realm.ts';
 import { mpmbScripts } from '../engine/scripts.ts';
-import { diffCharacter } from '../engine/sheet-data.ts';
-import { blankSheet, characterSheet } from '../engine/sheet.ts';
+import { CHARACTER_FORMAT, FORMAT_VERSION, applyCharacter, diffCharacter, unpackSheet } from '../engine/sheet-data.ts';
+import type { SheetPack } from '../engine/sheet-pack.ts';
+import { blankSheet } from '../engine/sheet.ts';
+import { fieldValues } from '../engine/sheet-changes.ts';
+import { serveDocument, sourceDocument } from '../engine/source-doc.ts';
+import type { SourceReply, SourceRequest } from '../engine/source-doc.ts';
 import { allowTimer } from '../engine/startup.ts';
-import type { Bookmark, SheetSnapshot } from '../engine/types.ts';
+import type { Bookmark, ImageSlot, SheetImage, SheetImages, SheetSnapshot } from '../engine/types.ts';
 import { offers } from '../engine/choices.ts';
 import { answerScores } from '../engine/scores.ts';
 import { SPELLS_READ_SCRIPT, applySpellPicks, newSpellRow, readSpellsInfo } from '../engine/spells.ts';
@@ -26,7 +32,19 @@ import { readSheetPdf } from '../pdf/read-sheet.ts';
 import { writeSheetPdf } from '../pdf/write-sheet.ts';
 import { waitForAnswer } from './channel.ts';
 import type { Channel } from './channel.ts';
-import type { Answer, Ask, Command, FailureCode, FromWorker, MenuNode, Opened, ToWorker } from './protocol.ts';
+import { LinkTimeout, sendReply, waitForReply } from './link.ts';
+import type {
+  Answer,
+  Ask,
+  Command,
+  FailureCode,
+  FoundSheet,
+  FromWorker,
+  MenuNode,
+  Migrated,
+  Opened,
+  ToWorker,
+} from './protocol.ts';
 import { changedViews, viewsOf } from './views.ts';
 import { lockDown } from './lockdown.ts';
 import type { FieldViews } from './views.ts';
@@ -45,6 +63,22 @@ if (stillReachable.length) console.warn(`The engine worker could not remove: ${s
 
 let channel: Channel | null = null;
 let engine: Engine | null = null;
+/**
+ * The version of MPMB's sheet this worker runs: the one the app ships, or an older one it keeps (a pack,
+ * see sheet-versions.ts), for a character saved on it.
+ */
+let sheetVersion: { blank: () => SheetSnapshot; scripts: readonly SheetScript[] } = {
+  blank: blankSheet,
+  scripts: mpmbScripts,
+};
+/** Serving an update (the `serve` command): no more pop-ups for the player from this sheet. */
+let serving = false;
+
+function usePack(pack: SheetPack | undefined): void {
+  if (!pack) return;
+  const blank = unpackSheet(pack.sheet);
+  sheetVersion = { blank: () => blank, scripts: pack.scripts };
+}
 let shown: FieldViews = {};
 let shownMenu = '';
 
@@ -54,6 +88,7 @@ class CommandError extends Error {
     readonly code: FailureCode,
     message: string,
     readonly detail?: string,
+    readonly found?: FoundSheet,
   ) {
     super(message);
   }
@@ -64,6 +99,7 @@ class CommandError extends Error {
  * to see alerts, and the scripts carry on with Acrobat's answer for a closed pop-up.
  */
 const ask = (question: Ask): Answer => {
+  if (serving) return null;
   if (!channel) {
     if (question.kind === 'alert') post({ type: 'notice', ask: question });
     return null;
@@ -142,9 +178,9 @@ function sendMenu(): void {
   post({ type: 'menu', menu });
 }
 
-function open(sheet: SheetSnapshot): Opened {
+function open(sheet: SheetSnapshot, sheetHost: Host = host): Opened {
   if (engine) throw new Error('This worker already has a sheet open; open the next one in a new worker.');
-  engine = Engine.load({ sheet, scripts: mpmbScripts, host, realm: currentRealm(), allowTimer });
+  engine = Engine.load({ sheet, scripts: sheetVersion.scripts, host: sheetHost, realm: currentRealm(), allowTimer });
   // Opening the sheet in Acrobat runs the timers MPMB set while loading (those the app allows).
   engine.runTimers();
   // Acrobat shows the text that Format scripts made when the PDF was saved; here each field's Format
@@ -158,9 +194,9 @@ const opened = (): Engine => {
   return engine;
 };
 
-/** The sheet the app ships with; a PDF of another type or version doesn't fit its data. */
+/** The sheet this worker runs (see sheetVersion); a PDF of another type or version doesn't fit its data. */
 function checkSheetType(sheet: SheetSnapshot): void {
-  const blank = blankSheet().info;
+  const blank = sheetVersion.blank().info;
   const { SheetType: type, SheetVersion: version } = sheet.info;
   if (type !== blank.SheetType || version !== blank.SheetVersion) {
     const what = type || version ? `${type ?? '?'} v${version ?? '?'}` : '';
@@ -168,6 +204,7 @@ function checkSheetType(sheet: SheetSnapshot): void {
       'wrong-sheet',
       `This PDF is "${what || 'not an MPMB sheet'}"; the app reads "${blank.SheetType} v${blank.SheetVersion}" sheets.`,
       what,
+      type && version ? { type, version } : undefined,
     );
   }
 }
@@ -181,11 +218,16 @@ async function readPdf(bytes: ArrayBuffer): Promise<SheetSnapshot> {
 }
 
 const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }>) => unknown } = {
-  open: ({ character }) => open(character ? characterSheet(character) : blankSheet()),
+  open: ({ character, pack }) => {
+    usePack(pack);
+    const blank = sheetVersion.blank();
+    return open(character ? applyCharacter(blank, character) : blank);
+  },
   // The PDF opens as it is, with its own field scripts: MPMB changes some at run time (setAction, e.g.
   // the calculations of limited features), so they are part of the character. checkSheetType makes
   // sure the rest equals the sheet the app ships. Its add-on scripts run while it opens, see add-ons.ts.
-  importPdf: async ({ bytes }) => {
+  importPdf: async ({ bytes, pack }) => {
+    usePack(pack);
     const sheet = await readPdf(bytes);
     checkSheetType(sheet);
     return open(sheet);
@@ -201,7 +243,10 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
   click: ({ field, widget, shift, newRow }) =>
     newRow ? newSpellRow(opened(), field, true, ROW_MENUS) : opened().click(field, widget, shift),
   bookmark: ({ path }) => opened().clickBookmark(path),
-  save: () => diffCharacter(blankSheet(), opened().snapshot()),
+  save: () => diffCharacter(sheetVersion.blank(), opened().snapshot()),
+  values: () => fieldValues(opened().snapshot()),
+  serve: ({ port, buffer }) => serve(opened(), port, buffer),
+  migrate: ({ port, buffer, images }) => migrate(port, buffer, images),
   addOns: () => addOnsOf(opened()),
   scriptFiles: () => scriptFilesOf(opened()),
   setScripts: ({ changes }) => setScripts(opened(), changes),
@@ -218,6 +263,70 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
   setSpells: ({ picks, sheet }) => applySpellPicks(opened(), picks, answered, sheet),
   setImage: ({ slot, image }) => opened().setImage(slot, image),
 };
+
+/**
+ * Answers the requests of the worker that updates this character (`migrate`) from this sheet's realm, as
+ * the old document of MPMB's import (source-doc.ts). Each answer goes back through the shared buffer.
+ */
+function serve(sheet: Engine, port: MessagePort, buffer: SharedArrayBuffer): void {
+  serving = true;
+  const answer = serveDocument(sheet.tools.realm.global, sheet.tools.copy);
+  port.onmessage = ({ data }: MessageEvent<SourceRequest>) => {
+    // Every request gets an answer, or the other worker sleeps forever.
+    let reply: string;
+    try {
+      reply = JSON.stringify(answer(data));
+    } catch (err) {
+      reply = JSON.stringify({ error: String(err) } satisfies SourceReply);
+    }
+    sendReply({ buffer }, reply);
+  };
+}
+
+/**
+ * The blank current sheet with MPMB's welcome turned off: in Acrobat the player imports into a sheet they
+ * opened before, and the import sets the same field anyway.
+ */
+const quietBlank = (): SheetSnapshot =>
+  applyCharacter(blankSheet(), {
+    format: CHARACTER_FORMAT,
+    version: FORMAT_VERSION,
+    info: blankSheet().info,
+    numPages: blankSheet().numPages,
+    fields: { 'Opening Remember': { value: 'Yes' } },
+  });
+
+/** Updates the character another worker serves (see `serve`) onto the current sheet. */
+function migrate(port: MessagePort, buffer: SharedArrayBuffer, images: SheetImages = {}): Migrated {
+  const importHost = new ImportHost(host);
+  open(quietBlank(), importHost);
+  const sheet = opened();
+  // The scripts wait for each answer: the request goes out on the port, the answer comes back through
+  // the shared buffer while this worker sleeps.
+  // Once the old sheet stopped answering (its worker died), every later request fails at once instead of
+  // waiting again: MPMB's import catches some errors and goes on, and the update must fail as a whole.
+  const dead = { lost: null as LinkTimeout | null };
+  const link = (request: SourceRequest): SourceReply => {
+    if (dead.lost) return { error: dead.lost.message };
+    port.postMessage(request);
+    try {
+      return JSON.parse(waitForReply({ buffer })) as SourceReply;
+    } catch (err) {
+      if (!(err instanceof LinkTimeout)) throw err;
+      dead.lost = err;
+      return { error: err.message };
+    }
+  };
+  try {
+    const summary = importSheet(sheet, sourceDocument(sheet.tools, link), importHost);
+    if (dead.lost) throw new Error(`The old sheet stopped answering during the update. ${dead.lost.message}`);
+    // The app carries the pictures itself (the import's own icon copy is turned off, see ImportHost).
+    (Object.entries(images) as [ImageSlot, SheetImage][]).forEach(([slot, image]) => sheet.setImage(slot, image));
+    return { addOns: addOnsOf(sheet), summary };
+  } finally {
+    port.close();
+  }
+}
 
 function pick(sheet: Engine, field: string, answer: string): boolean {
   menuAnswer = answer;
@@ -303,7 +412,15 @@ async function run(id: number, command: Command): Promise<void> {
     );
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
-    if (err instanceof CommandError) post({ type: 'failed', id, error, code: err.code, detail: err.detail });
+    if (err instanceof CommandError)
+      post({
+        type: 'failed',
+        id,
+        error,
+        code: err.code,
+        detail: err.detail,
+        ...(err.found ? { found: err.found } : {}),
+      });
     else post({ type: 'failed', id, error });
   }
 }
