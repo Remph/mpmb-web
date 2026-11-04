@@ -29,6 +29,8 @@ import {
   sameNamed,
 } from './session-texts.ts';
 import { CharacterStore, copyHomebrew, describeCharacter, keepStorage } from './store/characters.ts';
+import { TabLock, browserLocks } from './store/tab-lock.ts';
+import type { Locks } from './store/tab-lock.ts';
 import type { UltCharges } from './homebrew/ult.ts';
 import type { CharacterMeta, PreviousVersion, StoredCharacter } from './store/characters.ts';
 import { EngineClient, EngineError } from './worker/client.ts';
@@ -49,16 +51,28 @@ export interface OtherScript extends ScriptFile {
 /** A line under the list: what an import or restore did. */
 export interface Note {
   id: number;
-  kind: 'busy' | 'ok' | 'error';
+  /** `info`: something to know that isn't a failure (the character is open in another tab). */
+  kind: 'busy' | 'ok' | 'error' | 'info';
   text: string;
+  /** A button at the end of the line: the way out of what it says (Nick's pick, 2026-11-04). */
+  action?: { label: string; run: () => void };
+  /** Stays when other notes are cleared, until the page reloads (the database went to a newer tab). */
+  keep?: boolean;
 }
+
+/**
+ * Whether the open character takes no changes: still opening, failed (until reopened), or open in another
+ * tab that took it over (`elsewhere`; see store/tab-lock.ts).
+ */
+export const readOnly = (status: OpenCharacter['status']): boolean =>
+  status === 'opening' || status === 'error' || status === 'elsewhere';
 
 export interface OpenCharacter {
   meta: CharacterMeta;
   /** The fields as the engine shows them (value and Format text). */
   fields: FieldViews;
   menu: MenuNode[];
-  status: 'opening' | 'working' | 'saving' | 'saved' | 'error';
+  status: 'opening' | 'working' | 'saving' | 'saved' | 'error' | 'elsewhere';
   /** The portrait and organisation symbol (M8). */
   images: SheetImages;
 }
@@ -137,12 +151,23 @@ export class Session {
   private nextChange = 1;
   /** Whether the browser was asked to keep the data during this visit. */
   private askedToKeep = false;
+  /**
+   * Changes and Build steps waiting in line, the one running included. The last one saves for all of them:
+   * a save writes the whole character (about 600 KB), and five quick taps saved five times (tech review
+   * 2026-11-04, finding 4a).
+   */
+  private queued = 0;
+  /** This tab's hold on the open character, so another tab can't overwrite it (finding 2). */
+  private readonly tabLock: TabLock;
 
   constructor(
     private readonly texts: () => Texts,
     /** Starts an engine worker: newEngineWorker in the app, a stand-in in tests. */
     private readonly newWorker: () => WorkerLike = newEngineWorker,
+    /** The browser's locks across tabs; a stand-in in tests. */
+    locks: Locks | undefined = browserLocks(),
   ) {
+    this.tabLock = new TabLock(locks, (id) => this.lostToOtherTab(id));
     this.client = new EngineClient(this.popUps, newWorker);
     this.client.onFields = () => {
       this.dirty = true;
@@ -165,27 +190,60 @@ export class Session {
 
   async start(): Promise<void> {
     try {
-      this.store = await CharacterStore.open();
+      let waiting: number | undefined;
+      this.store = await CharacterStore.open(indexedDB, undefined, {
+        blocked: () => {
+          waiting = this.note('info', this.t.dbBlocked, undefined, { keep: true });
+        },
+        replaced: () => this.replacedByNewerTab(),
+      });
+      if (waiting) this.notes = this.notes.filter((n) => n.id !== waiting);
       await this.refresh();
     } catch (err) {
       this.storageError = errorText(err);
     }
   }
 
+  /**
+   * A tab of a newer release upgraded the database: this tab closed it so the upgrade could go on, and
+   * can't save any more. The open character stops taking changes; a reload loads the new release.
+   */
+  private replacedByNewerTab(): void {
+    this.store = null;
+    if (this.current) this.current.status = 'elsewhere';
+    this.note('error', this.t.dbReplaced, undefined, {
+      keep: true,
+      action: { label: this.t.reload, run: () => location.reload() },
+    });
+  }
+
   private async refresh(): Promise<void> {
     this.characters = (await this.store?.list()) ?? [];
   }
 
-  private note(kind: Note['kind'], text: string, replacing?: number): number {
+  private note(
+    kind: Note['kind'],
+    text: string,
+    replacing?: number,
+    extra: Pick<Note, 'action' | 'keep'> = {},
+  ): number {
     const id = replacing ?? this.nextNote++;
-    const note = { id, kind, text };
+    const note = { id, kind, text, ...extra };
     this.notes = replacing ? this.notes.map((n) => (n.id === id ? note : n)) : [...this.notes, note];
     return id;
   }
 
-  /** Clears the notes of finished work; an import still running keeps its line. */
+  /** Clears the notes of finished work; an import still running keeps its line, and so does a kept one. */
   clearNotes(): void {
-    this.notes = this.notes.filter((n) => n.kind === 'busy');
+    this.notes = this.notes.filter((n) => n.kind === 'busy' || n.keep);
+  }
+
+  /**
+   * An error nothing else caught (a crash in a part of the page outside the session): shown as a note,
+   * so it isn't lost in the browser's console (tech review 2026-11-04, finding 6).
+   */
+  reportError(err: unknown): void {
+    this.note('error', fill(this.t.unexpectedError, { reason: errorText(err) }));
   }
 
   // ---- Import ----
@@ -357,11 +415,22 @@ export class Session {
 
   // ---- One character ----
 
-  async open(id: string): Promise<boolean> {
+  /**
+   * Opens a saved character; false when it isn't saved here. Open in another tab, it shows only a line
+   * offering to take it over (`steal`: take it from that tab, which stops saving).
+   */
+  async open(id: string, steal = false): Promise<boolean> {
     this.clearNotes();
     const stored = await this.store?.get(id);
     if (!stored) return false;
     this.waiting.clear();
+    if (!(await this.tabLock.take(id, steal))) {
+      this.current = { meta: stored.meta, fields: {}, menu: [], status: 'elsewhere', images: {} };
+      this.note('info', this.t.openElsewhere, undefined, {
+        action: { label: this.t.takeOver, run: () => void this.takeOver() },
+      });
+      return true;
+    }
     this.current = { meta: stored.meta, fields: {}, menu: [], status: 'opening', images: { ...stored.data.images } };
     // This opening, not a later one of the same character (read back: Svelte's state wraps the object).
     const shown = this.current;
@@ -380,9 +449,60 @@ export class Session {
       // Left during an update: nothing to say, the next opening tries again.
       if (err instanceof UpdateLeft) return true;
       if (this.current?.meta.id === id) this.current.status = 'error';
-      this.note('error', this.explain(err));
+      this.failed(err);
     }
     return true;
+  }
+
+  /** The open character is open in another tab: this tab takes it over, and the other one stops saving it. */
+  async takeOver(): Promise<void> {
+    const id = this.current?.meta.id;
+    if (!id) return;
+    await this.running;
+    this.client.close();
+    await this.open(id, true);
+  }
+
+  /**
+   * After a failed action the character takes no changes (the engine's state is unsure): opening it again
+   * loads what was saved last, without the way back through the list (finding 6).
+   */
+  async reopen(): Promise<void> {
+    const id = this.current?.meta.id;
+    if (!id) return;
+    await this.running;
+    this.client.close();
+    await this.open(id);
+  }
+
+  /** Another tab took over the open character: this one stops saving it and says so. */
+  private lostToOtherTab(id: string): void {
+    const open = this.current;
+    if (open?.meta.id !== id) return;
+    open.status = 'elsewhere';
+    this.waiting.clear();
+    this.note('info', this.t.takenElsewhere, undefined, {
+      action: { label: this.t.takeOver, run: () => void this.takeOver() },
+    });
+  }
+
+  /**
+   * A failed action's note, with the button that opens the character again (Nick's pick A, 2026-11-04).
+   * Nothing to say when another tab took the character over meanwhile: that has its own line.
+   */
+  private failed(err: unknown): void {
+    const open = this.current;
+    if (open?.status === 'elsewhere') return;
+    if (!open) {
+      this.note('error', this.explain(err));
+      return;
+    }
+    const reason = this.explain(err);
+    // The reason may come without a full stop (an engine message): the hint is a sentence of its own.
+    const stop = /[.!?…]$/.test(reason) ? '' : '.';
+    this.note('error', `${reason}${stop} ${this.t.reopenHint}`, undefined, {
+      action: { label: this.t.reopen, run: () => void this.reopen() },
+    });
   }
 
   /**
@@ -440,9 +560,13 @@ export class Session {
    */
   async setUlt(ult: UltCharges): Promise<void> {
     const open = this.current;
-    if (!open || !this.store) return;
-    open.meta = { ...open.meta, homebrew: { ...open.meta.homebrew, ult: { ...ult } } };
+    if (!open || !this.store || !this.tabLock.holds(open.meta.id)) return;
+    // A change like any other: the list moves it up, and a backup restore's "older than here" sees it
+    // (tech review 2026-11-04, finding 13).
+    const updated = new Date().toISOString();
+    open.meta = { ...open.meta, updated, homebrew: { ...open.meta.homebrew, ult: { ...ult } } };
     await this.store.putMeta($state.snapshot(open.meta));
+    await this.refresh();
   }
 
   // ---- After a sheet update (M11) ----
@@ -495,8 +619,28 @@ export class Session {
   async close(): Promise<void> {
     await this.running;
     this.client.close();
+    this.tabLock.free();
     this.current = null;
     this.clearNotes();
+  }
+
+  /**
+   * The page is going away or out of sight (another app on the iPad): saves what isn't saved yet. Changes
+   * in line save after the last of them anyway; this covers a change nothing saved after.
+   */
+  flush(): void {
+    const open = this.current;
+    if (!open || !this.dirty || this.queued > 0 || readOnly(open.status)) return;
+    const before = this.running;
+    const save = async (): Promise<void> => {
+      await before;
+      try {
+        await this.saveOpen();
+      } catch (err) {
+        this.failed(err);
+      }
+    };
+    this.running = save();
   }
 
   /**
@@ -540,19 +684,39 @@ export class Session {
   /** Runs a worker command after the work before it, then shows and saves what it changed. */
   private inLine(job: () => Promise<unknown>): Promise<void> {
     const open = this.current;
-    if (!open || open.status === 'opening' || open.status === 'error') return this.running;
-    this.running = this.running
-      .then(async () => {
-        if (this.current !== open) return;
-        open.status = 'working';
-        await job();
-        open.fields = this.shownFields();
-        await this.saveOpen();
-      })
-      .catch((err: unknown) => {
-        open.status = 'error';
-        this.note('error', this.explain(err));
-      });
+    if (!open || readOnly(open.status)) return this.running;
+    return this.queue(open, async () => {
+      await job();
+    });
+  }
+
+  /**
+   * Puts work on the open sheet in line after the work before it; the fields then show what it changed.
+   * Only the last piece of work in line saves, for all of them (finding 4a). `onFail` tidies up after
+   * a failure, before the error note.
+   */
+  private queue(open: OpenCharacter, job: () => Promise<void>, onFail?: () => void): Promise<void> {
+    this.queued++;
+    const before = this.running;
+    const run = async (): Promise<void> => {
+      await before;
+      try {
+        try {
+          if (this.current !== open || readOnly(open.status)) return;
+          open.status = 'working';
+          await job();
+          open.fields = this.shownFields();
+        } finally {
+          this.queued--;
+        }
+        if (this.queued === 0) await this.saveOpen();
+      } catch (err) {
+        onFail?.();
+        if (open.status !== 'elsewhere') open.status = 'error';
+        this.failed(err);
+      }
+    };
+    this.running = run();
     return this.running;
   }
 
@@ -563,7 +727,7 @@ export class Session {
   async builderInfo(): Promise<BuilderInfo | null> {
     const open = this.current;
     await this.running;
-    if (!open || this.current !== open || open.status === 'error') return null;
+    if (!open || this.current !== open || readOnly(open.status)) return null;
     try {
       return await this.client.builder();
     } catch (err) {
@@ -576,7 +740,7 @@ export class Session {
   async spellsInfo(): Promise<SpellsInfo | null> {
     const open = this.current;
     await this.running;
-    if (!open || this.current !== open || open.status === 'error') return null;
+    if (!open || this.current !== open || readOnly(open.status)) return null;
     try {
       return await this.client.spells();
     } catch (err) {
@@ -589,7 +753,7 @@ export class Session {
   async scriptFiles(): Promise<ScriptFiles | null> {
     const open = this.current;
     await this.running;
-    if (!open || this.current !== open || open.status === 'error') return null;
+    if (!open || this.current !== open || readOnly(open.status)) return null;
     try {
       return await this.client.scriptFiles();
     } catch (err) {
@@ -667,15 +831,20 @@ export class Session {
   /** One piece of work on the open sheet that isn't a play view change (a menu entry, the units); saved after. */
   private work(job: () => Promise<unknown>): Promise<void> {
     const open = this.current;
-    if (!open || open.status === 'opening' || open.status === 'working') return this.running;
+    if (!open || open.status === 'opening' || open.status === 'working' || open.status === 'elsewhere')
+      return this.running;
     this.clearNotes();
     open.status = 'working';
-    this.running = job()
-      .then(() => this.saveOpen())
-      .catch((err: unknown) => {
+    const run = async (): Promise<void> => {
+      try {
+        await job();
+        await this.saveOpen();
+      } catch (err) {
         open.status = 'error';
-        this.note('error', this.explain(err));
-      });
+        this.failed(err);
+      }
+    };
+    this.running = run();
     return this.running;
   }
 
@@ -685,7 +854,7 @@ export class Session {
    */
   change(steps: Step[]): Promise<void> {
     const open = this.current;
-    if (!open || open.status === 'opening' || open.status === 'error' || steps.length === 0) return this.running;
+    if (!open || readOnly(open.status) || steps.length === 0) return this.running;
     const id = this.nextChange++;
     const next = expected(open.fields, steps);
     steps.forEach((step) => {
@@ -694,31 +863,17 @@ export class Session {
       if (view) this.waiting.set(name, { value: view.value, change: id });
     });
     open.fields = next;
-    this.running = this.running
-      .then(async () => {
-        if (this.current !== open) return;
-        open.status = 'working';
-        await steps.reduce<Promise<unknown>>(
-          (previous, step) =>
-            previous.then(() =>
-              'edit' in step
-                ? this.client.edit(step.edit, step.text)
-                : this.popUps.titled(step.menuTitle, () => this.client.click(step.click, 0, step.shift, step.newRow)),
-            ),
-          Promise.resolve(),
-        );
-        this.waiting.forEach((wait, name) => {
-          if (wait.change === id) this.waiting.delete(name);
-        });
-        open.fields = this.shownFields();
-        await this.saveOpen();
-      })
-      .catch((err: unknown) => {
-        this.waiting.clear();
-        open.status = 'error';
-        this.note('error', this.explain(err));
+    const make = async (): Promise<void> => {
+      // One after the other: each step's field events may change what the next one finds.
+      for (const step of steps) {
+        if ('edit' in step) await this.client.edit(step.edit, step.text);
+        else await this.popUps.titled(step.menuTitle, () => this.client.click(step.click, 0, step.shift, step.newRow));
+      }
+      this.waiting.forEach((wait, name) => {
+        if (wait.change === id) this.waiting.delete(name);
       });
-    return this.running;
+    };
+    return this.queue(open, make, () => this.waiting.clear());
   }
 
   /**
@@ -739,6 +894,8 @@ export class Session {
   private async saveOpen(): Promise<void> {
     const open = this.current;
     if (!open) return;
+    // Another tab took the character over: its saves count from now on, not this tab's.
+    if (!this.tabLock.holds(open.meta.id)) return;
     if (!this.dirty) {
       open.status = 'saved';
       return;
@@ -769,6 +926,11 @@ export class Session {
       cancel: 'cancel',
     });
     if (answer !== 'delete') return;
+    // The other tab would save it again with its next change.
+    if ((await this.tabLock.openElsewhere([meta.id])).length) {
+      this.note('error', fill(this.t.deleteOpenElsewhere, { name: meta.name || this.t.unnamed }));
+      return;
+    }
     await this.store?.delete(meta.id);
     await this.refresh();
   }
@@ -796,11 +958,27 @@ export class Session {
     if (!this.store) return;
     const store = this.store;
     const wanted = ids ?? this.characters.map((c) => c.id);
+    // The open character as saved after its last change (the Sheet menu's backup comes during play).
+    if (this.current && wanted.includes(this.current.meta.id)) await this.running;
     const found = await Promise.all(wanted.map((id) => store.get(id)));
     const characters = found.filter((c): c is StoredCharacter => c !== undefined);
     if (!characters.length) return;
     const backup = makeBackup(characters, SHEET_ID);
     download(new Blob([JSON.stringify(backup)], { type: 'application/json' }), backupFileName(characters));
+    await this.markBackedUp(characters, backup.created);
+  }
+
+  /**
+   * Notes the backup in each character's list entry, for the start page's reminder (finding 1). Not a
+   * change: `updated` stays, and so does the list's order.
+   */
+  private async markBackedUp(characters: StoredCharacter[], date: string): Promise<void> {
+    const store = this.store;
+    if (!store) return;
+    await Promise.all(characters.map(({ meta }) => store.putMeta({ ...meta, lastBackup: date })));
+    const open = this.current;
+    if (open && characters.some(({ meta }) => meta.id === open.meta.id)) open.meta = { ...open.meta, lastBackup: date };
+    await this.refresh();
   }
 
   /**
@@ -810,7 +988,7 @@ export class Session {
   async fillPdf(file: File): Promise<{ pdf: Blob; name: string }> {
     const open = this.current;
     await this.running;
-    if (!open || this.current !== open || open.status === 'error') throw new Error(this.t.fillPdfNoSheet);
+    if (!open || this.current !== open || readOnly(open.status)) throw new Error(this.t.fillPdfNoSheet);
     try {
       const { result } = await this.client.exportPdf(await file.arrayBuffer());
       return {
@@ -848,7 +1026,17 @@ export class Session {
         cancel: 'cancel',
       });
       if (answer !== 'restore') return;
-      await this.save(...backup.characters);
+      // The other tab would overwrite a restored character with its next change.
+      const elsewhere = await this.tabLock.openElsewhere(backup.characters.map((c) => c.meta.id));
+      if (elsewhere.length) {
+        const names = backup.characters
+          .filter((c) => elsewhere.includes(c.meta.id))
+          .map((c) => c.meta.name || this.t.unnamed);
+        this.note('error', fill(this.t.restoreOpenElsewhere, { names: names.join(', ') }));
+        return;
+      }
+      // The file is a backup of them: no reminder until they change again.
+      await this.save(...backup.characters.map((c) => ({ ...c, meta: { ...c.meta, lastBackup: backup.created } })));
       await this.refresh();
       this.note('ok', counted(this.t.restoredOne, this.t.restored, backup.characters.length));
     } catch (err) {

@@ -20,6 +20,8 @@ export interface CharacterMeta {
   /** ISO dates. `updated` is the last change on any device (a backup carries it along). */
   created: string;
   updated: string;
+  /** ISO date of the last backup made in this browser (or the backup it was restored from); see backup-reminder.ts. */
+  lastBackup?: string;
   /** The last update of the character to a new release of MPMB's sheet, when it had one. */
   sheetUpdate?: SheetUpdate;
   /** Homebrew the app adds on top of MPMB's sheet (never in a PDF); see src/homebrew/. */
@@ -82,19 +84,46 @@ const committed = (tx: IDBTransaction): Promise<void> =>
     tx.addEventListener('abort', () => reject(tx.error ?? new Error('IndexedDB transaction aborted')));
   });
 
+/**
+ * Another tab and this one disagree on the database's version (a deploy came between them). Without
+ * these, the newer tab's opening waited without end while the older tab kept the database open, and the
+ * start page stayed empty without a word (tech review 2026-11-04, finding 3).
+ */
+export interface VersionEvents {
+  /** This tab wants a newer version, and an older tab still has the database open. */
+  blocked?: () => void;
+  /**
+   * A newer tab wants to upgrade: this tab has closed the database so the upgrade can go on, and can't
+   * save any more until it is reloaded.
+   */
+  replaced?: () => void;
+}
+
 export class CharacterStore {
   private constructor(private readonly db: IDBDatabase) {}
 
   /** Opens (and on the first visit creates) the database. `factory` is a stand-in in tests. */
-  static async open(factory: IDBFactory = indexedDB, name = DB_NAME): Promise<CharacterStore> {
-    const request = factory.open(name, DB_VERSION);
+  static async open(
+    factory: IDBFactory = indexedDB,
+    name = DB_NAME,
+    events: VersionEvents = {},
+    version = DB_VERSION,
+  ): Promise<CharacterStore> {
+    const request = factory.open(name, version);
     request.addEventListener('upgradeneeded', () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(META)) db.createObjectStore(META, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(DATA)) db.createObjectStore(DATA);
       if (!db.objectStoreNames.contains(PREVIOUS)) db.createObjectStore(PREVIOUS);
     });
-    return new CharacterStore(await done(request));
+    // The opening goes on by itself once the other tab closes its database (or is closed).
+    request.addEventListener('blocked', () => events.blocked?.());
+    const db = await done(request);
+    db.addEventListener('versionchange', () => {
+      db.close();
+      events.replaced?.();
+    });
+    return new CharacterStore(db);
   }
 
   /** Every character's list entry, the last changed first. */
@@ -197,17 +226,19 @@ function classLine(data: CharacterData): string {
 export function describeCharacter(
   data: CharacterData,
   addOns: AddOns,
-  before: Pick<CharacterMeta, 'id' | 'created' | 'sheetUpdate' | 'homebrew'> | null,
+  before: Pick<CharacterMeta, 'id' | 'created' | 'sheetUpdate' | 'homebrew' | 'lastBackup'> | null,
   now = new Date(),
 ): CharacterMeta {
   const portrait = data.images?.portrait?.thumb;
   const sheetUpdate = before?.sheetUpdate;
   const homebrew = before?.homebrew;
+  const lastBackup = before?.lastBackup;
   return {
     ...(portrait ? { portrait } : {}),
     ...(sheetUpdate ? { sheetUpdate: { ...sheetUpdate } } : {}),
     // A copy, for the same reason as the add-ons below.
     ...(homebrew ? { homebrew: copyHomebrew(homebrew) } : {}),
+    ...(lastBackup ? { lastBackup } : {}),
     id: before?.id ?? crypto.randomUUID(),
     name: textOf(data, 'PC Name'),
     classes: classLine(data),
