@@ -18,6 +18,8 @@ export type Command =
   | { type: 'open'; character: CharacterData | null; pack?: SheetPack }
   /** Opens a character from a filled MPMB PDF (Colorful A4 v24.2.0, or the version of `pack`). */
   | { type: 'importPdf'; bytes: ArrayBuffer; pack?: SheetPack }
+  /** The values a player sees on the open sheet (FieldValues), to tell what a sheet update changed. */
+  | { type: 'values' }
   /**
    * The open sheet becomes the old document of an update in another worker (`migrate`): it answers that
    * worker's requests from the port, through the shared buffer (link.ts). Its pop-ups are answered as

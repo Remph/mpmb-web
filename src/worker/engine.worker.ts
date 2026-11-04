@@ -18,6 +18,7 @@ import { mpmbScripts } from '../engine/scripts.ts';
 import { CHARACTER_FORMAT, FORMAT_VERSION, applyCharacter, diffCharacter, unpackSheet } from '../engine/sheet-data.ts';
 import type { SheetPack } from '../engine/sheet-pack.ts';
 import { blankSheet } from '../engine/sheet.ts';
+import { fieldValues } from '../engine/sheet-changes.ts';
 import { serveDocument, sourceDocument } from '../engine/source-doc.ts';
 import type { SourceReply, SourceRequest } from '../engine/source-doc.ts';
 import { allowTimer } from '../engine/startup.ts';
@@ -243,6 +244,7 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
     newRow ? newSpellRow(opened(), field, true, ROW_MENUS) : opened().click(field, widget, shift),
   bookmark: ({ path }) => opened().clickBookmark(path),
   save: () => diffCharacter(sheetVersion.blank(), opened().snapshot()),
+  values: () => fieldValues(opened().snapshot()),
   serve: ({ port, buffer }) => serve(opened(), port, buffer),
   migrate: ({ port, buffer, images }) => migrate(port, buffer, images),
   addOns: () => addOnsOf(opened()),

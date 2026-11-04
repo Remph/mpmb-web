@@ -6,6 +6,8 @@ import { parseScriptFiles, scriptName } from './build/add-ons.ts';
 import type { BuilderInfo, UnitSystem } from './engine/builder.ts';
 import type { ScoreChange } from './engine/scores.ts';
 import type { SpellPicks, SpellSheetPicks, SpellsInfo } from './engine/spells.ts';
+import { sheetChanges } from './engine/sheet-changes.ts';
+import type { FieldValues } from './engine/sheet-changes.ts';
 import type { CharacterData } from './engine/sheet-data.ts';
 import { SHEET_ID } from './engine/sheet-id.ts';
 import type { SheetPack } from './engine/sheet-pack.ts';
@@ -18,7 +20,7 @@ import { counted, fill } from './i18n.ts';
 import { PopUpStack } from './popups/popups.svelte.ts';
 import { BackupError, backupFileName, filledPdfName, makeBackup, planRestore, readBackup } from './store/backup.ts';
 import { CharacterStore, describeCharacter, keepStorage } from './store/characters.ts';
-import type { CharacterMeta, StoredCharacter } from './store/characters.ts';
+import type { CharacterMeta, PreviousVersion, StoredCharacter } from './store/characters.ts';
 import { EngineClient, EngineError } from './worker/client.ts';
 import type { Done, PopUps } from './worker/client.ts';
 import { createLink } from './worker/link.ts';
@@ -242,7 +244,8 @@ export class Session {
       if (!found || !pack || !this.client.answersPopUps) throw err;
       // The bytes moved to the first worker; the file is read again.
       const bytes = await file.arrayBuffer();
-      return { opened: await this.migrate((source) => source.importPdf(bytes, pack)), from: found.version };
+      const { migrated } = await this.migrate((source) => source.importPdf(bytes, pack));
+      return { opened: migrated, from: found.version };
     }
   }
 
@@ -252,18 +255,22 @@ export class Session {
    * the client's worker as the old document (see the workers' `serve` and `migrate`). The updated
    * character stays open in the client's worker. Needs shared memory (the client answers pop-ups).
    */
-  private async migrate(openOld: (source: EngineClient) => Promise<unknown>): Promise<Done<Migrated>> {
+  private async migrate(
+    openOld: (source: EngineClient) => Promise<unknown>,
+  ): Promise<{ migrated: Done<Migrated>; before: FieldValues }> {
     const source = new EngineClient(CLOSED_POP_UPS, newEngineWorker);
     try {
       await openOld(source);
       // The import leaves out the pictures (the app carries them), so they come from the old sheet.
       const { images } = await source.save();
+      // What the player saw, to tell them what the update changed.
+      const before = await source.values();
       const { port1, port2 } = new MessageChannel();
       const link = createLink();
       await source.serve(port1, link.buffer);
       const migrated = await this.client.migrate(port2, link.buffer, images);
       if (migrated.result.summary === null) throw new UpdateStopped(this.t.sheetUpdateStopped);
-      return migrated;
+      return { migrated, before };
     } finally {
       source.close();
     }
@@ -370,7 +377,8 @@ export class Session {
    */
   private async openOlder(stored: StoredCharacter, pack: SheetPack): Promise<void> {
     const store = this.store;
-    if (!store || !this.client.answersPopUps) {
+    const undone = stored.meta.sheetUpdate?.undone === true && stored.meta.sheetUpdate.to === SHEET_ID.version;
+    if (!store || !this.client.answersPopUps || undone) {
       await this.client.open(stored.data, pack);
       return;
     }
@@ -378,18 +386,72 @@ export class Session {
     const texts = { name, from: pack.version, to: SHEET_ID.version };
     const busy = this.note('busy', fill(this.t.sheetUpdating, texts));
     try {
-      const migrated = await this.migrate((source) => source.open(stored.data, pack));
+      const { migrated, before } = await this.migrate((source) => source.open(stored.data, pack));
       const data = await this.client.save();
-      const sheetUpdate = { from: pack.version, to: SHEET_ID.version, date: new Date().toISOString(), seen: false };
+      const changes = sheetChanges(before, await this.client.values());
+      const sheetUpdate = {
+        from: pack.version,
+        to: SHEET_ID.version,
+        date: new Date().toISOString(),
+        seen: false,
+        changes: changes.length,
+      };
       const meta = describeCharacter(data, migrated.result.addOns, { ...stored.meta, sheetUpdate });
-      await store.putUpdated({ meta, data }, { ...stored, summary: migrated.result.summary ?? '' });
+      await store.putUpdated({ meta, data }, { ...stored, summary: migrated.result.summary ?? '', changes });
       if (this.current?.meta.id === meta.id) this.current.meta = meta;
       await this.refresh();
-      this.note('ok', fill(this.t.sheetUpdated, texts), busy);
+      // The line under the top bar says the rest (CharacterView).
+      this.notes = this.notes.filter((n) => n.id !== busy);
     } catch (err) {
       this.note('error', fill(this.t.sheetUpdateFailed, { ...texts, reason: this.explain(err) }), busy);
       await this.client.open(stored.data, pack);
     }
+  }
+
+  // ---- After a sheet update (M11) ----
+
+  /** The open character's last update: what changed, MPMB's notes and the copy from before. */
+  async updateDetails(): Promise<PreviousVersion | null> {
+    const id = this.current?.meta.id;
+    return (id && (await this.store?.previous(id))) || null;
+  }
+
+  /** The player keeps the update: the line and the list's mark go. */
+  async keepUpdate(): Promise<void> {
+    const open = this.current;
+    const update = open?.meta.sheetUpdate;
+    if (!open || !update || !this.store) return;
+    open.meta = { ...open.meta, sheetUpdate: { ...update, seen: true } };
+    await this.store.putMeta($state.snapshot(open.meta));
+    await this.refresh();
+  }
+
+  /**
+   * The player goes back to the copy from before the update (changes made since are lost): it opens again on
+   * its old sheet and stays there until the player updates it again (updateAgain).
+   */
+  async undoUpdate(): Promise<void> {
+    const open = this.current;
+    const update = open?.meta.sheetUpdate;
+    if (!open || !update || !this.store) return;
+    await this.running;
+    const previous = await this.store.previous(open.meta.id);
+    if (!previous) return;
+    const meta = { ...previous.meta, sheetUpdate: { ...update, seen: true, undone: true } };
+    await this.store.putBack({ meta, data: previous.data });
+    await this.refresh();
+    await this.open(meta.id);
+  }
+
+  /** A character whose update was undone tries again, as when it first opened on the new sheet. */
+  async updateAgain(): Promise<void> {
+    const open = this.current;
+    const update = open?.meta.sheetUpdate;
+    if (!open || !update?.undone || !this.store) return;
+    await this.running;
+    await this.store.putMeta({ ...$state.snapshot(open.meta), sheetUpdate: { ...update, undone: false } });
+    await this.refresh();
+    await this.open(open.meta.id);
   }
 
   /** Leaves the open character, after the last action on it is saved. */

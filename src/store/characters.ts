@@ -4,6 +4,7 @@
 // Two object stores: `meta` holds what the character list shows (a few hundred bytes each), `data` the
 // sheet itself (half a megabyte or more). The list reads only `meta`.
 import type { AddOns } from '../engine/add-ons.ts';
+import type { SheetChange } from '../engine/sheet-changes.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
 
 export interface CharacterMeta {
@@ -29,8 +30,12 @@ export interface SheetUpdate {
   to: string;
   /** ISO date. */
   date: string;
-  /** Whether the player has seen the note about it. */
+  /** Whether the player has seen the note about it (kept the update, or undid it). */
   seen: boolean;
+  /** How many entries the player sees differ from before (the update note says so). */
+  changes: number;
+  /** The player went back to the version before: the character stays on `from` until they update again. */
+  undone?: boolean;
 }
 
 export interface StoredCharacter {
@@ -42,6 +47,8 @@ export interface StoredCharacter {
 export interface PreviousVersion extends StoredCharacter {
   /** MPMB's closing "Things to consider about the import" text (English, as MPMB writes it). */
   summary: string;
+  /** The entries the player sees that differ after the update. */
+  changes: SheetChange[];
 }
 
 const DB_NAME = 'mpmb-web';
@@ -125,6 +132,25 @@ export class CharacterStore {
     tx.objectStore(META).put(character.meta);
     tx.objectStore(DATA).put(character.data, character.meta.id);
     tx.objectStore(PREVIOUS).put(previous, character.meta.id);
+    await committed(tx);
+  }
+
+  /**
+   * Undoes the last sheet update: the copy from before becomes the character again (with this list entry),
+   * and the copy is gone.
+   */
+  async putBack(character: StoredCharacter): Promise<void> {
+    const tx = this.db.transaction([META, DATA, PREVIOUS], 'readwrite');
+    tx.objectStore(META).put(character.meta);
+    tx.objectStore(DATA).put(character.data, character.meta.id);
+    tx.objectStore(PREVIOUS).delete(character.meta.id);
+    await committed(tx);
+  }
+
+  /** Replaces only the list entry (the update note was seen), keeping the sheet. */
+  async putMeta(meta: CharacterMeta): Promise<void> {
+    const tx = this.db.transaction(META, 'readwrite');
+    tx.objectStore(META).put(meta);
     await committed(tx);
   }
 

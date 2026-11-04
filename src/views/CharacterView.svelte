@@ -27,6 +27,9 @@
   import type { PrintPart } from '../play/print.ts';
   import PrintWindow from './print/PrintWindow.svelte';
   import FillPdfWindow from './print/FillPdfWindow.svelte';
+  import UpdateLine from './update/UpdateLine.svelte';
+  import UpdateWindow from './update/UpdateWindow.svelte';
+  import type { PreviousVersion } from '../store/characters.ts';
 
   interface Props {
     session: Session;
@@ -77,6 +80,24 @@
   const shortRestText = (): string =>
     /warlock/i.test(open.meta.classes) ? `${t.shortRestText} ${t.shortRestPactMagic}` : t.shortRestText;
 
+  // After a sheet update (M11): the line until the player keeps or undoes it; after an undo, the line that
+  // offers the update again.
+  const sheetUpdate = $derived(open.meta.sheetUpdate);
+  const updateLine = $derived(sheetUpdate && (!sheetUpdate.seen || sheetUpdate.undone) ? sheetUpdate : null);
+  /** The "What changed" window's contents once loaded; undefined while it is closed. */
+  let updateDetails = $state<PreviousVersion | null | undefined>(undefined);
+  async function showUpdate() {
+    updateDetails = await session.updateDetails();
+  }
+  function keepUpdate() {
+    updateDetails = undefined;
+    void session.keepUpdate();
+  }
+  function undoUpdate() {
+    updateDetails = undefined;
+    void session.undoUpdate();
+  }
+
   let printWindow = $state(false);
   let fillPdfWindow = $state(false);
   /** The parts and the pencil choice from the print window; null until it was used (Ctrl+P prints every part). */
@@ -123,7 +144,28 @@
     <button type="button" onclick={() => (menuOpen = true)}>☰ {t.sheetMenu}</button>
   </TopBar>
 
-  <div class="notes"><Notes notes={session.notes} /></div>
+  <div class="notes">
+    <Notes notes={session.notes} />
+    {#if updateLine}
+      <UpdateLine
+        update={updateLine}
+        {t}
+        onshow={showUpdate}
+        onkeep={keepUpdate}
+        onagain={() => void session.updateAgain()}
+      />
+    {/if}
+  </div>
+  {#if updateDetails !== undefined && sheetUpdate}
+    <UpdateWindow
+      update={sheetUpdate}
+      name={open.meta.name || t.unnamed}
+      details={updateDetails}
+      {t}
+      onkeep={keepUpdate}
+      onundo={undoUpdate}
+    />
+  {/if}
 
   <div class="play">
     <div class="side left">

@@ -3,6 +3,7 @@
 import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem } from '../engine/host.ts';
 import type { AddOns, ScriptChanges, ScriptFiles } from '../engine/add-ons.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
+import type { FieldValues } from '../engine/sheet-changes.ts';
 import type { SheetPack } from '../engine/sheet-pack.ts';
 import type { ImageSlot, SheetImage, SheetImages } from '../engine/types.ts';
 import type { BuilderInfo, UnitSystem } from '../engine/builder.ts';
@@ -106,6 +107,11 @@ export class EngineClient {
    */
   importPdf(bytes: ArrayBuffer, pack?: SheetPack): Promise<Done<Opened>> {
     return this.restart({ type: 'importPdf', bytes, ...(pack ? { pack } : {}) }) as Promise<Done<Opened>>;
+  }
+
+  /** The values a player sees on the open sheet. */
+  async values(): Promise<FieldValues> {
+    return (await this.send({ type: 'values' })).result as FieldValues;
   }
 
   /** The open sheet answers another worker's `migrate` from this port (see the worker's `serve`). */

@@ -96,6 +96,9 @@
               ? ` · ${counted(t.addOnCountOne, t.addOnCount, addOns)}`
               : ''}
           </span>
+          {#if character.sheetUpdate && !character.sheetUpdate.seen}
+            <span class="line updated">↻ {fill(t.updListMark, { to: character.sheetUpdate.to })}</span>
+          {/if}
         </a>
         <div class="actions">
           <button type="button" onclick={() => session.backUp([character.id])}>{t.backUp}</button>
@@ -126,6 +129,11 @@
 </section>
 
 <style>
+  .updated {
+    color: var(--accent);
+    font-weight: 500;
+  }
+
   .head {
     display: flex;
     flex-wrap: wrap;
