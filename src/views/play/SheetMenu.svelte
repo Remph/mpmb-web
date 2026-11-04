@@ -14,6 +14,8 @@
   import Modal from '../../popups/Modal.svelte';
   import MenuTree from '../MenuTree.svelte';
   import AddOnsWindow from './AddOnsWindow.svelte';
+  import HomebrewWindow from '../HomebrewWindow.svelte';
+  import { homebrew } from '../../homebrew/switches.svelte.ts';
 
   interface Props {
     session: Session;
@@ -63,6 +65,9 @@
   const units = $derived<UnitSystem>(valueOf(open.fields, 'Unit System') === 'metric' ? 'metric' : 'imperial');
   /** The "Add-on scripts" window, shown in this window's place. */
   let scripts = $state(false);
+  /** The homebrew window, shown in this window's place too. */
+  let rules = $state(false);
+  const rulesOn = $derived(Object.values(homebrew.switches).filter(Boolean).length);
   const buildHref = $derived(`#/character/${encodeURIComponent(open.meta.id)}/build`);
 
   /** A menu item runs MPMB's scripts, which may open their own pop-ups: this window steps aside. */
@@ -86,6 +91,8 @@
 
 {#if scripts}
   <AddOnsWindow {session} {open} {onclose} {t} />
+{:else if rules}
+  <HomebrewWindow {onclose} {t} />
 {:else}
   <Modal title={t.sheetMenu} onescape={onclose} closeLabel={t.close} wide>
     {#if !session.client.answersPopUps}
@@ -159,6 +166,9 @@
     <div class="tiles">
       <button type="button" class="tile" onclick={() => session.backUp([open.meta.id])}>
         <b>{t.backUp}</b><small>{t.menuBackUpLine}</small>
+      </button>
+      <button type="button" class="tile" onclick={() => (rules = true)}>
+        <b>{t.homebrewTitle}</b><small>{rulesOn ? fill(t.homebrewOnCount, { count: rulesOn }) : t.homebrewLine}</small>
       </button>
       <button type="button" class="tile" onclick={toggleLanguage}>
         <b lang={t.switchLanguage === 'English' ? 'en' : 'de'}>{t.switchLanguage}</b><small>{t.menuLanguageLine}</small>

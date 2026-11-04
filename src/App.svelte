@@ -6,6 +6,7 @@
   import CharacterList from './views/CharacterList.svelte';
   import CharacterView from './views/CharacterView.svelte';
   import BuildView from './views/build/BuildView.svelte';
+  import HomebrewWindow from './views/HomebrewWindow.svelte';
   import { BUILD, SOURCE_URL, sourceUrl } from './version.ts';
 
   const storageKey = 'mpmb-web.lang';
@@ -49,6 +50,7 @@
   // Try it: https://regex101.com/?regex=%5E%23%5C%2Fcharacter%5C%2F%28%5B%5E%2F%5D%2B%29%28%5C%2Fbuild%28%3F%3A%5C%2Fchoices%5C%2F%28%5B%5E%2F%5D%2A%29%7C%5C%2F%28gear%7Cspells%29%29%3F%29%3F%24&testString=%23%2Fcharacter%2Fabc%2Fbuild%2Fspells
   // A feature's choice: https://regex101.com/?regex=%5E%23%5C%2Fcharacter%5C%2F%28%5B%5E%2F%5D%2B%29%28%5C%2Fbuild%28%3F%3A%5C%2Fchoices%5C%2F%28%5B%5E%2F%5D%2A%29%7C%5C%2F%28gear%7Cspells%29%29%3F%29%3F%24&testString=%23%2Fcharacter%2Fabc%2Fbuild%2Fchoices%2FFighting%2520Style
   const CHARACTER_ROUTE = /^#\/character\/([^/]+)(\/build(?:\/choices\/([^/]*)|\/(gear|spells))?)?$/;
+  let rules = $state(false);
   let missing = $state(false);
   let building = $state(false);
   /** The feature whose choice the Build screen opens at, or null for its first step. */
@@ -87,15 +89,21 @@
 {:else}
   <header>
     <a class="brand" href="#/">{t.title}</a>
-    <button
-      type="button"
-      onclick={toggleLanguage}
-      aria-label={t.switchLanguageLabel}
-      lang={lang === 'de' ? 'en' : 'de'}
-    >
-      {t.switchLanguage}
-    </button>
+    <span class="end">
+      <button type="button" onclick={() => (rules = true)}>{t.homebrewTitle}</button>
+      <button
+        type="button"
+        onclick={toggleLanguage}
+        aria-label={t.switchLanguageLabel}
+        lang={lang === 'de' ? 'en' : 'de'}
+      >
+        {t.switchLanguage}
+      </button>
+    </span>
   </header>
+  {#if rules}
+    <HomebrewWindow onclose={() => (rules = false)} {t} />
+  {/if}
 
   <main>
     {#if missing}
@@ -134,6 +142,10 @@
     border-bottom: 1px solid var(--line);
   }
 
+  .end {
+    display: flex;
+    gap: 0.5rem;
+  }
   .brand {
     display: inline-flex;
     align-items: center;

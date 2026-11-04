@@ -8,11 +8,22 @@ MPMB Web is an unofficial fan project, not affiliated with or endorsed by MorePu
 Wijnen). Get the PDF sheets from MPMB directly: [MPMB's website](https://www.flapkan.com/download/#charactersheets)
 or [MPMB's Patreon](https://www.patreon.com/morepurplemorebetter).
 
-**Status:** in development. Built for a single play group first. You can import characters from filled
-MPMB PDFs (Colorful A4 v24.2.0, with the add-on scripts in them), keep them in the browser, and move
-them between devices with backup files, and play them at the table: hit points, conditions, attacks,
-spell slots, limited features, rests, checks, inventory, features and notes, on laptops and the iPad.
-The engine (MPMB's scripts on a stand-in for Acrobat) matches Acrobat on the reference characters.
+**Status:** in development, built for a single play group first, live at <https://remph.de/mpmb/>. You
+can:
+
+- import characters from filled MPMB PDFs (Colorful A4 v24.2.0, with the add-on scripts in them), or
+  start a new one;
+- build them: class and level, species, background, feats, ability scores, skills, languages and tools,
+  armour and weapons, spells, and add-on scripts of your own;
+- play them at the table: hit points, conditions, attacks, ammunition, spell slots and prepared spells,
+  limited features, rests, checks, experience, inventory, features, notes and the portrait;
+- print them on A4, or fill a blank MPMB PDF you supply;
+- keep them in the browser and move them between devices with backup files. Characters saved on an
+  older version of MPMB's sheet are updated when they open, with MPMB's own import; the version
+  before is kept.
+
+Laptops and the iPad come first. The engine (MPMB's scripts on a stand-in for Acrobat) matches Acrobat
+on the reference characters.
 
 The font is [Atkinson Hyperlegible Next](https://www.brailleinstitute.org/freefont/) by the Braille
 Institute (SIL Open Font License 1.1), bundled with the app.
@@ -43,6 +54,8 @@ The smoke test needs Firefox for Playwright once: `pnpm exec playwright install 
   cross-origin isolated page: `pnpm dev` and `pnpm preview` send the headers, the live site gets them
   from `public/.htaccess`.
 - `src/store/`: characters in the browser (IndexedDB) and backup files.
+- `src/homebrew/`: house rules the app adds on top of MPMB's sheet, each behind a switch in "Homebrew
+  rules" (per browser). They stay in the app and never go into a PDF. So far: ult charges.
 - `src/popups/`: the page's side of MPMB's pop-ups (alerts, menus, dialogs) and the app's own questions.
 - `src/views/`, `src/App.svelte`, `src/session.svelte.ts`: the pages and what they do.
 - `test/`: the reference characters (made in Acrobat, SRD only) and the tests that compare the engine
