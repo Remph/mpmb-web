@@ -184,6 +184,27 @@ describe('languages and tools', () => {
     expect(freeLangToolRow(fields, 'Language')).toBe('Language 2');
   });
 
+  it("a hand-added language moved into a choice slot reads as the species' choice, and goes with the species", () => {
+    const engine = openSheet(referenceSheet('paladin8-warlock2'));
+    engine.edit('Language 4', 'Giant');
+    engine.edit('Language 5', 'Orc');
+    // What the pencil's "Added by you" does: the slot takes the name, the hand-added row is emptied.
+    engine.edit('Language 2', 'Giant');
+    engine.edit('Language 4', '');
+    engine.edit('Language 3', '');
+    let fields = viewsOf(engine.doc);
+    expect(readLangTools(fields, 'Language')).toEqual([
+      { field: 'Language 1', name: 'Common', sources: ['Silver Dragonborn'], choice: false },
+      { field: 'Language 2', name: 'Giant', sources: ['Silver Dragonborn'], choice: true },
+      { field: 'Language 5', name: 'Orc', sources: [], choice: false },
+    ]);
+    expect(freeLangToolRow(fields, 'Language')).toBe('Language 4');
+    // MPMB's RemoveLangTool finds both tagged rows, the filled and the emptied one, and the player's own stays.
+    engine.edit('Race', '');
+    fields = viewsOf(engine.doc);
+    expect(readLangTools(fields, 'Language').map((row) => [row.name, row.choice])).toEqual([['Orc', false]]);
+  });
+
   it("a language typed into a free row shows as the player's own", () => {
     const engine = openSheet(referenceSheet('paladin8-warlock2'));
     engine.edit('Language 4', 'Undercommon');
