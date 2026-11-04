@@ -207,7 +207,7 @@
 
   .facts {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 7.5rem), 1fr));
     gap: 0.375rem;
   }
 
@@ -246,6 +246,20 @@
   /* Two boxes wide, so "Chaotic Neutral" fits next to the ▾. */
   .fact.choices {
     grid-column: span 2;
+  }
+
+  /*
+   * Where only one box fits in a row (beside the portrait on a phone), a second column made for it would
+   * stick out past the screen's edge; there the one column is wide enough. 15.375 rem is two boxes and the gap.
+   */
+  .facts {
+    container-type: inline-size;
+  }
+
+  @container (max-width: 15.374rem) {
+    .fact.choices {
+      grid-column: auto;
+    }
   }
 
   /* Room on the right for the ▾, which covers the box's full height so it is easy to hit. */
@@ -309,7 +323,7 @@
   /* Two side by side where there is room (traits next to ideal), one below the other on narrow columns. */
   .texts {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
     gap: 0.5rem;
   }
 
