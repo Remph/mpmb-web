@@ -16,10 +16,11 @@ const fromOne = (count: number): number[] => Array.from({ length: count }, (_, i
 const ATTACK_ROWS = fromOne(ROWS_PER_PAGE);
 const DEATH_SAVE_BOXES = fromOne(ROWS_PER_PAGE);
 
-/** The page's menu button and what MPMB's menu answers to add and remove a page. */
+/** The page's menu button ("Companion Options"). */
 export const companionMenu = (prefix: string): string => `${prefix}Companion.Options`;
-export const ADD_COMPANION_PAGE = ['companion', 'add_page'];
-export const REMOVE_COMPANION_PAGE = ['companion', 'remove_page'];
+/** MPMB's menu answers on that button (its cReturn texts) for adding and removing a page. */
+export const ADD_COMPANION_PAGE = 'companion#add_page';
+export const REMOVE_COMPANION_PAGE = 'companion#remove_page';
 
 /** How MPMB marks a companion's skill ("Text.Comp.Use.Skills.Arc.Prof"). */
 export type SkillMark = 'nothing' | 'proficient' | 'expertise';
@@ -167,3 +168,17 @@ export function readCompanions(fields: FieldViews): Companion[] {
 
 /** A page with no creature and no name: what "Add extra companion page" makes, or a page left empty. */
 export const isEmptyCompanion = (c: Companion): boolean => c.creature === '' && c.name === '';
+
+/** What a companion is called in the app's lists: its name, else its creature ("Quasit"). */
+export const companionLabel = (c: Companion): string => c.name || c.creature;
+
+/**
+ * The page the app should show after the list changed: the one shown before while it still exists, else
+ * the character (null).
+ */
+export const stillShown = (prefixes: string[], shown: string | null): string | null =>
+  shown !== null && prefixes.includes(shown) ? shown : null;
+
+/** The page MPMB added: the first prefix that wasn't there before. */
+export const addedPage = (before: string[], after: string[]): string | null =>
+  after.find((prefix) => !before.includes(prefix)) ?? null;

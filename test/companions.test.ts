@@ -2,7 +2,7 @@
 // and the play view reads it back. The creature is the SRD owl from Find Familiar, so the test carries no
 // content beyond the SRD.
 import { describe, expect, test } from 'vitest';
-import { companionPrefixes, isEmptyCompanion, readCompanions } from '../src/play/companions.ts';
+import { addedPage, companionPrefixes, isEmptyCompanion, readCompanions, stillShown } from '../src/play/companions.ts';
 import { viewsOf } from '../src/worker/views.ts';
 import { openSheet, referenceSheet } from './characters.ts';
 
@@ -44,5 +44,18 @@ describe('companion pages', () => {
     const prefixes = companionPrefixes(viewsOf(engine.doc));
     expect(prefixes[0]).toBe('P4.AScomp.');
     expect(prefixes.slice(1)).toEqual([expect.stringMatching(/\.AScomp\.$/)]);
+  });
+});
+
+describe('which page the bar shows', () => {
+  test('a removed page falls back to the character', () => {
+    expect(stillShown(['P4.AScomp.', 'P5.AScomp.'], 'P5.AScomp.')).toBe('P5.AScomp.');
+    expect(stillShown(['P4.AScomp.'], 'P5.AScomp.')).toBeNull();
+    expect(stillShown(['P4.AScomp.'], null)).toBeNull();
+  });
+
+  test('the added page is the prefix that is new', () => {
+    expect(addedPage(['P4.AScomp.'], ['P4.AScomp.', 'P12.AScomp.'])).toBe('P12.AScomp.');
+    expect(addedPage(['P4.AScomp.'], ['P4.AScomp.'])).toBeNull();
   });
 });

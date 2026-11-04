@@ -26,10 +26,12 @@
     onprint?: () => void;
     /** Opens "Fill MPMB PDF" (M10); left out where the menu doesn't offer it. */
     onfillpdf?: () => void;
+    /** Shows a companion page to fill in, or adds one (the play view only). */
+    oncompanion?: () => void;
     t: Texts;
   }
 
-  let { session, open, onclose, toggleLanguage, onprint, onfillpdf, t }: Props = $props();
+  let { session, open, onclose, toggleLanguage, onprint, onfillpdf, oncompanion, t }: Props = $props();
 
   // MPMB's bookmarks: "Functions" is its menu; the page jumps under "Navigation" mean nothing here.
   const MENU_ROOT = 'Functions';
@@ -125,6 +127,11 @@
       <button type="button" class="tile" disabled={busy} onclick={() => run([MENU_ROOT, 'Source Material'])}>
         <b>{t.menuSources}</b><small>{t.menuSourcesLine}</small>
       </button>
+      {#if oncompanion}
+        <button type="button" class="tile" disabled={busy} onclick={oncompanion}>
+          <b>{t.menuCompanion}</b><small>{t.menuCompanionLine}</small>
+        </button>
+      {/if}
       {#if onprint}
         <button type="button" class="tile" disabled={busy} onclick={onprint}>
           <b>{t.printTitle}</b><small>{t.menuPrintLine}</small>

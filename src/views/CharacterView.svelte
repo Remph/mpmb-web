@@ -22,6 +22,18 @@
   import TopBar from './TopBar.svelte';
   import { readSpells } from '../play/spells.ts';
   import Vitals from './play/Vitals.svelte';
+  import CompanionBar from './play/CompanionBar.svelte';
+  import CompanionChecks from './play/CompanionChecks.svelte';
+  import CompanionTab from './play/CompanionTab.svelte';
+  import CompanionVitals from './play/CompanionVitals.svelte';
+  import {
+    ADD_COMPANION_PAGE,
+    addedPage,
+    companionMenu,
+    isEmptyCompanion,
+    readCompanions,
+    stillShown,
+  } from '../play/companions.ts';
   import { homebrew } from '../homebrew/switches.svelte.ts';
   import { readUlt } from '../homebrew/ult.ts';
   import { valueOf } from '../play/read.ts';
@@ -67,6 +79,56 @@
   /** The Spells tab only for a character with spell sheet pages. */
   const hasSpells = $derived(readSpells(open.fields).length > 0);
   const shownTab = $derived((wide && tab === 'checks') || (tab === 'spells' && !hasSpells) ? 'combat' : tab);
+
+  // Companion pages (Nick picked B, 2026-11-04): the bar under the top bar switches all three columns to a
+  // companion. Which one is shown belongs to this view and this character; it isn't saved.
+  const companions = $derived(readCompanions(open.fields));
+  let showing = $state<{ id: string; prefix: string } | null>(null);
+  const shownPrefix = $derived(
+    showing?.id === open.meta.id
+      ? stillShown(
+          companions.map((c) => c.prefix),
+          showing.prefix,
+        )
+      : null,
+  );
+  const companion = $derived(companions.find((c) => c.prefix === shownPrefix) ?? null);
+  /** MPMB starts every sheet with an empty companion page: the bar lists empty pages only while one is shown. */
+  const listed = $derived(companions.filter((c) => !isEmptyCompanion(c) || c.prefix === shownPrefix));
+  type CompanionTabKey = 'combat' | 'checks' | 'notes';
+  let companionTab = $state<CompanionTabKey>('combat');
+  const companionTabs = $derived(
+    (
+      [
+        ['combat', t.tabCombat],
+        ['checks', t.tabChecks],
+        ['notes', t.tabNotes],
+      ] as const
+    ).filter(([key]) => !(wide && key === 'checks')),
+  );
+  const shownCompanionTab = $derived(wide && companionTab === 'checks' ? 'combat' : companionTab);
+
+  function showCompanion(prefix: string | null) {
+    showing = prefix === null ? null : { id: open.meta.id, prefix };
+    window.scrollTo({ top: 0 });
+  }
+
+  /**
+   * "+ Companion": an empty page if the sheet has one (MPMB makes one with every new sheet), else MPMB's
+   * "Add extra companion page" on the last page's menu (or the template's own, with no page left).
+   */
+  async function addCompanion() {
+    menuOpen = false;
+    const empty = companions.find(isEmptyCompanion);
+    if (empty) return showCompanion(empty.prefix);
+    const before = companions.map((c) => c.prefix);
+    await session.pick(companionMenu(before[before.length - 1] ?? ''), ADD_COMPANION_PAGE);
+    const added = addedPage(
+      before,
+      readCompanions(open.fields).map((c) => c.prefix),
+    );
+    if (added) showCompanion(added);
+  }
 
   const fields = $derived(open.fields);
   const disabled = $derived(readOnly(open.status));
@@ -161,6 +223,18 @@
     <button type="button" onclick={() => (menuOpen = true)}>☰ {t.sheetMenu}</button>
   </TopBar>
 
+  {#if listed.length && !elsewhereOnly}
+    <CompanionBar
+      character={open.meta.name || t.unnamed}
+      companions={listed}
+      shown={shownPrefix}
+      {disabled}
+      onshow={showCompanion}
+      onadd={() => void addCompanion()}
+      {t}
+    />
+  {/if}
+
   <div class="notes">
     <Notes notes={session.notes} />
     {#if updateLine}
@@ -186,64 +260,101 @@
 
   <!-- Open in another tab from the start: no sheet here, only the line offering to take it over. -->
   {#if !elsewhereOnly}
-    <div class="play">
-      <div class="side left">
-        {#if noClass}
-          <section class="start" aria-labelledby="no-class-title">
-            <h2 id="no-class-title">{t.noClassTitle}</h2>
-            <p>{t.noClassLine}</p>
-            <a href={buildHref}>{t.menuBuild}</a>
-          </section>
-        {:else}
-          <Vitals {fields} {disabled} {change} {ult} onult={(u) => void session.setUlt(u)} {t} />
+    {#if companion}
+      <div class="play">
+        <div class="side left">
+          <CompanionVitals {companion} {disabled} {change} {t} />
+        </div>
+        <!-- An empty page has nothing to show yet but the way to fill it, on the left. -->
+        {#if !isEmptyCompanion(companion)}
+          <div class="middle">
+            <div class="tabs" role="tablist">
+              {#each companionTabs as [key, label] (key)}
+                <button
+                  type="button"
+                  role="tab"
+                  id={`tab-${key}`}
+                  aria-selected={shownCompanionTab === key}
+                  aria-controls="tab-panel"
+                  onclick={() => (companionTab = key)}>{label}</button
+                >
+              {/each}
+            </div>
+            <div id="tab-panel" role="tabpanel" aria-labelledby={`tab-${shownCompanionTab}`}>
+              {#if shownCompanionTab === 'checks'}
+                <CompanionChecks {companion} {t} />
+              {:else}
+                <CompanionTab {companion} part={shownCompanionTab} {t} />
+              {/if}
+            </div>
+          </div>
+          {#if wide}
+            <div class="side right">
+              <CompanionChecks {companion} {t} />
+            </div>
+          {/if}
         {/if}
       </div>
-
-      <div class="middle">
-        <div class="tabs" role="tablist">
-          {#each tabs as [key, label] (key)}
-            <button
-              type="button"
-              role="tab"
-              id={`tab-${key}`}
-              aria-selected={shownTab === key}
-              aria-controls="tab-panel"
-              onclick={() => (tab = key)}>{label}</button
-            >
-          {/each}
-        </div>
-        <div id="tab-panel" role="tabpanel" aria-labelledby={`tab-${shownTab}`}>
-          {#if shownTab === 'combat'}
-            <CombatTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
-          {:else if shownTab === 'spells'}
-            <SpellsTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
-          {:else if shownTab === 'checks'}
-            <Checks {fields} {disabled} {change} {t} />
-          {:else if shownTab === 'inventory'}
-            <InventoryTab {fields} {disabled} {change} {t} />
-          {:else if shownTab === 'features'}
-            <FeaturesTab {fields} characterId={open.meta.id} {t} />
-          {:else if shownTab === 'profile'}
-            <ProfileTab
-              {fields}
-              images={open.images}
-              {disabled}
-              {change}
-              setImage={(slot, file) => session.setImage(slot, file)}
-              {t}
-            />
+    {:else}
+      <div class="play">
+        <div class="side left">
+          {#if noClass}
+            <section class="start" aria-labelledby="no-class-title">
+              <h2 id="no-class-title">{t.noClassTitle}</h2>
+              <p>{t.noClassLine}</p>
+              <a href={buildHref}>{t.menuBuild}</a>
+            </section>
           {:else}
-            <NotesTab {fields} {disabled} {change} pick={(field, answer) => session.pick(field, answer)} {t} />
+            <Vitals {fields} {disabled} {change} {ult} onult={(u) => void session.setUlt(u)} {t} />
           {/if}
         </div>
-      </div>
 
-      {#if wide}
-        <div class="side right">
-          <Checks {fields} {disabled} {change} {t} />
+        <div class="middle">
+          <div class="tabs" role="tablist">
+            {#each tabs as [key, label] (key)}
+              <button
+                type="button"
+                role="tab"
+                id={`tab-${key}`}
+                aria-selected={shownTab === key}
+                aria-controls="tab-panel"
+                onclick={() => (tab = key)}>{label}</button
+              >
+            {/each}
+          </div>
+          <div id="tab-panel" role="tabpanel" aria-labelledby={`tab-${shownTab}`}>
+            {#if shownTab === 'combat'}
+              <CombatTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
+            {:else if shownTab === 'spells'}
+              <SpellsTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
+            {:else if shownTab === 'checks'}
+              <Checks {fields} {disabled} {change} {t} />
+            {:else if shownTab === 'inventory'}
+              <InventoryTab {fields} {disabled} {change} {t} />
+            {:else if shownTab === 'features'}
+              <FeaturesTab {fields} characterId={open.meta.id} {t} />
+            {:else if shownTab === 'profile'}
+              <ProfileTab
+                {fields}
+                images={open.images}
+                {disabled}
+                {change}
+                setImage={(slot, file) => session.setImage(slot, file)}
+                {t}
+              />
+            {:else}
+              <NotesTab {fields} {disabled} {change} pick={(field, answer) => session.pick(field, answer)} {t} />
+            {/if}
+          </div>
         </div>
-      {/if}
-    </div>
+
+        {#if wide}
+          <div class="side right">
+            <Checks {fields} {disabled} {change} {t} />
+          </div>
+        {/if}
+      </div>
+    {/if}
   {/if}
 
   {#if menuOpen}
@@ -260,6 +371,7 @@
         menuOpen = false;
         fillPdfWindow = true;
       }}
+      oncompanion={() => void addCompanion()}
       {t}
     />
   {/if}
