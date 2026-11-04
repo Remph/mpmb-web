@@ -1,5 +1,10 @@
-<!-- The middle column's first tab: what a turn needs. Attacks, spell slots, limited features, actions. -->
+<!--
+  The middle column's first tab: what a turn needs. Attacks (a to-hit number opens the advantage pop-up
+  for every attack roll, the PDF's "Att Adv"/"Att Dis"), ammunition, spell slots, limited features, actions.
+-->
 <script lang="ts">
+  import { tick } from 'svelte';
+  import { ARROW, edgeOf, isAttackRoll } from '../../play/edge.ts';
   import { gearHref } from '../../build/choose-link.ts';
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
@@ -10,12 +15,15 @@
     readActions,
     readAttacks,
     readLimitedFeatures,
+    readRollMarks,
     readSpellSlotUse,
     recoveryKind,
   } from '../../play/read.ts';
   import type { LimitedFeature } from '../../play/read.ts';
   import type { FieldViews } from '../../worker/views.ts';
+  import AmmoPanel from './AmmoPanel.svelte';
   import Dots from './Dots.svelte';
+  import EdgePopUp from './EdgePopUp.svelte';
   import NumberPad from './NumberPad.svelte';
   import Stepper from './Stepper.svelte';
 
@@ -35,6 +43,23 @@
   const slots = $derived(readSpellSlotUse(fields));
   const features = $derived(readLimitedFeatures(fields));
   const actions = $derived(readActions(fields));
+  const attackMark = $derived(readRollMarks(fields).attacks);
+  const attackEdge = $derived(edgeOf(attackMark));
+  const edgeLabel = (e: 'adv' | 'dis'): string => (e === 'adv' ? t.advantage : t.disadvantage);
+
+  /** The to-hit button that opened the advantage pop-up: focus goes back there when it closes. */
+  let markFrom: HTMLButtonElement | null = $state(null);
+  let marking = $state(false);
+  function openMark(button: HTMLButtonElement) {
+    markFrom = button;
+    marking = true;
+  }
+  async function closeMark() {
+    marking = false;
+    await tick();
+    markFrom?.focus();
+    markFrom = null;
+  }
 
   /** MPMB leaves "used" empty rather than 0. */
   const usedText = (used: number): string => (used > 0 ? String(used) : '');
@@ -81,7 +106,22 @@
     <div class="attack">
       <span class="name">{attack.name}</span>
       <span class="hit">
-        {#if attack.toHit}<span class="badge">{attack.toHit}</span>{/if}
+        {#if isAttackRoll(attack.toHit)}
+          <button
+            type="button"
+            class="badge"
+            aria-haspopup="dialog"
+            aria-label={`${fill(t.attackRollsOf, { name: attack.name })} ${attack.toHit}${attackEdge ? `, ${edgeLabel(attackEdge)}` : ''}`}
+            onclick={(ev) => openMark(ev.currentTarget)}
+            >{attack.toHit}
+            {#if attackEdge}<small class="edge {attackEdge}" aria-hidden="true"
+                >{ARROW[attackEdge]} {edgeLabel(attackEdge)}</small
+              >{/if}</button
+          >
+        {:else if attack.toHit}
+          <!-- A saving throw DC ("DC 14"): no attack roll, so no advantage mark and no pop-up. -->
+          <span class="badge">{attack.toHit}</span>
+        {/if}
         {#if attack.damage}
           <span class="badge damage">{attack.damage} <small>{attack.damageType}</small></span>
         {/if}
@@ -92,6 +132,22 @@
     <p class="muted">{t.noAttacks}</p>
   {/each}
 </section>
+
+{#if marking}
+  <EdgePopUp
+    title={t.attackRolls}
+    roll=""
+    state={attackMark}
+    boxes="Att"
+    note={t.attackRollsNote}
+    {disabled}
+    {change}
+    onclose={() => void closeMark()}
+    {t}
+  />
+{/if}
+
+<AmmoPanel {fields} {disabled} {change} {t} />
 
 {#if slots.length}
   <section class="panel" aria-labelledby="slots-title">
@@ -269,6 +325,32 @@
     font-weight: 800;
     line-height: 1.1;
     text-align: center;
+  }
+
+  /* The to-hit number is a button (the advantage pop-up) that keeps the badge's look. */
+  button.badge {
+    border: 0;
+    font: inherit;
+    font-size: 1.125rem;
+    font-weight: 800;
+    line-height: 1.1;
+    color: var(--accent);
+  }
+
+  button.badge:not(:disabled):hover,
+  button.badge:focus-visible {
+    background: var(--accent-soft);
+    filter: brightness(0.95);
+  }
+
+  /* Under the number, like the damage type under the damage. */
+  .badge .edge {
+    color: var(--ok);
+    font-weight: 700;
+  }
+
+  .badge .edge.dis {
+    color: var(--hp);
   }
 
   .badge.damage {

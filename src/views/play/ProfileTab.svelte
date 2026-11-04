@@ -1,5 +1,5 @@
 <!--
-  Who the character is: appearance, personality, allies and enemies, backstory. Every box is one of
+  Who the character is: experience points, appearance, personality, allies and enemies, backstory. Every box is one of
   the sheet's own fields (page 1, the background page and the notes page of the PDF), saved when it
   loses focus so typing doesn't run MPMB's scripts on every key. The portrait sits left of the
   appearance, the organisation symbol under faction, rank and renown (M8).
@@ -10,6 +10,7 @@
   import type { Step } from '../../session.svelte.ts';
   import { choicesOf, valueOf } from '../../play/read.ts';
   import type { FieldViews } from '../../worker/views.ts';
+  import Experience from './Experience.svelte';
   import Picture from './Picture.svelte';
 
   interface Props {
@@ -109,6 +110,8 @@
     {/each}
   </div>
 {/snippet}
+
+<Experience {fields} {disabled} {change} {t} />
 
 <section class="panel" aria-labelledby="appearance-title">
   <h2 id="appearance-title">{t.appearance}</h2>

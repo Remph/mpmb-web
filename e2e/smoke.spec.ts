@@ -62,6 +62,41 @@ test('a new character gets a class, armour and a weapon, and the play view shows
   await expect(page.locator('.attack').filter({ hasText: 'Longsword' })).toBeVisible();
   await expect(page.getByText('Armor class').locator('..')).toContainText('16');
 
+  // The parity leftovers: arrows from MPMB's list, two shots, half of them picked up again; the attack
+  // rolls with advantage; experience points added in the Profile tab, without the Build screen. (Without ability scores this
+  // fighter has no initiative to mark.)
+  await page.getByRole('button', { name: '+ Ammunition' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Arrows', exact: true }).click();
+  const countPad = page.getByRole('dialog', { name: 'How many Arrows?' });
+  await countPad.getByRole('button', { name: '2', exact: true }).click();
+  await countPad.getByRole('button', { name: '0', exact: true }).click();
+  await countPad.getByRole('button', { name: 'Apply' }).click();
+  const arrows = page.getByRole('group', { name: 'Arrows' });
+  await expect(arrows).toContainText('20');
+  await arrows.getByRole('button', { name: 'Arrows: Fewer' }).click();
+  await expect(arrows).toContainText('19');
+  await arrows.getByRole('button', { name: 'Arrows: Fewer' }).click();
+  await expect(page.getByText('2 used')).toBeVisible();
+  await page.getByRole('button', { name: 'Pick up' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Half: 1' }).click();
+  await expect(arrows).toContainText('19');
+  await expect(page.getByText('2 used')).toHaveCount(0);
+  await page.getByRole('button', { name: /^Longsword attack roll/ }).click();
+  await page
+    .getByRole('dialog', { name: 'Attack rolls' })
+    .getByRole('button', { name: /Advantage/ })
+    .click();
+  await expect(page.getByRole('button', { name: /^Longsword attack roll .*, advantage$/ })).toBeVisible();
+  await page.getByRole('tab', { name: 'Profile' }).click();
+  await page.getByRole('button', { name: '+ XP' }).click();
+  const xpPad = page.getByRole('dialog', { name: 'Add experience points' });
+  await xpPad.getByRole('button', { name: '1', exact: true }).click();
+  await xpPad.getByRole('button', { name: '0', exact: true }).click();
+  await xpPad.getByRole('button', { name: '0', exact: true }).click();
+  await xpPad.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(page.getByText('100 XP', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Combat' }).click();
+
   // Print (M10): the print window offers the parts this fighter has (no spells, no notes), and the print
   // sheet appears for the browser's print with the attack on it. window.print() itself would wait for a
   // dialog the test can't answer, so the test fires the browser's "beforeprint" the way printing does.

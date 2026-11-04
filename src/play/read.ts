@@ -649,3 +649,12 @@ export const linesOf = (text: string): string[] => text.split(/\r\n?|\n/);
 export function readToggles(fields: FieldViews): { inspiration: boolean; reactionUsed: boolean } {
   return { inspiration: isOn(fields, 'Inspiration'), reactionUsed: isOn(fields, 'Reaction Used This Round') };
 }
+
+/** Advantage or disadvantage on initiative and on every attack roll: the PDF's "Init" and "Att" boxes. */
+export function readRollMarks(fields: FieldViews): { initiative: Advantage; attacks: Advantage } {
+  const pair = (prefix: string): Advantage => ({
+    advantage: isOn(fields, `${prefix} Adv`),
+    disadvantage: isOn(fields, `${prefix} Dis`),
+  });
+  return { initiative: pair('Init'), attacks: pair('Att') };
+}

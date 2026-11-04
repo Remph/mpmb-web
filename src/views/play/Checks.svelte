@@ -8,7 +8,8 @@
   import { tick } from 'svelte';
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
-  import Modal from '../../popups/Modal.svelte';
+  import { ARROW, edgeOf } from '../../play/edge.ts';
+  import EdgePopUp from './EdgePopUp.svelte';
   import { readAbilities, readSkills, readTool } from '../../play/read.ts';
   import type { AbilityKey, Advantage, SkillKey } from '../../play/read.ts';
   import type { Step } from '../../session.svelte.ts';
@@ -31,11 +32,8 @@
    * A condition can give every skill one (Poisoned), so a word each would crowd the list; the panel
    * head names what the arrows mean.
    */
-  const edge = (a: Advantage): '' | 'adv' | 'dis' =>
-    a.advantage === a.disadvantage ? '' : a.advantage ? 'adv' : 'dis';
-  const ARROW = { adv: '▲', dis: '▼' };
   const label = (e: 'adv' | 'dis'): string => (e === 'adv' ? t.advantage : t.disadvantage);
-  const edges = $derived([...abilities, ...skills].map(edge).filter((e): e is 'adv' | 'dis' => e !== ''));
+  const edges = $derived([...abilities, ...skills].map(edgeOf).filter((e): e is 'adv' | 'dis' => e !== ''));
   const legend = $derived((['adv', 'dis'] as const).filter((e) => edges.includes(e)));
 
   /** The skill or saving throw whose pop-up is open. */
@@ -74,27 +72,6 @@
     }
     return null;
   });
-  type Mark = '' | 'adv' | 'dis';
-  const CHOICES: [Mark, 'rollNormal' | 'rollAdvantage' | 'rollDisadvantage'][] = [
-    ['', 'rollNormal'],
-    ['adv', 'rollAdvantage'],
-    ['dis', 'rollDisadvantage'],
-  ];
-
-  /**
-   * The PDF's own check boxes ("Ste Adv", "Ste Dis", "Str ST Adv") hold the mark, so it stays in the
-   * sheet and in a printed PDF. Ticking one makes MPMB untick the other (SetDisAdv); Normal unticks what
-   * is ticked. The armour's disadvantage on Stealth is one of these boxes too, set by MPMB.
-   */
-  function mark(state: Advantage, boxes: string, to: Mark) {
-    const steps: Step[] = [];
-    if (to === 'adv' && !state.advantage) steps.push({ click: `${boxes} Adv` });
-    if (to === 'dis' && !state.disadvantage) steps.push({ click: `${boxes} Dis` });
-    if (to === '' && state.advantage) steps.push({ click: `${boxes} Adv` });
-    if (to === '' && state.disadvantage) steps.push({ click: `${boxes} Dis` });
-    if (steps.length) change(steps);
-    void close();
-  }
 </script>
 
 <section class="panel" aria-labelledby="abilities-title">
@@ -113,7 +90,7 @@
     </thead>
     <tbody>
       {#each abilities as a (a.key)}
-        {@const e = edge(a)}
+        {@const e = edgeOf(a)}
         <tr>
           <th scope="row">{t[`ability${a.key}`]}</th>
           <td class="score">{a.score}</td>
@@ -144,7 +121,7 @@
   </div>
   <ul class="skills">
     {#each skills as s (s.key)}
-      {@const e = edge(s)}
+      {@const e = edgeOf(s)}
       <li>
         <button
           type="button"
@@ -165,24 +142,16 @@
 </section>
 
 {#if marked}
-  {@const current = edge(marked.state)}
-  <Modal title={marked.title} onescape={close} closeLabel={t.close}>
-    <p class="roll">{marked.roll}</p>
-    <div class="choices">
-      {#each CHOICES as [to, text] (to)}
-        <button
-          type="button"
-          class="choice {to}"
-          aria-pressed={current === to}
-          {disabled}
-          onclick={() => mark(marked.state, marked.boxes, to)}
-          >{#if to}<span aria-hidden="true">{ARROW[to]}</span>{/if}
-          {t[text]}</button
-        >
-      {/each}
-    </div>
-    <p class="hint">{t.edgeHint}</p>
-  </Modal>
+  <EdgePopUp
+    title={marked.title}
+    roll={marked.roll}
+    state={marked.state}
+    boxes={marked.boxes}
+    {disabled}
+    {change}
+    onclose={() => void close()}
+    {t}
+  />
 {/if}
 
 <style>
@@ -345,64 +314,6 @@
   .skill:hover,
   .skill:focus-visible {
     background: var(--hover);
-  }
-
-  .roll {
-    margin: 0 0 0.75rem;
-    color: var(--ink-muted);
-  }
-
-  .choices {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .choice {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    min-height: 48px;
-    padding: 0 0.875rem;
-    border: 1px solid var(--line);
-    border-radius: 0.625rem;
-    background: var(--surface);
-    color: var(--ink);
-    font: inherit;
-    font-weight: 700;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .choice.adv {
-    color: var(--ok);
-  }
-
-  .choice.dis {
-    color: var(--hp);
-  }
-
-  .choice[aria-pressed='true'] {
-    border-color: currentColor;
-    background: var(--accent-soft);
-  }
-
-  .choice.adv[aria-pressed='true'] {
-    background: color-mix(in srgb, var(--ok) 14%, var(--surface));
-  }
-
-  .choice.dis[aria-pressed='true'] {
-    background: var(--hp-soft);
-  }
-
-  .choice:hover:not(:disabled, [aria-pressed='true']) {
-    background: var(--hover);
-  }
-
-  .hint {
-    margin: 0.75rem 0 0;
-    color: var(--ink-muted);
-    font-size: 0.875rem;
   }
 
   .ability {
