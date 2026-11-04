@@ -482,11 +482,14 @@
     text-align: left;
   }
 
-  /* Under the pointer the wash deepens a little; the shared hover rule's grey would hide the colour. */
+  /*
+   * Under the pointer the border takes the full colour; the wash stays, because the shared hover rule's grey would
+   * hide the colour and a deeper wash drops the advantage arrow below 4.5:1 (hover also sticks after a tap on the iPad).
+   */
   button.tile:not(:disabled):hover,
   button.tile:focus-visible {
-    border-color: color-mix(in srgb, var(--stat) 35%, transparent);
-    background: color-mix(in srgb, var(--stat) 10%, var(--stat-soft));
+    border-color: var(--stat);
+    background: var(--stat-soft);
     color: var(--stat);
   }
 

@@ -40,7 +40,7 @@
   /*
    * The numbers under hit points: each its own colour, so the eye finds them by colour after a session or two
    * (Remph picked look A of three, session feedback 2026-11-04). Red stays hit points' own; every number keeps at least
-   * 4.5:1 on its wash in both themes (src/stat-colors.test.ts checks it).
+   * 4.5:1 on its wash in both themes (src/play/stat-colors.test.ts checks it).
    */
   --stat-ac: #2b5a8c;
   --stat-ac-soft: #e3ecf7;
