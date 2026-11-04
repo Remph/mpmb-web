@@ -4,7 +4,8 @@
 // been filled there.
 //
 // What a character changes in the PDF, and how each part is written:
-// - Field values, flags, tooltips (/TU), MPMB's data in /TM, choice lists and scripts: on the fields.
+// - Field values, flags, tooltips (/TU), MPMB's data in /TM, choice lists (with the entry they mark as
+//   chosen) and scripts: on the fields.
 // - Pages: MPMB adds pages from templates (hidden pages under /Names /Templates) and deletes pages. A page
 //   made with renaming carries fields named "P<page>.<template>.<name>"; one made without renaming shows
 //   the template's own fields with one more widget. The writer works out, for each page of the character,
@@ -631,6 +632,9 @@ class SheetWriter {
         ),
       );
     }
+    // Checked on every drop-down, not only changed ones: a PDF filled by an older version of this writer
+    // may still mark another entry than its value.
+    if (def.type === 'Ch') this.setChosen(d, def);
     if (changed('actions')) this.setActions(entry, def);
     def.widgets.forEach((w, k) => {
       const ref = entry.widgets[k];
@@ -659,6 +663,23 @@ class SheetWriter {
     if (def.type === 'Btn') d.set(name('V'), name(Array.isArray(v) ? (v[0] ?? 'Off') : v));
     else if (Array.isArray(v)) d.set(name('V'), this.ctx.obj(v.map((s) => PDFHexString.fromText(s))));
     else d.set(name('V'), PDFHexString.fromText(v));
+  }
+
+  /**
+   * The entries a drop-down or list marks as chosen (/I), to agree with its value. Viewers other than
+   * Acrobat (Firefox's among them) show the marked entry, not the value, so a stale mark shows the blank
+   * sheet's empty first entry. A typed value that is no entry marks none, as Acrobat saves it.
+   */
+  private setChosen(d: PDFDict, def: FieldDef): void {
+    const entries = (def.options ?? []).map((o) => (typeof o === 'string' ? o : o[0]));
+    const values = def.value === undefined ? [] : Array.isArray(def.value) ? def.value : [def.value];
+    const at = values.map((v) => entries.indexOf(v)).sort((a, b) => a - b);
+    const want = values.length && at.every((i) => i >= 0) ? at : undefined;
+    const has = lookArray(this.ctx, d.get(name('I'))).map((n) => this.ctx.lookupMaybe(n, PDFNumber)?.asNumber());
+    if (want && sameJson(has, want)) return;
+    if (!want && !d.has(name('I'))) return;
+    if (want) d.set(name('I'), this.ctx.obj(want));
+    else d.delete(name('I'));
   }
 
   /** Field triggers on the field, mouse and focus triggers and the click (/A) on each widget. */
