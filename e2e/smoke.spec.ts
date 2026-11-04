@@ -229,12 +229,43 @@ test('a character saved on an older sheet is updated when it opens, and the vers
   await page.getByRole('link', { name: /Characters/ }).click();
   await page.getByRole('link', { name: /Test Paladin/ }).click();
 
-  // Two engines start (the old sheet and the new one) and MPMB's import runs between them.
-  await expect(page.getByText(`is updated from sheet v${OLD} to v24.2.0`)).toBeVisible({ timeout: STARTUP });
+  // Two engines start (the old sheet and the new one) and MPMB's import runs between them. The line under the
+  // top bar says so (M11, the owner's pick A).
+  const line = page.getByRole('status').filter({ hasText: "Updated to MPMB's sheet v24.2.0." });
+  await expect(line).toBeVisible({ timeout: STARTUP });
+  await expect(line).toContainText(/\d+ entries differ from before/);
   await expect(page.getByText('Test Paladin / Warlock').first()).toBeVisible();
   // Saved on the current sheet, and the version before is kept.
-  // As a string: the browser's IndexedDB types aren't in the e2e tests' TypeScript setup.
-  const stored = await page.evaluate(`new Promise((resolve, reject) => {
+  const stored = await page.evaluate(STORED);
+  expect(stored).toMatchObject({ version: '24.2.0', previous: OLD, update: { from: OLD, to: '24.2.0', seen: false } });
+
+  // What changed: MPMB's import puts the limited features in another order.
+  await line.getByRole('button', { name: 'See what changed' }).click();
+  const window = page.getByRole('dialog', { name: "Updated to MPMB's sheet v24.2.0" });
+  await expect(window.getByRole('rowheader', { name: 'Limited feature 1', exact: true })).toBeVisible();
+  await window.getByRole('button', { name: "MPMB's notes on the import (English)" }).click();
+  await expect(window).toContainText('might not have transferred');
+  // Undo: back on the old sheet, where it stays, and the line offers the update again.
+  await window.getByRole('button', { name: `Undo: back to v${OLD}` }).click();
+  const stays = page.getByRole('status').filter({ hasText: `stays on MPMB's sheet v${OLD}` });
+  await expect(stays).toBeVisible({ timeout: STARTUP });
+  expect(await page.evaluate(STORED)).toMatchObject({ version: OLD, previous: null });
+  await stays.getByRole('button', { name: 'Update to v24.2.0' }).click();
+  await expect(line).toBeVisible({ timeout: STARTUP });
+  // ✕ keeps the update: the line goes, and the list no longer marks the character.
+  await line.getByRole('button', { name: 'Keep the update and close this line' }).click();
+  await expect(line).toBeHidden();
+  expect(await page.evaluate(STORED)).toMatchObject({ version: '24.2.0', previous: OLD, update: { seen: true } });
+  await page.getByRole('link', { name: /Characters/ }).click();
+  await expect(page.getByText('Updated to sheet v24.2.0')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+/**
+ * The older paladin in the browser's storage: its sheet version, its copy from before the update, its update
+ * entry. As a string: the browser's IndexedDB types aren't in the e2e tests' TypeScript setup.
+ */
+const STORED = `new Promise((resolve, reject) => {
     const open = indexedDB.open('mpmb-web');
     open.onerror = () => reject(open.error);
     open.onsuccess = () => {
@@ -245,11 +276,8 @@ test('a character saved on an older sheet is updated when it opens, and the vers
       tx.oncomplete = () =>
         resolve({
           version: data.result.info.SheetVersion,
-          previous: previous.result.data.info.SheetVersion,
+          previous: previous.result ? previous.result.data.info.SheetVersion : null,
           update: meta.result.sheetUpdate,
         });
     };
-  })`);
-  expect(stored).toMatchObject({ version: '24.2.0', previous: OLD, update: { from: OLD, to: '24.2.0', seen: false } });
-  expect(errors).toEqual([]);
-});
+  })`;

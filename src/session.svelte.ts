@@ -402,7 +402,7 @@ export class Session {
     try {
       const { migrated, before } = await this.migrate((source) => source.open(stored.data, pack), shown);
       const data = await this.client.save();
-      const changes = sheetChanges(before, await this.client.values());
+      const changes = sheetChanges(before, await this.client.values(), { from: pack.version, to: SHEET_ID.version });
       const sheetUpdate = {
         from: pack.version,
         to: SHEET_ID.version,

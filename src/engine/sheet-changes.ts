@@ -72,16 +72,29 @@ export function fieldValues(sheet: SheetSnapshot): FieldValues {
     Object.entries(sheet.fields)
       .filter(
         ([name, field]) =>
-          !name.startsWith(EXTRAS) && !name.startsWith(UNDER_THE_LINES) && !name.endsWith(BOOKKEEPING) && visible(field),
+          !name.startsWith(EXTRAS) &&
+          !name.startsWith(UNDER_THE_LINES) &&
+          !name.endsWith(BOOKKEEPING) &&
+          visible(field),
       )
       .map(([name, field]) => [rename(name), text(field.value)]),
   );
 }
 
-/** The entries whose value differs, in the order of the sheet after the update (then those it no longer has). */
-export function sheetChanges(before: FieldValues, now: FieldValues): SheetChange[] {
+/**
+ * The entries whose value differs, in the order of the sheet after the update (then those it no longer has).
+ * With the two versions given, an entry that differs only in the sheet's version number (the spell sheet's
+ * "… Character Record Sheet v24.2.0" line) doesn't count: the update is what changed it.
+ */
+export function sheetChanges(
+  before: FieldValues,
+  now: FieldValues,
+  versions?: { from: string; to: string },
+): SheetChange[] {
   const names = [...new Set([...Object.keys(now), ...Object.keys(before)])];
+  const onlyVersion = (c: SheetChange): boolean =>
+    versions !== undefined && c.before.split(versions.from).join(versions.to) === c.now;
   return names
     .map((field) => ({ field, before: before[field] ?? '', now: now[field] ?? '' }))
-    .filter((c) => c.before !== c.now);
+    .filter((c) => c.before !== c.now && !onlyVersion(c));
 }

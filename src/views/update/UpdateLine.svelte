@@ -32,9 +32,7 @@
     <p><strong>{fill(t.updLine, { to: update.to })}</strong> {changed}</p>
     <div class="buttons">
       <button type="button" class="primary" onclick={onshow}>{t.updSee}</button>
-      <button type="button" class="close" aria-label={t.updCloseLine} title={t.updCloseLine} onclick={onkeep}
-        >✕</button
-      >
+      <button type="button" class="close" aria-label={t.updCloseLine} title={t.updCloseLine} onclick={onkeep}>✕</button>
     </div>
   {/if}
 </div>

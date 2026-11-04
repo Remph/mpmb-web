@@ -65,7 +65,9 @@
         </tbody>
       </table>
     </div>
-    {#if changes.length > rows.length}<p class="muted">{fill(t.updMore, { count: changes.length - rows.length })}</p>{/if}
+    {#if changes.length > rows.length}<p class="muted">
+        {fill(t.updMore, { count: changes.length - rows.length })}
+      </p>{/if}
   {/if}
   {#if notes.length}
     <button type="button" class="disclose" aria-expanded={mpmbOpen} onclick={() => (mpmbOpen = !mpmbOpen)}

@@ -95,15 +95,34 @@ describe('CharacterStore', () => {
     const store = await fresh();
     const before = character('Anna', '2026-10-01T00:00:00Z');
     await store.put(before);
-    const sheetUpdate = { from: '24.2.0', to: '24.3.0', date: '2026-11-04T00:00:00Z', seen: false };
+    const sheetUpdate = { from: '24.2.0', to: '24.3.0', date: '2026-11-04T00:00:00Z', seen: false, changes: 1 };
     const data = { ...before.data, info: { ...before.data.info, SheetVersion: '24.3.0' } };
     const after = { meta: describeCharacter(data, NO_ADD_ONS, { ...before.meta, sheetUpdate }), data };
-    const previous: PreviousVersion = { ...before, summary: 'Some things that you adjusted manually …' };
+    const previous: PreviousVersion = {
+      ...before,
+      summary: 'Some things that you adjusted manually …',
+      changes: [{ field: 'Extra.Notes', before: 'Test Notes', now: '' }],
+    };
     await store.putUpdated(after, previous);
     expect(await store.get('anna')).toEqual(after);
     expect((await store.list())[0]?.sheetUpdate).toEqual(sheetUpdate);
     expect(await store.previous('anna')).toEqual(previous);
     await store.delete('anna');
+    expect(await store.previous('anna')).toBeUndefined();
+  });
+
+  test('undo puts the copy from before back and drops it; keeping changes only the list entry', async () => {
+    const store = await fresh();
+    const before = character('Anna', '2026-10-01T00:00:00Z');
+    const sheetUpdate = { from: '24.2.0', to: '24.3.0', date: '2026-11-04T00:00:00Z', seen: false, changes: 0 };
+    const after = { meta: { ...before.meta, sheetUpdate }, data: before.data };
+    await store.putUpdated(after, { ...before, summary: '', changes: [] });
+    await store.putMeta({ ...after.meta, sheetUpdate: { ...sheetUpdate, seen: true } });
+    expect((await store.get('anna'))?.meta.sheetUpdate?.seen).toBe(true);
+    expect(await store.previous('anna')).toBeDefined();
+    const undone = { ...before.meta, sheetUpdate: { ...sheetUpdate, seen: true, undone: true } };
+    await store.putBack({ meta: undone, data: before.data });
+    expect(await store.get('anna')).toEqual({ meta: undone, data: before.data });
     expect(await store.previous('anna')).toBeUndefined();
   });
 
