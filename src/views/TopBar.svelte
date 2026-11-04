@@ -12,9 +12,11 @@
     back: { href: string; label: string };
     t: Texts;
     children: Snippet;
+    /** When given, a last button folds the bar away (the play view; session feedback, 2026-11-04). */
+    onfold?: () => void;
   }
 
-  let { open, back, t, children }: Props = $props();
+  let { open, back, t, children, onfold }: Props = $props();
 
   const statusText = $derived(
     { opening: t.opening, working: t.saving, saving: t.saving, saved: t.saved, error: '', elsewhere: '' }[open.status],
@@ -30,6 +32,11 @@
   {#if statusText}<span class="status" class:busy={open.status !== 'saved'} aria-live="polite">{statusText}</span>{/if}
   <div class="actions">
     {@render children()}
+    {#if onfold}
+      <button type="button" class="fold" aria-label={t.foldBar} title={t.foldBar} onclick={onfold}>
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 15l6-6 6 6" /></svg>
+      </button>
+    {/if}
   </div>
 </header>
 
@@ -109,6 +116,23 @@
   .actions {
     display: flex;
     gap: 0.5rem;
+  }
+
+  /* Round and quiet: it moves the bar, it isn't one of the screen's actions. */
+  .fold {
+    display: inline-grid;
+    place-items: center;
+    padding: 0;
+    border-radius: 50%;
+    color: var(--accent);
+  }
+
+  .fold svg {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   /* Phones come later (roadmap); until then the buttons wrap. */

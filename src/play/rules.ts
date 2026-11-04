@@ -104,3 +104,58 @@ export const usedText = (used: number): string => (used > 0 ? String(used) : '')
  */
 export const slotClicks = (fields: FieldViews, boxes: string[], used: number): string[] =>
   boxes.filter((box, i) => isOn(fields, box) !== i < used);
+
+/** The dice a magic item rolls at dawn for the charges it gets back: "1d6+1" is 1, 6 and 1. */
+export interface RegainDice {
+  count: number;
+  sides: number;
+  bonus: number;
+}
+
+/** A feature that comes back at dawn and how: all of it, or what a roll of `dice` says. */
+export interface DawnFeature {
+  row: number;
+  name: string;
+  max: number;
+  used: number;
+  /** Null when everything comes back; MPMB names the roll otherwise: "Wand of Magic Missiles (regains 1d6+1)". */
+  dice: RegainDice | null;
+}
+
+// MPMB adds the item's daily regain to the feature's name. Try it:
+// https://regex101.com/?regex=regains%3F%20%28%5Cd%2B%29d%28%5Cd%2B%29%28%3F%3A%5Cs*%5C%2B%5Cs*%28%5Cd%2B%29%29%3F&flags=i&testString=Wand%20of%20Magic%20Missiles%20%28regains%201d6%20%2B%201%29
+const REGAIN_DICE = /regains? (\d+)d(\d+)(?:\s*\+\s*(\d+))?/i;
+
+/**
+ * The features that come back "at dawn" (magic items mostly). Not part of a long rest: dawn and a rest
+ * often fall together, but not always, so the player says when.
+ */
+export function dawnFeatures(fields: FieldViews): DawnFeature[] {
+  return readLimitedFeatures(fields).flatMap((f) => {
+    if (recoveryKind(f.recovery) !== 'dawn' || f.max === null) return [];
+    const m = REGAIN_DICE.exec(f.name);
+    const dice = m ? { count: Number(m[1]), sides: Number(m[2]), bonus: Number(m[3] ?? 0) } : null;
+    return [{ row: f.row, name: f.name, max: f.max, used: f.used, dice }];
+  });
+}
+
+/** One roll of the dice; `random` gives numbers from 0 to under 1, like Math.random (tests pass their own). */
+export function rollRegain(dice: RegainDice, random: () => number = Math.random): number {
+  let total = dice.bonus;
+  for (let i = 0; i < dice.count; i++) total += 1 + Math.floor(random() * dice.sides);
+  return total;
+}
+
+/**
+ * What dawn gives back: everything, or for a feature with regain dice the amount in `regained` (by row),
+ * never more than was used.
+ */
+export function dawn(fields: FieldViews, regained: Record<number, number>): RestEdits {
+  const values: Record<string, string> = {};
+  for (const f of dawnFeatures(fields)) {
+    if (f.used === 0) continue;
+    const back = f.dice ? Math.max(0, regained[f.row] ?? 0) : f.used;
+    values[`Limited Feature Used ${f.row}`] = usedText(Math.max(0, f.used - back));
+  }
+  return { values, untick: [] };
+}

@@ -4,7 +4,18 @@ import { openSheet, referenceSheet } from '../../test/characters.ts';
 import { withValues } from '../../test/fields.ts';
 import { viewsOf } from '../worker/views.ts';
 import { readSpellSlotUse } from './read.ts';
-import { applyDamage, applyHealing, longRest, shortRest, slotClicks, tickedDeathSaves, usedText } from './rules.ts';
+import {
+  applyDamage,
+  applyHealing,
+  dawn,
+  dawnFeatures,
+  longRest,
+  rollRegain,
+  shortRest,
+  slotClicks,
+  tickedDeathSaves,
+  usedText,
+} from './rules.ts';
 
 const paladin = viewsOf(openSheet(referenceSheet('paladin8-warlock2')).doc);
 const wizard = viewsOf(openSheet(referenceSheet('wizard10-evoker')).doc);
@@ -96,5 +107,54 @@ describe('marks the player sets', () => {
     const outOfOrder = withValues(wizard, { [third]: 'Yes' });
     expect(slotClicks(outOfOrder, boxes, 1)).toEqual([first, third]);
     expect(slotClicks(withValues(wizard, { [first]: 'Yes', [second]: 'Yes' }), boxes, 2)).toEqual([]);
+  });
+});
+
+describe('dawn', () => {
+  // Two magic items on the wizard's sheet: one comes back in full, one rolls for its charges.
+  const items = withValues(wizard, {
+    'Limited Feature 3': 'Cloak of the Bat (Polymorph)',
+    'Limited Feature Max Usages 3': '1',
+    'Limited Feature Recovery 3': 'dawn',
+    'Limited Feature Used 3': '1',
+    'Limited Feature 4': 'Wand of Magic Missiles (regains 1d6 + 1)',
+    'Limited Feature Max Usages 4': '7',
+    'Limited Feature Recovery 4': 'Dawn',
+    'Limited Feature Used 4': '5',
+  });
+
+  it('finds the features that come back at dawn and the dice in their names', () => {
+    const found = dawnFeatures(items);
+    expect(found.find((f) => f.row === 3)).toEqual({
+      row: 3,
+      name: 'Cloak of the Bat (Polymorph)',
+      max: 1,
+      used: 1,
+      dice: null,
+    });
+    expect(found.find((f) => f.row === 4)?.dice).toEqual({ count: 1, sides: 6, bonus: 1 });
+    expect(found.map((f) => f.row)).not.toContain(1);
+  });
+
+  it('gives everything back, or the rolled amount, never more than was used', () => {
+    expect(dawn(items, { 4: 3 }).values).toMatchObject({
+      'Limited Feature Used 3': '',
+      'Limited Feature Used 4': '2',
+    });
+    expect(dawn(items, { 4: 9 }).values).toMatchObject({ 'Limited Feature Used 4': '' });
+    expect(dawn(items, {}).values).toMatchObject({ 'Limited Feature Used 4': '5' });
+  });
+
+  it('leaves features alone that are full or come back on a rest', () => {
+    const edits = dawn(withValues(items, { 'Limited Feature Used 3': '' }), { 4: 1 });
+    expect(edits.values).not.toHaveProperty('Limited Feature Used 3');
+    expect(Object.keys(edits.values)).toEqual(['Limited Feature Used 4']);
+    expect(edits.untick).toEqual([]);
+  });
+
+  it('rolls each die from 1 to its sides and adds the bonus', () => {
+    const dice = { count: 2, sides: 4, bonus: 1 };
+    expect(rollRegain(dice, () => 0)).toBe(3);
+    expect(rollRegain(dice, () => 0.999)).toBe(9);
   });
 });
