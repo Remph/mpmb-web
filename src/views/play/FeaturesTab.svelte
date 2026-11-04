@@ -112,7 +112,7 @@
   /* Senses, resistances and immunities side by side, as many per row as fit. */
   .cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
     gap: 0 0.625rem;
   }
 

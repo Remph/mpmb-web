@@ -580,4 +580,19 @@
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
   }
+
+  /*
+   * Phones come later (roadmap). Until then the table keeps its columns and scrolls sideways inside its
+   * card: anything wider than the screen would make the whole page scroll sideways, and Chrome on Android
+   * then zooms the page out and keeps it that way. 29.25 rem is the columns above plus their gaps.
+   */
+  @media (max-width: 699px) {
+    .table {
+      overflow-x: auto;
+    }
+
+    .row {
+      min-width: 29.25rem;
+    }
+  }
 </style>
