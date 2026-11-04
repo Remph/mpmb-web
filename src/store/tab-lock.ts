@@ -62,6 +62,7 @@ export class TabLock {
       const options: LockOptions = steal ? { steal: true } : { ifAvailable: true };
       // Made before the request: the browser may call back at once. `released` is set right after.
       const mine: Held = { id, release, released: Promise.resolve() };
+      let granted = false;
       const request = async (): Promise<void> => {
         try {
           await locks.request(lockName(id), options, (lock) => {
@@ -69,13 +70,19 @@ export class TabLock {
               resolve(false);
               return undefined;
             }
+            granted = true;
             this.held = mine;
             resolve(true);
             return holding;
           });
         } catch {
-          // A request that fails outright (a page the browser gives no locks) works as without the API.
-          resolve(true);
+          if (!granted) {
+            // A request that fails outright (a page the browser gives no locks) works as without the API:
+            // held as far as this tab knows, or `holds` would stop every save without a word.
+            this.held = mine;
+            resolve(true);
+            return;
+          }
           // Another tab stole the lock: the browser rejects this request.
           if (this.held === mine) {
             this.held = null;

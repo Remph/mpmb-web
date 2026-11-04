@@ -1,6 +1,7 @@
 // The per-character lock across tabs, on a stand-in for the browser's LockManager that two "tabs" share.
 import { describe, expect, test } from 'vitest';
 import { TabLock, lockName } from './tab-lock.ts';
+import type { Locks } from './tab-lock.ts';
 import { StandInLocks } from '../../test/stand-in-locks.ts';
 
 /** Two tabs of the same browser, each recording which characters it lost. */
@@ -65,6 +66,22 @@ describe('TabLock', () => {
     await first.take('anna');
     await first.take('bert');
     await expect.poll(async () => (await locks.query()).held?.map((lock) => lock.name)).toEqual([lockName('bert')]);
+  });
+
+  test('a browser that refuses the request outright: this tab may still save, as without the API', async () => {
+    const refusing: Locks = {
+      request: () => Promise.reject(new DOMException('No locks here', 'SecurityError')),
+      query: () => Promise.reject(new DOMException('No locks here', 'SecurityError')),
+    };
+    const lost: string[] = [];
+    const tab = new TabLock(refusing, (id) => lost.push(id));
+    expect(await tab.take('anna')).toBe(true);
+    expect(tab.holds('anna')).toBe(true);
+    expect(await tab.openElsewhere(['anna'])).toEqual([]);
+    tab.free();
+    expect(await tab.take('bert')).toBe(true);
+    expect(tab.holds('bert')).toBe(true);
+    expect(lost).toEqual([]);
   });
 
   test('without the API (older Safari) every tab may save, as before', async () => {

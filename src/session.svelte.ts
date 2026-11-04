@@ -421,16 +421,18 @@ export class Session {
    */
   async open(id: string, steal = false): Promise<boolean> {
     this.clearNotes();
-    const stored = await this.store?.get(id);
-    if (!stored) return false;
+    const found = await this.store?.get(id);
+    if (!found) return false;
     this.waiting.clear();
     if (!(await this.tabLock.take(id, steal))) {
-      this.current = { meta: stored.meta, fields: {}, menu: [], status: 'elsewhere', images: {} };
+      this.current = { meta: found.meta, fields: {}, menu: [], status: 'elsewhere', images: {} };
       this.note('info', this.t.openElsewhere, undefined, {
         action: { label: this.t.takeOver, run: () => void this.takeOver() },
       });
       return true;
     }
+    // Taken from another tab: read it again, the other tab may have saved while the lock changed hands.
+    const stored = steal ? ((await this.store?.get(id)) ?? found) : found;
     this.current = { meta: stored.meta, fields: {}, menu: [], status: 'opening', images: { ...stored.data.images } };
     // This opening, not a later one of the same character (read back: Svelte's state wraps the object).
     const shown = this.current;
@@ -905,6 +907,9 @@ export class Session {
     // Asked each time: "Add Extra Materials" in the Sheet menu adds and removes scripts in the open sheet.
     const addOns = await this.client.addOns();
     const meta = describeCharacter(data, addOns, open.meta);
+    // Asked again: another tab may have taken the character over while the engine was busy. That tab has
+    // read the character already, and a write now would leave it showing an older one than is saved.
+    if (!this.tabLock.holds(open.meta.id)) return;
     await this.save({ meta, data });
     this.dirty = false;
     // A tap on the ult charges while this save ran is newer than `meta`; its own write came after this one.

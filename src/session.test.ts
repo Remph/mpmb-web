@@ -42,15 +42,20 @@ class StandInWorker implements WorkerLike {
   onmessage: ((event: MessageEvent<FromWorker>) => void) | null = null;
   onerror: ((event: ErrorEvent) => void) | null = null;
 
-  constructor(private readonly answer: (command: Command) => Reply) {}
+  constructor(
+    private readonly answer: (command: Command) => Reply,
+    /** Holds the reply to a command back until the promise it returns settles (a slow engine). */
+    private readonly hold?: (command: Command) => Promise<void> | undefined,
+  ) {}
 
   postMessage(message: ToWorker): void {
     if (message.type !== 'command') return;
     const { command } = message;
     const reply = this.answer(command);
     const { id } = message;
+    const held = this.hold?.(command);
     // Asynchronous, like a real worker.
-    queueMicrotask(() => {
+    const send = (): void => {
       // A typed text changes its field, which the worker reports before the command is done.
       if (command.type === 'edit' && 'result' in reply) {
         const view: FieldView = { type: 'Tx', value: command.text, flags: 0, widgets: [], style: {} };
@@ -62,7 +67,9 @@ class StandInWorker implements WorkerLike {
           ? { type: 'done', id, result: reply.result, summary: { errors: 0, missing: {} } }
           : { type: 'failed', id, error: reply.error, ...(reply.code ? { code: reply.code } : {}) };
       this.onmessage?.({ data } as MessageEvent<FromWorker>);
-    });
+    };
+    if (held) void held.then(send);
+    else queueMicrotask(send);
   }
 
   terminate(): void {
@@ -74,7 +81,14 @@ class StandInWorker implements WorkerLike {
  * A session on a fresh stand-in database; an imported "PDF" is the character's JSON. `tab`: a second tab of
  * the same browser shares the database and the locks; `sent` collects the commands its worker got.
  */
-async function startSession(tab: { browser?: IDBFactory; locks?: Locks; sent?: Command[] } = {}): Promise<Session> {
+async function startSession(
+  tab: {
+    browser?: IDBFactory;
+    locks?: Locks;
+    sent?: Command[];
+    hold?: (command: Command) => Promise<void> | undefined;
+  } = {},
+): Promise<Session> {
   vi.stubGlobal('indexedDB', tab.browser ?? new IDBFactory());
   let opened: CharacterData | null = null;
   const answer = (command: Command): Reply => {
@@ -101,7 +115,7 @@ async function startSession(tab: { browser?: IDBFactory; locks?: Locks; sent?: C
   };
   const session = new Session(
     () => t,
-    () => new StandInWorker(answer),
+    () => new StandInWorker(answer, tab.hold),
     tab.locks,
   );
   await session.start();
@@ -372,6 +386,39 @@ describe('the same character in two tabs (finding 2)', () => {
     firstSent.length = 0;
     await first.change([{ edit: 'Notes', text: 'lost' }]);
     expect(firstSent.filter((c) => c.type === 'save')).toEqual([]);
+  });
+
+  test('taken over while the first tab was saving: the first tab does not write over what the second read', async () => {
+    const browser = new IDBFactory();
+    const locks = new StandInLocks();
+    // The first tab's engine is slow to report its add-on scripts, the last step before a save writes.
+    let slow: Promise<void> | undefined;
+    const first = await startSession({
+      browser,
+      locks,
+      hold: (command) => (command.type === 'addOns' ? slow : undefined),
+    });
+    const secondSent: Command[] = [];
+    const second = await startSession({ browser, locks, sent: secondSent });
+    const id = await openNew(first);
+    await second.open(id);
+    let letGo = (): void => undefined;
+    slow = new Promise((resolve) => (letGo = resolve));
+    const changing = first.change([{ edit: 'Notes', text: 'late' }]);
+    await vi.waitFor(() => expect(first.current?.status).toBe('saving'));
+    await second.takeOver();
+    letGo();
+    await changing;
+    expect(first.current?.status).toBe('elsewhere');
+    // What the second tab opened is still what is saved.
+    const opened = secondSent.findLast((c) => c.type === 'open');
+    await second.close();
+    await second.open(id);
+    expect(secondSent.at(-1)).toMatchObject({
+      type: 'open',
+      character: opened?.type === 'open' ? opened.character : {},
+    });
+    expect(secondSent.at(-1)).not.toMatchObject({ character: { fields: { Notes: { value: 'late' } } } });
   });
 
   test('reopening after a failure keeps the character for this tab', async () => {
