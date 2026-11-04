@@ -82,7 +82,7 @@
   const hasSpells = $derived(readSpells(open.fields).length > 0);
   const shownTab = $derived((wide && tab === 'checks') || (tab === 'spells' && !hasSpells) ? 'combat' : tab);
 
-  // Companion pages (the owner picked B, 2026-11-04): the bar under the top bar switches all three columns to a
+  // Companion pages (Remph picked B, 2026-11-04): the bar under the top bar switches all three columns to a
   // companion. Which one is shown belongs to this view and this character; it isn't saved.
   const companions = $derived(readCompanions(open.fields));
   let showing = $state<{ id: string; prefix: string } | null>(null);
