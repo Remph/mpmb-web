@@ -675,6 +675,11 @@ export class Session {
     return this.inLine(() => this.client.pick(field, answer));
   }
 
+  /** The same for one of MPMB's bookmarks (its "Functions" menu), as `path` names it. */
+  pickBookmark(path: string[], answer: string): Promise<void> {
+    return this.inLine(() => this.client.pickBookmark(path, answer));
+  }
+
   /**
    * The Spells step's picks through MPMB's spell dialogs, then MPMB makes the spell sheet pages again. In line
    * after the changes before it, like setScores.

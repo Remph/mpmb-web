@@ -258,7 +258,8 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
   builder: () => readBuilderInfo(opened().evaluate(BUILDER_INFO_SCRIPT)),
   units: ({ system }) => switchUnits(opened(), system),
   scores: ({ changes }) => answered(answerScores(changes), () => opened().click('Ability Scores Button')),
-  pick: ({ field, answer }) => pick(opened(), field, answer),
+  pick: ({ field, answer }) => pick(answer, () => opened().click(field)),
+  pickBookmark: ({ path, answer }) => pick(answer, () => opened().clickBookmark(path)),
   spells: () => readSpellsInfo(opened().evaluate(SPELLS_READ_SCRIPT)),
   setSpells: ({ picks, sheet }) => applySpellPicks(opened(), picks, answered, sheet),
   setImage: ({ slot, image }) => opened().setImage(slot, image),
@@ -328,11 +329,12 @@ function migrate(port: MessagePort, buffer: SharedArrayBuffer, images: SheetImag
   }
 }
 
-function pick(sheet: Engine, field: string, answer: string): boolean {
+/** Presses a button or bookmark (`press`) with `answer` ready for its first menu; false when not offered. */
+function pick(answer: string, press: () => void): boolean {
   menuAnswer = answer;
   menuPicked = false;
   try {
-    sheet.click(field);
+    press();
   } finally {
     menuAnswer = null;
   }

@@ -66,6 +66,8 @@ export type Command =
    * when the menu doesn't offer it.
    */
   | { type: 'pick'; field: string; answer: string }
+  /** The same for one of MPMB's bookmarks (its "Functions" menu), as `path` names it. */
+  | { type: 'pickBookmark'; path: string[]; answer: string }
   /** What MPMB's spell dialogs offer and hold (SpellsInfo), read without showing them. */
   | { type: 'spells' }
   /**

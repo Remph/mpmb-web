@@ -161,6 +161,11 @@ export class EngineClient {
     return (await this.send({ type: 'pick', field, answer })).result === true;
   }
 
+  /** The same for one of MPMB's bookmarks (see the `pickBookmark` command). */
+  async pickBookmark(path: string[], answer: string): Promise<boolean> {
+    return (await this.send({ type: 'pickBookmark', path, answer })).result === true;
+  }
+
   async spells(): Promise<SpellsInfo> {
     return (await this.send({ type: 'spells' })).result as SpellsInfo;
   }
