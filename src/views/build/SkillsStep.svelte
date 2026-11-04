@@ -71,6 +71,16 @@
     picking = null;
   }
 
+  /** Fills the choice slot being changed with a row the player added by hand, which then goes. */
+  function move(from: LangTool) {
+    if (!picking?.row) return;
+    change([
+      { edit: picking.row, text: from.name },
+      { edit: from.field, text: '' },
+    ]);
+    picking = null;
+  }
+
   function editOther(field: string, event: Event) {
     const text = (event.currentTarget as HTMLInputElement).value.trim();
     if (text !== valueOf(fields, field)) change([{ edit: field, text }]);
@@ -147,7 +157,10 @@
                 {disabled}
                 onclick={() => (picking = { kind, row: row.field })}>✎</button
               >
-            {:else if !row.sources.length}
+            {/if}
+            <!-- A choice slot may go too: a species changed late may offer a choice the player already
+                 made by hand (a language "added by you" before). -->
+            {#if row.choice || !row.sources.length}
               <button
                 type="button"
                 class="quiet icon"
@@ -214,7 +227,9 @@
         ]
       : [{ title: t.tools, names: info.tools }]}
     known={(picking.kind === 'Language' ? languages : tools).map((r) => r.name)}
+    own={picking.row ? (picking.kind === 'Language' ? languages : tools).filter((r) => !r.sources.length) : []}
     ontake={take}
+    onmove={move}
     onclose={() => (picking = null)}
     {t}
   />
