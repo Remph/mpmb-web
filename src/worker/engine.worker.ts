@@ -31,7 +31,7 @@ import { readSheetPdf } from '../pdf/read-sheet.ts';
 import { writeSheetPdf } from '../pdf/write-sheet.ts';
 import { waitForAnswer } from './channel.ts';
 import type { Channel } from './channel.ts';
-import { sendReply, waitForReply } from './link.ts';
+import { LinkTimeout, sendReply, waitForReply } from './link.ts';
 import type {
   Answer,
   Ask,
@@ -301,12 +301,23 @@ function migrate(port: MessagePort, buffer: SharedArrayBuffer, images: SheetImag
   const sheet = opened();
   // The scripts wait for each answer: the request goes out on the port, the answer comes back through
   // the shared buffer while this worker sleeps.
+  // Once the old sheet stopped answering (its worker died), every later request fails at once instead of
+  // waiting again: MPMB's import catches some errors and goes on, and the update must fail as a whole.
+  const dead = { lost: null as LinkTimeout | null };
   const link = (request: SourceRequest): SourceReply => {
+    if (dead.lost) return { error: dead.lost.message };
     port.postMessage(request);
-    return JSON.parse(waitForReply({ buffer })) as SourceReply;
+    try {
+      return JSON.parse(waitForReply({ buffer })) as SourceReply;
+    } catch (err) {
+      if (!(err instanceof LinkTimeout)) throw err;
+      dead.lost = err;
+      return { error: err.message };
+    }
   };
   try {
     const summary = importSheet(sheet, sourceDocument(sheet.tools, link), importHost);
+    if (dead.lost) throw new Error(`The old sheet stopped answering during the update. ${dead.lost.message}`);
     // The app carries the pictures itself (the import's own icon copy is turned off, see ImportHost).
     (Object.entries(images) as [ImageSlot, SheetImage][]).forEach(([slot, image]) => sheet.setImage(slot, image));
     return { addOns: addOnsOf(sheet), summary };
