@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vitest/config';
+import { offline } from './tools/offline-plugin.ts';
 
 // Cross-origin isolation: the engine worker waits for the answer to a pop-up with Atomics.wait on
 // shared memory, which browsers only allow on isolated pages. The live site sends the same headers
@@ -41,7 +42,8 @@ export default defineConfig({
   // Relative asset paths: the app is served from a subfolder of the owner's website,
   // and the exact folder name shouldn't be baked into the build.
   base: './',
-  plugins: [svelte()],
+  // offline(): the service worker that keeps the built app usable without network (src/offline/sw.ts).
+  plugins: [svelte(), offline()],
   server: { headers: ISOLATION_HEADERS },
   preview: { headers: { ...ISOLATION_HEADERS, 'Content-Security-Policy': sitePolicy() } },
   worker: { format: 'es' },

@@ -69,7 +69,9 @@ mirror="mirror -R --overwrite --verbose --parallel=4 $dry_run --exclude-glob .ft
   # Two passes, so that someone opening the app during an upload never gets a page whose scripts
   # aren't there yet (lftp uploads the folder's own files before assets/): first the new build
   # files next to the old ones, then index.html, and only then remove the old build's files.
-  echo "$mirror --exclude-glob index.html \"$local_dir\" ."
+  # sw.js (the service worker) waits for the second pass too: it stores the new build's files for
+  # offline use, so it must not find them missing.
+  echo "$mirror --exclude-glob index.html --exclude-glob sw.js \"$local_dir\" ."
   echo "$mirror --delete \"$local_dir\" ."
 } | lftp -f /dev/stdin 2>&1 |
   # A dry run prints full URLs including user:password; cut that part out of the log.
