@@ -171,6 +171,19 @@ describe('languages and tools', () => {
     ]);
   });
 
+  it('an emptied choice slot goes from the list and is the last row a new language takes', () => {
+    const engine = openSheet(referenceSheet('paladin8-warlock2'));
+    engine.edit('Language 2', '');
+    let fields = viewsOf(engine.doc);
+    expect(readLangTools(fields, 'Language').map((row) => row.field)).toEqual(['Language 1', 'Language 3']);
+    // MPMB's tag stays on the empty row, so a language typed in now would read as the species' choice.
+    expect(fields['Language 2']?.submitName).toContain('_#_');
+    expect(freeLangToolRow(fields, 'Language')).toBe('Language 4');
+    ['Undercommon', 'Abyssal', 'Infernal', 'Giant', 'Orc'].forEach((name, i) => engine.edit(`Language ${i + 4}`, name));
+    fields = viewsOf(engine.doc);
+    expect(freeLangToolRow(fields, 'Language')).toBe('Language 2');
+  });
+
   it("a language typed into a free row shows as the player's own", () => {
     const engine = openSheet(referenceSheet('paladin8-warlock2'));
     engine.edit('Language 4', 'Undercommon');
