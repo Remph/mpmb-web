@@ -96,6 +96,9 @@
               ? ` · ${counted(t.addOnCountOne, t.addOnCount, addOns)}`
               : ''}
           </span>
+          {#if new URLSearchParams(location.search).get('mock-update')}<span class="line updated"
+              >↻ Updated to sheet v24.3.0 · see what changed</span
+            >{/if}
         </a>
         <div class="actions">
           <button type="button" onclick={() => session.backUp([character.id])}>{t.backUp}</button>
@@ -126,6 +129,11 @@
 </section>
 
 <style>
+  .updated {
+    color: var(--accent);
+    font-weight: 500;
+  }
+
   .head {
     display: flex;
     flex-wrap: wrap;

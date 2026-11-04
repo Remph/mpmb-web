@@ -27,6 +27,8 @@
   import type { PrintPart } from '../play/print.ts';
   import PrintWindow from './print/PrintWindow.svelte';
   import FillPdfWindow from './print/FillPdfWindow.svelte';
+  import UpdateBanner from './mock/UpdateBanner.svelte';
+  import UpdateWindow from './mock/UpdateWindow.svelte';
 
   interface Props {
     session: Session;
@@ -77,6 +79,11 @@
   const shortRestText = (): string =>
     /warlock/i.test(open.meta.classes) ? `${t.shortRestText} ${t.shortRestPactMagic}` : t.shortRestText;
 
+  // MOCK-UP (M11): ?mock-update=a shows the line under the top bar, =b opens the window at once.
+  const mock = new URLSearchParams(location.search).get('mock-update');
+  let mockBanner = $state(mock === 'a');
+  let mockWindow = $state(mock === 'b');
+
   let printWindow = $state(false);
   let fillPdfWindow = $state(false);
   /** The parts and the pencil choice from the print window; null until it was used (Ctrl+P prints every part). */
@@ -123,7 +130,16 @@
     <button type="button" onclick={() => (menuOpen = true)}>☰ {t.sheetMenu}</button>
   </TopBar>
 
-  <div class="notes"><Notes notes={session.notes} /></div>
+  <div class="notes">
+    <Notes notes={session.notes} />
+    {#if mockBanner}<UpdateBanner onshow={() => (mockWindow = true)} onkeep={() => (mockBanner = false)} />{/if}
+  </div>
+  {#if mockWindow}<UpdateWindow
+      onclose={() => {
+        mockWindow = false;
+        mockBanner = false;
+      }}
+    />{/if}
 
   <div class="play">
     <div class="side left">
