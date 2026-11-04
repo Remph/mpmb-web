@@ -1,6 +1,6 @@
 <!--
   What the last import, restore or action did: progress, results and errors. A note may end in a button
-  that is the way out of what it says ("Reopen character", "Take over"; Nick's pick A, 2026-11-04).
+  that is the way out of what it says ("Reopen character", "Take over"; Remph's pick A, 2026-11-04).
 -->
 <script lang="ts">
   import type { Note } from '../session.svelte.ts';

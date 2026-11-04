@@ -1,7 +1,7 @@
 <!--
   The ult charges card (homebrew, only while its switch is on): a meter that fills over a fight, one
   charge for each turn and each attack (the group's house rule). + is the big button because it is the
-  one tapped every turn; − undoes a mistap. A full meter turns + into "Use ult", which empties it (Nick
+  one tapped every turn; − undoes a mistap. A full meter turns + into "Use ult", which empties it (Remph
   picked this over a plain − / +, 2026-11-04). Tapping the number types it, for jumps or fixes.
   Not a sheet field: the charges are saved with the character's list entry and never go into a PDF.
 -->

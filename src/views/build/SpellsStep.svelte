@@ -1,5 +1,5 @@
 <!--
-  Build step "Spells" (M7, Nick picked a Build step, 2026-11-03): each of MPMB's spell sources (a class, a
+  Build step "Spells" (M7, Remph picked a Build step, 2026-11-03): each of MPMB's spell sources (a class, a
   feat, a species, an item) with what its SPELL SELECTION DIALOG holds, and "Spell sheet" with MPMB's order
   dialog. The player picks a class's cantrips and spells, the bonus spells of feats and items, the spells
   for "Prepared spells only", and the sheet's order and options; "Update spell sheet" hands it all to MPMB's

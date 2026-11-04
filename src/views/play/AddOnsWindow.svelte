@@ -1,5 +1,5 @@
 <!--
-  The "Add-on scripts" window (M9, Nick picked it 2026-11-03): the character's script files with what each
+  The "Add-on scripts" window (M9, Remph picked it 2026-11-03): the character's script files with what each
   adds, a newer version or removal per file, new files from the computer or from the other characters in
   this browser, and the pasted code. Nothing changes until Apply, which hands everything to MPMB's own
   files dialog (the worker answers it in the player's place); MPMB then runs the scripts, says how it went

@@ -1,5 +1,5 @@
 <!--
-  Build step "Armour & weapons" (M6.5, Nick picked a Build step, 2026-11-02): the armour, the shield and
+  Build step "Armour & weapons" (M6.5, Remph picked a Build step, 2026-11-02): the armour, the shield and
   the sheet's attack rows. Every choice goes into MPMB's own fields ("AC Armor Description", "AC Shield
   Bonus Description", "Attack.N.Weapon Selection"), and MPMB's scripts work out AC, to hit and damage as
   they do in Acrobat. The lists are MPMB's own drop-downs (gear.ts in the engine).

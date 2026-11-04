@@ -1,4 +1,4 @@
-// When the start page reminds the player to back up (tech review 2026-11-04, finding 1; Nick picked the
+// When the start page reminds the player to back up (tech review 2026-11-04, finding 1; Remph picked the
 // line above the list, 2026-11-04). Characters live only in this browser: clearing the site's data, or
 // Safari's rule that deletes a site's storage after 7 days of Safari use without a visit, takes them
 // with it. Only a backup file survives that.

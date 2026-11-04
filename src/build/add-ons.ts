@@ -1,4 +1,4 @@
-// What the "Add-on scripts" window (M9, Nick picked it 2026-11-03) shows about a script without running
+// What the "Add-on scripts" window (M9, Remph picked it 2026-11-03) shows about a script without running
 // it: the name MPMB knows it by, when it was added, and roughly what it adds to the lists. Also reads the
 // scripts other characters in this browser carry, from their saved sheets.
 import type { ScriptFile } from '../engine/add-ons.ts';

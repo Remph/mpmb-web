@@ -1,5 +1,5 @@
 <!--
-  Under a Build step's lists (M9, as in Nick's pick, 2026-11-03): where what they offer comes from, the
+  Under a Build step's lists (M9, as in Remph's pick, 2026-11-03): where what they offer comes from, the
   sources switched on and the add-on scripts, with a way to change either. "Sources" is MPMB's own Source
   Selection; "Add-on scripts" the app's window.
 -->
