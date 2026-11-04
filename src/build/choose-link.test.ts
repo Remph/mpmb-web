@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Choice } from '../engine/choices.ts';
-import { choiceNamed, choicesHref, gearHref, pointsToChooseFeature } from './choose-link.ts';
+import { choiceNamed, choicesHref, gearHref, pointsToChooseFeature, splitAtChooseButton } from './choose-link.ts';
 
 const choice = (name: string, kind: Choice['kind'] = 'class'): Choice => ({
   id: name,
@@ -42,5 +42,21 @@ describe('links from feature texts to the Choices step', () => {
   it("makes the Choices step's address without the feature mark", () => {
     expect(choicesHref('a b', '◆ Fighting Style')).toBe('#/character/a%20b/build/choices/Fighting%20Style');
     expect(gearHref('a b')).toBe('#/character/a%20b/build/gear');
+  });
+});
+
+describe("MPMB's mentions of the PDF's button", () => {
+  it('splits them out, so the play view can link them', () => {
+    expect(splitAtChooseButton('Use the "Choose Feature" button above to select them.')).toEqual([
+      'Use ',
+      'the "Choose Feature" button above',
+      ' to select them.',
+    ]);
+    expect(splitAtChooseButton('Select it using the "Choose Feature" button.')).toEqual([
+      'Select it using ',
+      'the "Choose Feature" button',
+      '.',
+    ]);
+    expect(splitAtChooseButton('No button here.')).toEqual(['No button here.']);
   });
 });

@@ -123,12 +123,12 @@
    * MPMB's row menu (M7): Shift and a click on a row's first column, as in Acrobat. On a spell's row it
    * moves, clears or inserts rows; on the first free row it adds a spell, an empty line or a header.
    */
-  const rowMenu = (box: string): void => change([{ click: box, shift: true }]);
+  const rowMenu = (box: string, menuTitle: string): void => change([{ click: box, shift: true, menuTitle }]);
   /** The pop-up closes first: MPMB's menu opens in its place, and the row may be gone afterwards. */
   function editRow(spell: Spell): void {
     const box = checkboxField(spell);
     details = null;
-    rowMenu(box);
+    rowMenu(box, spell.fullName);
   }
   const hasPages = $derived(spellPages(fields).length > 0);
 
@@ -149,7 +149,7 @@
         .at(-1);
     const after = anchor ? rowAfter(fields, anchor) : null;
     if (!after) return null;
-    return [{ click: after.box, shift: true, ...(after.used ? { newRow: true } : {}) }];
+    return [{ click: after.box, shift: true, menuTitle: t.spellsRows, ...(after.used ? { newRow: true } : {}) }];
   }
   const freeBox = $derived(freeRow(fields));
 
@@ -327,7 +327,7 @@
       type="button"
       aria-haspopup="menu"
       disabled={disabled || !freeBox}
-      onclick={() => freeBox && rowMenu(freeBox)}>{t.spellsAddRow}</button
+      onclick={() => freeBox && rowMenu(freeBox, t.spellsRows)}>{t.spellsAddRow}</button
     >
   </section>
 {/if}

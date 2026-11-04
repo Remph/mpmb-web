@@ -21,6 +21,7 @@
   import TopBar from './TopBar.svelte';
   import { readSpells } from '../play/spells.ts';
   import Vitals from './play/Vitals.svelte';
+  import { valueOf } from '../play/read.ts';
   import { flushSync } from 'svelte';
   import PrintSheet from './print/PrintSheet.svelte';
   import { printableParts } from '../play/print.ts';
@@ -67,6 +68,13 @@
   const fields = $derived(open.fields);
   const disabled = $derived(open.status === 'opening' || open.status === 'error');
   const change = (steps: Step[]) => void session.change(steps);
+  /**
+   * A new character before its class is chosen: MPMB's sheet has 0 hit points, death saves and empty scores,
+   * which looked like a dying character. A card that leads to the Build screen takes the hit point box's
+   * place, and the rests go, until a class is chosen (UI review 2, finding 06).
+   */
+  const noClass = $derived(open.status !== 'opening' && valueOf(fields, 'Class and Levels').trim() === '');
+  const buildHref = $derived(`#/character/${encodeURIComponent(open.meta.id)}/build`);
 
   const restSteps = (edits: RestEdits): Step[] => [
     ...Object.entries(edits.values).map(([edit, text]) => ({ edit, text })),
@@ -139,8 +147,10 @@
 
 <div class="screen-only">
   <TopBar {open} back={{ href: '#/', label: t.backToList }} {t}>
-    <button type="button" {disabled} onclick={() => rest('short')}>{t.shortRest}</button>
-    <button type="button" {disabled} onclick={() => rest('long')}>{t.longRest}</button>
+    {#if !noClass}
+      <button type="button" {disabled} onclick={() => rest('short')}>{t.shortRest}</button>
+      <button type="button" {disabled} onclick={() => rest('long')}>{t.longRest}</button>
+    {/if}
     <button type="button" onclick={() => (menuOpen = true)}>☰ {t.sheetMenu}</button>
   </TopBar>
 
@@ -169,7 +179,15 @@
 
   <div class="play">
     <div class="side left">
-      <Vitals {fields} {disabled} {change} {t} />
+      {#if noClass}
+        <section class="start" aria-labelledby="no-class-title">
+          <h2 id="no-class-title">{t.noClassTitle}</h2>
+          <p>{t.noClassLine}</p>
+          <a href={buildHref}>{t.menuBuild}</a>
+        </section>
+      {:else}
+        <Vitals {fields} {disabled} {change} {t} />
+      {/if}
     </div>
 
     <div class="middle">
@@ -267,6 +285,37 @@
     max-width: var(--page-max);
     margin-inline: auto;
     padding: 0 1rem;
+  }
+
+  .start {
+    display: grid;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border: 1px solid var(--accent);
+    border-radius: 0.75rem;
+    background: var(--accent-soft);
+  }
+
+  .start h2 {
+    margin: 0;
+    font-size: 1.125rem;
+  }
+
+  .start p {
+    margin: 0;
+  }
+
+  .start a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 1rem;
+    border-radius: 0.5rem;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 600;
+    text-decoration: none;
   }
 
   .play {

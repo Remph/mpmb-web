@@ -268,16 +268,29 @@ test('a character saved on an older sheet is updated when it opens, and the vers
   // top bar says so (M11, the owner's pick A).
   const line = page.getByRole('status').filter({ hasText: "Updated to MPMB's sheet v24.2.0." });
   await expect(line).toBeVisible({ timeout: STARTUP });
-  await expect(line).toContainText(/\d+ entries differ from before/);
+  // MPMB's import only moves the paladin's limited features and bonus actions to other rows, which the app
+  // doesn't count, and empties its main Notes, which the app brings back (UI review 2, findings 01 and 03).
+  await expect(line).toContainText('Everything you see is as before.');
   await expect(page.getByText('Test Paladin / Warlock').first()).toBeVisible();
   // Saved on the current sheet, and the version before is kept.
   const stored = await page.evaluate(STORED);
   expect(stored).toMatchObject({ version: '24.2.0', previous: OLD, update: { from: OLD, to: '24.2.0', seen: false } });
 
-  // What changed: MPMB's import puts the limited features in another order.
+  await page.getByRole('tab', { name: 'Notes' }).click();
+  await expect(page.getByRole('tabpanel').locator('textarea#notes')).toHaveValue('Test Notes');
+  const notes = await page.evaluate(`new Promise((resolve) => {
+    const open = indexedDB.open('mpmb-web');
+    open.onsuccess = () => {
+      const get = open.result.transaction('data').objectStore('data').get('older-paladin');
+      get.onsuccess = () => resolve(get.result.fields['Extra.Notes'].value);
+    };
+  })`);
+  expect(notes).toBe('Test Notes');
+
+  // What changed: nothing to check.
   await line.getByRole('button', { name: 'See what changed' }).click();
   const window = page.getByRole('dialog', { name: "Updated to MPMB's sheet v24.2.0" });
-  await expect(window.getByRole('rowheader', { name: 'Limited feature 1', exact: true })).toBeVisible();
+  await expect(window).toContainText('Every entry you see is as before.');
   await window.getByRole('button', { name: "MPMB's notes on the import (English)" }).click();
   await expect(window).toContainText('might not have transferred');
   // Undo: back on the old sheet, where it stays, and the line offers the update again.

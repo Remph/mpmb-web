@@ -9,11 +9,13 @@
 
   interface Props {
     items: MenuItem[];
+    /** What the menu is about; MPMB's menus have no title of their own. */
+    title?: string | null;
     t: Texts;
     answer: (picked: string | null) => void;
   }
 
-  let { items, t, answer }: Props = $props();
+  let { items, title = null, t, answer }: Props = $props();
   /** The submenus opened so far. */
   let path: MenuItem[] = $state([]);
 
@@ -37,7 +39,7 @@
 {/snippet}
 
 <Modal
-  title={path.length ? (path[path.length - 1]?.cName ?? '') : t.menuTitle}
+  title={path.length ? (path[path.length - 1]?.cName ?? '') : title || t.menuTitle}
   onescape={() => answer(null)}
   closeLabel={t.close}
   actions={path.length ? back : undefined}

@@ -15,6 +15,7 @@
     readLangTools,
     readSkillSources,
     skillChoices,
+    skillText,
   } from '../../build/proficiencies.ts';
   import type { LangTool, LangToolKind } from '../../build/proficiencies.ts';
   import type { BuilderInfo } from '../../engine/builder.ts';
@@ -92,9 +93,12 @@
     <ul class="sources">
       {#each sources as source, i (i)}
         {@const choice = choices.filter((c) => c.source === source.source)[0]}
+        {@const text = skillText(source, t)}
         <li>
           <b>{source.source}</b>
-          <span class="text">{source.text}</span>
+          <span class="text" lang={text.text === source.text ? 'en' : undefined}
+            >{text.text}{#if text.rest}<small lang="en">{text.rest}</small>{/if}</span
+          >
           {#if choice}
             <span class="count" class:done={choice.chosen >= choice.choose}
               >{fill(t.skillsChosen, { n: String(choice.chosen), of: String(choice.choose) })}</span
@@ -293,6 +297,12 @@
   .sources .text {
     flex: 1;
     min-width: 12rem;
+  }
+
+  /* MPMB's own words, when they say more than the skills (a German line is built from the app's names). */
+  .sources .text small {
+    display: block;
+    color: var(--ink-muted);
   }
 
   .count {

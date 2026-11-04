@@ -7,7 +7,7 @@
 // it doesn't carry over). Those are listed below; anything else is a difference to explain.
 import { describe, expect, test } from 'vitest';
 import { addOnsOf } from '../src/engine/add-ons.ts';
-import { ImportHost, importSheet } from '../src/engine/import-sheet.ts';
+import { ImportHost, importSheet, keptNotes } from '../src/engine/import-sheet.ts';
 import { CHARACTER_FORMAT, FORMAT_VERSION } from '../src/engine/sheet-data.ts';
 import { blankSheet, characterSheet } from '../src/engine/sheet.ts';
 import { serveDocument, sourceDocument } from '../src/engine/source-doc.ts';
@@ -19,8 +19,6 @@ import { ScriptedHost } from './hosts.ts';
 
 /** Fields that differ after the import, by MPMB's design or MPMB's behaviour elsewhere. */
 const EXPECTED: Record<string, string> = {
-  // MPMB's summary: "The 'Notes' section on the 3rd page is now solely what the automation added."
-  'Extra.Notes': 'notes on the third page',
   // Placeholder text hidden under the sheet's lines, a test left in the PDF (not shown, not imported).
   'Line.fixed': 'hidden test text',
   'Line.adventuringGear': 'hidden test text',
@@ -152,6 +150,33 @@ test("a sheet's add-on scripts come along, and what they added is set again", ()
   expect(fresh.doc.states.get('Extra.Magic Item Description 1')?.value).toBe(
     'This lantern glows whenever an import passes.',
   );
+});
+
+test("the player's notes come along, which MPMB's import leaves out", () => {
+  // MPMB's summary: "The 'Notes' section on the 3rd page is now solely what the automation added." The app
+  // copies the player's lines back (keptNotes); the reference characters above check a whole import.
+  const old = openSheet(referenceSheet('paladin8-warlock2'));
+  old.edit('Extra.Notes', 'Owes Brother Aldric 20 gp\r\rThe map is in the red book');
+  const host = new ImportHost(new ScriptedHost());
+  const fresh = openSheet(blankSheet(), host);
+  importSheet(
+    fresh,
+    sourceDocument(fresh.tools, jsonLink(serveDocument(old.tools.realm.global, old.tools.copy)).link),
+    host,
+  );
+  expect(fresh.stats.errors).toEqual([]);
+  expect(fresh.doc.states.get('Extra.Notes')?.value).toBe('Owes Brother Aldric 20 gp\r\rThe map is in the red book');
+});
+
+describe("keptNotes: the player's notes after an update", () => {
+  test.each([
+    ['nothing before', '', 'From MPMB', 'From MPMB'],
+    ['only own notes', 'Test Notes', '', 'Test Notes'],
+    ['everything already there', 'From MPMB', 'From MPMB\rmore', 'From MPMB\rmore'],
+    ["MPMB's lines once, the player's after them", 'From MPMB\rMine', 'From MPMB', 'From MPMB\r\rMine'],
+    ['empty lines between paragraphs kept, runs of them not', '\rA\r\r\r\rB\r', '', 'A\r\rB'],
+    ['line breaks of any kind', 'A\nB\r\nC', 'B', 'B\r\rA\rC'],
+  ])('%s', (_, before, now, kept) => expect(keptNotes(before, now)).toBe(kept));
 });
 
 describe('what the import needs from the Acrobat stand-in', () => {
