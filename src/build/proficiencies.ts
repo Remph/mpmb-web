@@ -204,13 +204,18 @@ export function readLangTools(fields: FieldViews, kind: LangToolKind): LangTool[
     .filter((row) => row.name !== '');
 }
 
-/** The first empty row, where a new language or tool goes; null when all eight are full. */
+/**
+ * The first empty row, where a new language or tool goes; null when all eight are full. A choice slot the
+ * player emptied keeps MPMB's tag (the app can only change a field's value), so it is taken last: a
+ * language typed into it would show as the species' choice, and MPMB clears that row again when the
+ * species goes.
+ */
 export function freeLangToolRow(fields: FieldViews, kind: LangToolKind): string | null {
-  return (
-    Array.from({ length: LANG_TOOL_ROWS }, (_, i) => `${kind} ${i + 1}`).filter(
-      (field) => valueOf(fields, field) === '',
-    )[0] ?? null
+  const empty = Array.from({ length: LANG_TOOL_ROWS }, (_, i) => `${kind} ${i + 1}`).filter(
+    (field) => valueOf(fields, field) === '',
   );
+  const tagged = (field: string): boolean => (fields[field]?.submitName ?? '').includes('_#_');
+  return empty.filter((field) => !tagged(field))[0] ?? empty[0] ?? null;
 }
 
 /**

@@ -1,25 +1,29 @@
 <!--
   Adding or changing a language or a tool on the "Skills & languages" step: the 2024 rules' languages
   (or MPMB's tool list, add-on scripts included) as buttons, plus a field for any other name. What the
-  character knows already is left out.
+  character knows already is left out. A choice slot being changed (a species' "one language of your
+  choice") also offers the rows the player added by hand: taking one moves it into the slot.
 -->
 <script lang="ts">
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import Modal from '../../popups/Modal.svelte';
-  import type { LangToolKind } from '../../build/proficiencies.ts';
+  import type { LangTool, LangToolKind } from '../../build/proficiencies.ts';
 
   interface Props {
     kind: LangToolKind;
     groups: { title: string; names: string[] }[];
     /** Names already on the sheet. */
     known: string[];
+    /** The rows the player added by hand, offered when a choice slot is changed; empty otherwise. */
+    own: LangTool[];
     ontake: (name: string) => void;
+    onmove: (row: LangTool) => void;
     onclose: () => void;
     t: Texts;
   }
 
-  let { kind, groups, known, ontake, onclose, t }: Props = $props();
+  let { kind, groups, known, own, ontake, onmove, onclose, t }: Props = $props();
   let typed = $state('');
   const isKnown = (name: string): boolean => known.some((k) => k.toLowerCase() === name.toLowerCase());
   const shown = $derived(groups.map((g) => ({ ...g, names: g.names.filter((n) => !isKnown(n)) })));
@@ -33,6 +37,14 @@
 
 <Modal title={kind === 'Language' ? t.skillsAddLanguage : t.skillsAddTool} onescape={onclose} closeLabel={t.close} wide>
   <p class="line">{kind === 'Language' ? t.skillsLanguageLine : t.skillsToolLine}</p>
+  {#if own.length}
+    <h3>{t.skillsMoveOwn}</h3>
+    <div class="chips">
+      {#each own as row (row.field)}
+        <button type="button" onclick={() => onmove(row)}>{row.name}</button>
+      {/each}
+    </div>
+  {/if}
   {#each shown as group (group.title)}
     {#if group.names.length}
       <h3>{group.title}</h3>
