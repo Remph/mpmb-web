@@ -73,6 +73,18 @@ const shape = (sheet: SheetSnapshot): unknown =>
     ]),
   );
 
+/**
+ * The entries the Species drop-down marks as chosen (/I). Firefox shows these, not the value, so they must
+ * agree with it.
+ */
+async function speciesMarks(pdf: Uint8Array): Promise<number[] | undefined> {
+  const dict = (await PDFDocument.load(pdf)).getForm().getDropdown('Species').acroField.dict;
+  return dict
+    .lookupMaybe(PDFName.of('I'), PDFArray)
+    ?.asArray()
+    .map((n) => (n as PDFNumber).asNumber());
+}
+
 describe('writing a character into a sheet PDF', () => {
   test('values, a check box and a page spawned from a template come back as written', async () => {
     const blank = await makeSheet();
@@ -95,17 +107,21 @@ describe('writing a character into a sheet PDF', () => {
   test('a drop-down marks the entry its value names, or none for a typed value', async () => {
     const blank = await makeSheet();
     const given = await readSheetPdf(blank);
-    // The entries a viewer shows as chosen (/I): Firefox shows these, not the value, so they must agree.
     const chosen = async (value: string): Promise<number[] | undefined> => {
       const target = { ...given, fields: { ...given.fields, Species: { ...given.fields.Species!, value } } };
-      const written = await writeSheetPdf(blank, target);
-      const dict = (await PDFDocument.load(written)).getForm().getDropdown('Species').acroField.dict;
-      const marks = dict.lookupMaybe(PDFName.of('I'), PDFArray);
-      return marks?.asArray().map((n) => (n as PDFNumber).asNumber());
+      return speciesMarks(await writeSheetPdf(blank, target));
     };
     expect(await chosen('Elf')).toEqual([2]);
     expect(await chosen('')).toEqual([0]);
     expect(await chosen('Thri-kreen')).toBeUndefined();
+  });
+
+  test('a stale mark is fixed even when the value stays: a PDF filled before the fix, picked as the base', async () => {
+    // Such a PDF has the value Elf but still marks the empty first entry.
+    const old = await PDFDocument.load(await makeSheet());
+    old.getForm().getDropdown('Species').acroField.dict.set(PDFName.of('V'), PDFString.of('Elf'));
+    const base = await old.save();
+    expect(await speciesMarks(await writeSheetPdf(base, await readSheetPdf(base)))).toEqual([2]);
   });
 
   test('the original bytes stay in front: the PDF grows by an update, as Acrobat saves', async () => {
