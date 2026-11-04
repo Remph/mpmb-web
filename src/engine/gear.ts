@@ -53,9 +53,23 @@ export interface WeaponEntry {
   weight: number | null;
 }
 
+/** A magic item from MPMB's magic item drop-down ("Extra.Magic Item N"), session feedback 2026-11-04. */
+export interface MagicItemEntry {
+  name: string;
+  /** MPMB's type, as it writes it: "Wondrous Item", "Weapon (any sword)", "Ring" … (empty when unknown). */
+  type: string;
+  rarity: string;
+  attunement: boolean;
+  /** MPMB's short description, the one its PDF puts in the item's field. */
+  description: string;
+  /** MPMB asks which version when the item is chosen ("Armor, +1, +2, or +3"). */
+  choices: boolean;
+}
+
 export interface GearInfo {
   armour: ArmourEntry[];
   weapons: WeaponEntry[];
+  magicItems: MagicItemEntry[];
   /** The unit of the weights above, as the sheet is set: "lb" or "kg". */
   massUnit: 'lb' | 'kg';
 }
@@ -84,7 +98,7 @@ export const GEAR_SCRIPT = `(function () {
     return own;
   };
 
-  var out = { armour: [], weapons: [], massUnit: metric ? "kg" : "lb" };
+  var out = { armour: [], weapons: [], magicItems: [], massUnit: metric ? "kg" : "lb" };
 
   var ownArmour = ownOf(CurrentVars.extraArmourDisplay);
   var armourItems = itemsOf("AC Armor Description");
@@ -140,5 +154,21 @@ export const GEAR_SCRIPT = `(function () {
       weight: wea ? weight(wea.weight) : null
     });
   }
+
+  // MPMB fills every magic item field's drop-down with the names of MagicItemsList's entries that the chosen
+  // sources allow (SetMagicItemsDropdown); the same loop here keeps each name with its entry. (Looking each
+  // name up with ParseMagicItem would scan the whole list once per name: seconds on a big list.)
+  var seenItems = {};
+  for (var mKey in MagicItemsList) {
+    var mi = MagicItemsList[mKey];
+    if (!mi || !mi.name || testSource(mKey, mi, "magicitemExcl") || seenItems[mi.name]) continue;
+    seenItems[mi.name] = true;
+    out.magicItems.push({
+      name: String(mi.name), type: mi.type ? String(mi.type) : "", rarity: mi.rarity ? String(mi.rarity) : "",
+      attunement: Boolean(mi.attunement), description: mi.description ? String(mi.description) : "",
+      choices: Boolean(mi.choices)
+    });
+  }
+  out.magicItems.sort(function (a, b) { return a.name < b.name ? -1 : a.name > b.name ? 1 : 0; });
   return JSON.stringify(out);
 })()`;

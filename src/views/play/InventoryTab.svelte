@@ -12,15 +12,20 @@
   import type { FieldViews } from '../../worker/views.ts';
   import Modal from '../../popups/Modal.svelte';
   import Stepper from './Stepper.svelte';
+  import MagicItemsWindow from './MagicItemsWindow.svelte';
+  import type { BuilderInfo } from '../../engine/builder.ts';
 
   interface Props {
     fields: FieldViews;
     disabled: boolean;
     change: (steps: Step[]) => void;
+    /** MPMB's lists, for "Change magic items" (session feedback, 2026-11-04). */
+    load: () => Promise<BuilderInfo | null>;
     t: Texts;
   }
 
-  let { fields, disabled, change, t }: Props = $props();
+  let { fields, disabled, change, load, t }: Props = $props();
+  let changingMagic = $state(false);
   const inventory = $derived(readInventory(fields));
   const attuned = $derived(inventory.magicItems.filter((item) => item.attuned).length);
 
@@ -151,11 +156,18 @@
   }
 </script>
 
+{#if changingMagic}
+  <MagicItemsWindow {fields} {disabled} {change} {load} onclose={() => (changingMagic = false)} {t} />
+{/if}
+
 <div class="columns">
   <section class="panel" aria-labelledby="magic-title">
     <div class="head">
       <h2 id="magic-title">{t.magicItems}</h2>
       {#if attuned}<span class="muted">{attuned} {t.attuned}</span>{/if}
+      <button type="button" class="change" aria-label={t.magicItemsChangeLabel} onclick={() => (changingMagic = true)}
+        >{t.magicItemsChange}</button
+      >
     </div>
     <ul>
       {#each inventory.magicItems as item (item.row)}
@@ -379,6 +391,23 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 0.5rem;
+  }
+
+  /* Like "Change weapons" on the Combat tab: quiet, the panel's own content comes first. */
+  .change {
+    margin-left: auto;
+    padding: 0 0.75rem;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .head:has(.change) {
+    align-items: center;
+    margin-bottom: 0.25rem;
+  }
+
+  .head:has(.change) h2 {
+    margin: 0;
   }
 
   h2 {

@@ -95,6 +95,18 @@ test('a new character gets a class, armour and a weapon, and the play view shows
   await xpPad.getByRole('button', { name: '0', exact: true }).click();
   await xpPad.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(page.getByText('100 XP', { exact: true })).toBeVisible();
+  // Magic items in place (session fixes, 2026-11-04): added from MPMB's list on the Inventory tab, then removed.
+  await page.getByRole('tab', { name: 'Inventory' }).click();
+  await page.getByRole('button', { name: 'Change magic items' }).click();
+  const magicWindow = page.getByRole('dialog', { name: 'Magic items' });
+  await magicWindow.getByRole('button', { name: '+ Add a magic item' }).click({ timeout: STARTUP });
+  const magicPick = page.getByRole('dialog', { name: 'Add a magic item' });
+  await magicPick.getByRole('searchbox').fill('Bag of Holding');
+  await magicPick.getByRole('button', { name: /^Bag of Holding/ }).click();
+  await expect(magicWindow.getByText('Bag of Holding')).toBeVisible();
+  await magicWindow.getByRole('button', { name: 'Remove Bag of Holding' }).click();
+  await expect(magicWindow.getByText('Bag of Holding')).toHaveCount(0);
+  await magicWindow.getByRole('button', { name: 'Close', exact: true }).last().click();
   await page.getByRole('tab', { name: 'Combat' }).click();
 
   // Session fixes (2026-11-04): the Actions card folds MPMB's basic actions away and opens a feature's rule

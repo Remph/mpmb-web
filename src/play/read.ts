@@ -54,7 +54,7 @@ export function isShown(fields: FieldViews, name: string): boolean {
  * The row numbers of a numbered field, in order: rows(fields, 'Attack.', '.Weapon Selection') finds
  * "Attack.1.Weapon Selection", "Attack.2.Weapon Selection" and so on.
  */
-function rows(fields: FieldViews, before: string, after = ''): number[] {
+export function rows(fields: FieldViews, before: string, after = ''): number[] {
   return (
     Object.keys(fields)
       .filter((key) => key.startsWith(before) && key.endsWith(after))
