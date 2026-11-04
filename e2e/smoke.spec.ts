@@ -2,6 +2,7 @@
 // (class, armour, a weapon; a wizard's spells), the play view showing what MPMB worked out, the print sheet
 // and filling MPMB's PDF. It catches
 // what unit tests can't: the worker, the page's headers, the pop-ups and the routes working together.
+import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
 
 /** Loading MPMB's scripts on a blank sheet takes a while in a fresh browser. */
@@ -145,5 +146,71 @@ test('a new wizard chooses spells on the Build screen, and the Spells tab shows 
   await expect(page.locator('.spell').filter({ hasText: 'Fire Bolt' }).first()).toBeVisible();
   await expect(page.locator('.spell').filter({ hasText: 'Magic Missile' }).first()).toBeVisible();
 
+  expect(errors).toEqual([]);
+});
+
+test('a character saved on an older sheet is updated when it opens, and the version before is kept', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  // The SRD paladin as Acrobat saved it, marked as saved on the older sheet that the test build offers
+  // (VITE_TEST_OLD_VERSION in playwright.config.ts), restored from a backup.
+  const OLD = '24.1.0';
+  const paladin = JSON.parse(fs.readFileSync('test/characters/paladin8-warlock2.json', 'utf8')) as {
+    info: Record<string, string>;
+  };
+  paladin.info.SheetVersion = OLD;
+  const day = '2026-11-01T00:00:00.000Z';
+  const backup = {
+    format: 'mpmb-web-backup',
+    version: 1,
+    created: day,
+    sheet: { type: 'Colorful - A4', version: OLD },
+    characters: [
+      {
+        meta: {
+          id: 'older-paladin',
+          name: 'Test Paladin / Warlock',
+          classes: 'Paladin 8, Warlock 2',
+          species: '',
+          addOns: { files: [], manual: false },
+          created: day,
+          updated: day,
+        },
+        data: paladin,
+      },
+    ],
+  };
+
+  await page.goto('./');
+  await page
+    .locator('input[accept=".json,application/json"]')
+    .setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
+  await page.getByRole('dialog', { name: 'Restore backup?' }).getByRole('button', { name: 'Restore' }).click();
+  await page.getByRole('link', { name: /Test Paladin/ }).click();
+
+  // Two engines start (the old sheet and the new one) and MPMB's import runs between them.
+  await expect(page.getByText(`is updated from sheet v${OLD} to v24.2.0`)).toBeVisible({ timeout: STARTUP });
+  await expect(page.getByText('Test Paladin / Warlock').first()).toBeVisible();
+  // Saved on the current sheet, and the version before is kept.
+  // As a string: the browser's IndexedDB types aren't in the e2e tests' TypeScript setup.
+  const stored = await page.evaluate(`new Promise((resolve, reject) => {
+    const open = indexedDB.open('mpmb-web');
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const tx = open.result.transaction(['meta', 'data', 'previous']);
+      const data = tx.objectStore('data').get('older-paladin');
+      const previous = tx.objectStore('previous').get('older-paladin');
+      const meta = tx.objectStore('meta').get('older-paladin');
+      tx.oncomplete = () =>
+        resolve({
+          version: data.result.info.SheetVersion,
+          previous: previous.result.data.info.SheetVersion,
+          update: meta.result.sheetUpdate,
+        });
+    };
+  })`);
+  expect(stored).toMatchObject({ version: '24.2.0', previous: OLD, update: { from: OLD, to: '24.2.0', seen: false } });
   expect(errors).toEqual([]);
 });

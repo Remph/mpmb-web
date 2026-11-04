@@ -18,6 +18,19 @@ export interface CharacterMeta {
   /** ISO dates. `updated` is the last change on any device (a backup carries it along). */
   created: string;
   updated: string;
+  /** The last update of the character to a new release of MPMB's sheet, when it had one. */
+  sheetUpdate?: SheetUpdate;
+}
+
+/** A character moved to a new release of MPMB's sheet with MPMB's own import (M11). */
+export interface SheetUpdate {
+  /** MPMB's version numbers, as the sheets' document info has them ("24.2.0"). */
+  from: string;
+  to: string;
+  /** ISO date. */
+  date: string;
+  /** Whether the player has seen the note about it. */
+  seen: boolean;
 }
 
 export interface StoredCharacter {
@@ -25,10 +38,19 @@ export interface StoredCharacter {
   data: CharacterData;
 }
 
+/** The character as it was before its last sheet update, kept so that the player can go back. */
+export interface PreviousVersion extends StoredCharacter {
+  /** MPMB's closing "Things to consider about the import" text (English, as MPMB writes it). */
+  summary: string;
+}
+
 const DB_NAME = 'mpmb-web';
-const DB_VERSION = 1;
+/** 2: the `previous` store (M11). */
+const DB_VERSION = 2;
 const META = 'meta';
 const DATA = 'data';
+/** The copy each character had before its last sheet update, by id (see PreviousVersion). */
+const PREVIOUS = 'previous';
 
 /** A request as a promise. */
 const done = <T>(request: IDBRequest<T>): Promise<T> =>
@@ -55,6 +77,7 @@ export class CharacterStore {
       const db = request.result;
       if (!db.objectStoreNames.contains(META)) db.createObjectStore(META, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(DATA)) db.createObjectStore(DATA);
+      if (!db.objectStoreNames.contains(PREVIOUS)) db.createObjectStore(PREVIOUS);
     });
     return new CharacterStore(await done(request));
   }
@@ -86,10 +109,29 @@ export class CharacterStore {
   }
 
   async delete(id: string): Promise<void> {
-    const tx = this.db.transaction([META, DATA], 'readwrite');
+    const tx = this.db.transaction([META, DATA, PREVIOUS], 'readwrite');
     tx.objectStore(META).delete(id);
     tx.objectStore(DATA).delete(id);
+    tx.objectStore(PREVIOUS).delete(id);
     await committed(tx);
+  }
+
+  /**
+   * Saves a character updated to a new sheet together with its copy from before, all or none: an update
+   * is never saved without the way back. Replaces the copy of an earlier update.
+   */
+  async putUpdated(character: StoredCharacter, previous: PreviousVersion): Promise<void> {
+    const tx = this.db.transaction([META, DATA, PREVIOUS], 'readwrite');
+    tx.objectStore(META).put(character.meta);
+    tx.objectStore(DATA).put(character.data, character.meta.id);
+    tx.objectStore(PREVIOUS).put(previous, character.meta.id);
+    await committed(tx);
+  }
+
+  /** The character's copy from before its last sheet update, if it has one. */
+  async previous(id: string): Promise<PreviousVersion | undefined> {
+    const tx = this.db.transaction(PREVIOUS, 'readonly');
+    return done(tx.objectStore(PREVIOUS).get(id) as IDBRequest<PreviousVersion | undefined>);
   }
 
   close(): void {
@@ -117,16 +159,18 @@ function classLine(data: CharacterData): string {
   return classes && level && !HAS_LEVEL.test(classes) ? `${classes} ${level}` : classes;
 }
 
-/** The list entry for a character, from its sheet. `before` keeps the id and creation date. */
+/** The list entry for a character, from its sheet. `before` keeps the id, creation date and last update. */
 export function describeCharacter(
   data: CharacterData,
   addOns: AddOns,
-  before: Pick<CharacterMeta, 'id' | 'created'> | null,
+  before: Pick<CharacterMeta, 'id' | 'created' | 'sheetUpdate'> | null,
   now = new Date(),
 ): CharacterMeta {
   const portrait = data.images?.portrait?.thumb;
+  const sheetUpdate = before?.sheetUpdate;
   return {
     ...(portrait ? { portrait } : {}),
+    ...(sheetUpdate ? { sheetUpdate: { ...sheetUpdate } } : {}),
     id: before?.id ?? crypto.randomUUID(),
     name: textOf(data, 'PC Name'),
     classes: classLine(data),

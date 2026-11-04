@@ -18,6 +18,9 @@ export default defineConfig({
     command: `pnpm build && pnpm preview --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}/`,
     reuseExistingServer: false,
+    // The test build also offers the current sheet as this older version (src/sheet-versions.ts), so the
+    // update of a character saved on an older sheet can be tested before MPMB releases a new one.
+    env: { VITE_TEST_OLD_VERSION: '24.1.0' },
     timeout: 180_000,
   },
 });
