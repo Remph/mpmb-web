@@ -250,7 +250,8 @@
 
   /*
    * Where only one box fits in a row (beside the portrait on a phone), a second column made for it would
-   * stick out past the screen's edge; there the one column is wide enough. 15.375 rem is two boxes and the gap.
+   * stick out past the screen's edge; there the one column is wide enough. 15.375 rem is two boxes and the
+   * gap (13.375 rem with the phone's narrower boxes below).
    */
   .facts {
     container-type: inline-size;
@@ -259,6 +260,14 @@
   @container (max-width: 15.374rem) {
     .fact.choices {
       grid-column: auto;
+    }
+  }
+
+  @media (max-width: 699px) {
+    @container (min-width: 13.375rem) {
+      .fact.choices {
+        grid-column: span 2;
+      }
     }
   }
 
@@ -353,5 +362,19 @@
     border-color: var(--accent);
     outline: none;
     background: var(--surface);
+  }
+
+  /*
+   * Phones come later (roadmap). Until then a slightly narrower portrait and boxes keep two boxes a row
+   * beside it on a phone of about 400 px, instead of one long column.
+   */
+  @media (max-width: 699px) {
+    .hero {
+      grid-template-columns: 8rem minmax(0, 1fr);
+    }
+
+    .facts {
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 6.5rem), 1fr));
+    }
   }
 </style>
