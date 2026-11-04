@@ -581,6 +581,9 @@
 
   .spell {
     display: grid;
+    /* The line may not be wider than the row (a phone with large text): long words break instead. */
+    grid-template-columns: minmax(0, 1fr);
+    overflow-wrap: anywhere;
     flex: 1;
     min-width: 0;
     min-height: 44px;

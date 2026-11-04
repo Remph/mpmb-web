@@ -84,6 +84,18 @@ body {
   margin: 0;
 }
 
+/*
+ * The page never scrolls sideways. If one box is ever wider than a phone, Chrome on Android widens the
+ * page to fit it, zooms out and keeps that zoom after the box is gone: the top bar then ends short of the
+ * right edge and its top is cut off until a reload. A box that is too wide is a bug of its own
+ * (e2e/phone.spec.ts looks for them); this keeps it from breaking the rest of the page. Clipped on the
+ * app's own element: on <html> and <body> Chrome still widens the page, and `hidden` there would stop the
+ * play view's sticky columns (clip doesn't make a scrolling box, so they keep sticking to the window).
+ */
+#app {
+  overflow-x: clip;
+}
+
 body {
   min-height: 100dvh;
   background: var(--paper);

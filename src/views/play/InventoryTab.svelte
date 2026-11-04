@@ -353,7 +353,7 @@
 <style>
   .columns {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(24rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
     gap: 0 0.625rem;
     align-items: start;
   }
@@ -548,6 +548,9 @@
 
   .controls {
     display: flex;
+    /* On the narrowest phones the weight goes under the stepper rather than past the screen's edge. */
+    flex-wrap: wrap;
+    justify-content: flex-end;
     align-items: center;
     gap: 0.5rem;
     margin-left: auto;
