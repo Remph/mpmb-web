@@ -128,6 +128,8 @@ export class Engine {
    * never see them (in Acrobat they are button icons, which the scripts only copy or reset).
    */
   private images: SheetImages;
+  /** The other document `app.openDoc` opens: the old sheet MPMB's import reads (see source-doc.ts). */
+  private openable: object | null = null;
 
   private constructor({ sheet, host, realm, now, allowTimer }: EngineOptions) {
     this.images = { ...sheet.images };
@@ -161,6 +163,11 @@ export class Engine {
         engine.timings.push([s.name, Math.round((engine.now() - t0) * MS_DECIMALS) / MS_DECIMALS]);
       });
     return engine;
+  }
+
+  /** Offers a document to `app.openDoc` (null: none again), for MPMB's "Import from another sheet". */
+  offerDocument(source: object | null): void {
+    this.openable = source;
   }
 
   get stats(): EngineStats {
@@ -204,6 +211,9 @@ export class Engine {
       mailDoc: missing(doc, 'Doc.mailDoc'),
       getURL: (url: unknown) => this.host.launchURL?.(String(url)),
       flattenPages: missing(doc, 'Doc.flattenPages'),
+      bringToFront: () => undefined,
+      // Acrobat's name for a document object; MPMB's import checks it on the document it opened.
+      toString: () => '[object Doc]',
       syncAnnotScan: () => undefined,
     };
     Object.assign(g, methods, {
@@ -232,7 +242,7 @@ export class Engine {
       delay: { get: () => doc.delay, set: (v: unknown) => (doc.delay = Boolean(v)) },
       dirty: { get: () => doc.dirty, set: (v: unknown) => (doc.dirty = Boolean(v)) },
       bookmarkRoot: { get: () => this.root },
-      info: { value: tools.copy(doc.info), writable: true },
+      info: { value: caseBlindInfo(tools.copy(doc.info)), writable: true },
       documentFileName: { value: 'character.pdf', writable: true },
       path: { value: '/character.pdf', writable: true },
       filesize: { value: 0, writable: true },
@@ -350,7 +360,12 @@ export class Engine {
       listMenuItems: () => tools.array([]),
       listToolbarButtons: () => tools.array([]),
       execMenuItem: (name: unknown) => doc.missing('app.execMenuItem ' + String(name)),
-      openDoc: missing(doc, 'app.openDoc', null),
+      // Whatever the path, the one document on offer: the app has no files to open.
+      openDoc: () => {
+        if (this.openable) return this.openable;
+        doc.missing('app.openDoc');
+        return null;
+      },
       newDoc: missing(doc, 'app.newDoc', null),
       browseForDoc: missing(doc, 'app.browseForDoc', null),
       response: missing(doc, 'app.response', null),
@@ -522,6 +537,26 @@ export class Engine {
     const { [slot]: _old, ...others } = this.images;
     this.images = image ? { ...others, [slot]: image } : others;
   }
+}
+
+/** The document info entries Acrobat also answers in lower case (`info.title` is `info.Title`). */
+const STANDARD_INFO = ['Title', 'Author', 'Subject', 'Keywords', 'Creator', 'Producer', 'CreationDate', 'ModDate'];
+
+/**
+ * Adds the lower-case names of the standard entries to a document info object, as getters that don't show
+ * when the entries are listed (so a saved sheet keeps one entry each). MPMB's import reads `info.title`.
+ */
+function caseBlindInfo(info: Record<string, unknown>): Record<string, unknown> {
+  STANDARD_INFO.forEach((name) => {
+    const lower = name.charAt(0).toLowerCase() + name.slice(1);
+    Object.defineProperty(info, lower, {
+      get: () => info[name],
+      set: (v: unknown) => (info[name] = v),
+      enumerable: false,
+      configurable: true,
+    });
+  });
+  return info;
 }
 
 /** Timer code in error messages is cut to this length. */
