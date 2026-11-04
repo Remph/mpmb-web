@@ -4,6 +4,7 @@
 import { describe, expect, test } from 'vitest';
 import { ImportHost, importSheet } from '../src/engine/import-sheet.ts';
 import { fieldValues, sheetChanges } from '../src/engine/sheet-changes.ts';
+import type { FieldValues } from '../src/engine/sheet-changes.ts';
 import { blankSheet } from '../src/engine/sheet.ts';
 import { serveDocument, sourceDocument } from '../src/engine/source-doc.ts';
 import type { SourceReply, SourceRequest } from '../src/engine/source-doc.ts';
@@ -26,29 +27,12 @@ function updated(name: ReferenceCharacter): { field: string; before: string; now
 }
 
 describe('what an update changed', () => {
-  test('the paladin: its notes, and limited features and bonus actions in another order', () => {
-    const changes = updated('paladin8-warlock2');
-    expect(changes.map((c) => c.field)).toEqual([
-      'Extra.Notes',
-      'Limited Feature 1',
-      'Limited Feature Max Usages 1',
-      'Limited Feature 2',
-      'Limited Feature Max Usages 2',
-      'Limited Feature 3',
-      'Limited Feature Max Usages 3',
-      'Limited Feature 4',
-      'Limited Feature Max Usages 4',
-      'Limited Feature 5',
-      'Bonus Action 1',
-      'Bonus Action 2',
-      'Bonus Action 3',
-    ]);
-    expect(changes[0]).toEqual({ field: 'Extra.Notes', before: 'Test Notes', now: '' });
+  test('the paladin: nothing; its limited features and bonus actions only moved, its notes came along', () => {
+    expect(updated('paladin8-warlock2')).toEqual([]);
   });
 
-  test("the wizard: its notes and the Staff of the Magi's spell page", () => {
+  test("the wizard: the Staff of the Magi's spell page", () => {
     expect(updated('wizard10-evoker').map((c) => c.field)).toEqual([
-      'Extra.Notes',
       'SSmore#0.spellshead.attack.0',
       'SSmore#0.spellshead.dc.0',
       'SSmore#0.spells.description.36',
@@ -71,11 +55,70 @@ describe('what an update changed', () => {
   });
 });
 
+describe('lists compared by their rows', () => {
+  const feature = (n: number, name: string, uses: string, recovery = 'long rest'): FieldValues => ({
+    [`Limited Feature ${n}`]: name,
+    [`Limited Feature Max Usages ${n}`]: uses,
+    [`Limited Feature Recovery ${n}`]: recovery,
+    [`Limited Feature Used ${n}`]: '',
+  });
+  const empty = (n: number): FieldValues => feature(n, '', '', '');
+
+  test('rows in another order are no change', () => {
+    const before = { ...feature(1, 'Lay on Hands', '40'), ...feature(2, 'Channel Divinity', '2') };
+    const now = { ...feature(1, 'Channel Divinity', '2'), ...feature(2, 'Lay on Hands', '40') };
+    expect(sheetChanges(before, now)).toEqual([]);
+    expect(
+      sheetChanges({ 'Bonus Action 1': 'A', 'Bonus Action 2': 'B' }, { 'Bonus Action 1': 'B', 'Bonus Action 2': 'A' }),
+    ).toEqual([]);
+  });
+
+  test('a row that went comes first, then changed and new rows, each as one entry', () => {
+    const before = {
+      ...feature(1, 'Lay on Hands', '40'),
+      ...feature(2, 'Channel Divinity', '2'),
+      ...empty(3),
+      Speed: '30 ft',
+    };
+    const now = {
+      ...feature(1, 'Channel Divinity', '3'),
+      ...feature(2, 'Divine Sense', '1'),
+      ...empty(3),
+      Speed: '35 ft',
+    };
+    expect(sheetChanges(before, now)).toEqual([
+      { field: 'Limited Feature 1', before: 'Lay on Hands · 40 · long rest', now: '' },
+      {
+        field: 'Limited Feature 1',
+        before: 'Channel Divinity · 2 · long rest',
+        now: 'Channel Divinity · 3 · long rest',
+      },
+      { field: 'Limited Feature 2', before: '', now: 'Divine Sense · 1 · long rest' },
+      { field: 'Speed', before: '30 ft', now: '35 ft' },
+    ]);
+  });
+
+  test('two rows of the same name are matched one by one', () => {
+    const before = { 'Reaction 1': 'Opportunity Attack', 'Reaction 2': 'Opportunity Attack' };
+    const now = { 'Reaction 1': 'Opportunity Attack', 'Reaction 2': '' };
+    expect(sheetChanges(before, now)).toEqual([{ field: 'Reaction 2', before: 'Opportunity Attack', now: '' }]);
+  });
+
+  test('entries that became empty come first', () => {
+    expect(sheetChanges({ A: '1', B: '2', C: '3' }, { A: 'x', B: '', C: '' }).map((c) => c.field)).toEqual([
+      'B',
+      'C',
+      'A',
+    ]);
+  });
+});
+
 describe('names in the update window', () => {
   test.each([
     ['Limited Feature 3', 'Begrenztes Merkmal 3', 'Limited feature 3'],
     ['Limited Feature Max Usages 3', 'Begrenztes Merkmal 3: Anwendungen', 'Limited feature 3: uses'],
     ['Bonus Action 2', 'Bonusaktion 2', 'Bonus action 2'],
+    ['Action 2', 'Aktion 2', 'Action 2'],
     ['Reaction 1', 'Reaktion 1', 'Reaction 1'],
     ['SSmore#0.spellshead.dc.0', 'Zauberblatt: Rettungswurf-SG', 'Spell sheet: save DC'],
     ['SSmore#0.spellshead.attack.0', 'Zauberblatt: Zauberangriff', 'Spell sheet: spell attack'],

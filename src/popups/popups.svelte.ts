@@ -22,7 +22,14 @@ export interface Choice<T extends string> {
 
 export type Entry =
   | { id: number; kind: 'alert'; request: AlertRequest; resolve: (reply: AlertReply) => void }
-  | { id: number; kind: 'menu'; items: MenuItem[]; resolve: (picked: string | null) => void }
+  | {
+      id: number;
+      kind: 'menu';
+      items: MenuItem[];
+      /** What the menu is about ("Longsword", "Spell sheet"); null shows a plain "Choose". */
+      title: string | null;
+      resolve: (picked: string | null) => void;
+    }
   | {
       id: number;
       kind: 'dialog';
@@ -49,6 +56,25 @@ export class PopUpStack implements PopUps {
   // Raw: entries are replaced, never changed in place, and a dialog view can be large.
   entries: Entry[] = $state.raw([]);
   private nextId = 1;
+
+  /**
+   * The title for MPMB's menus while the page's action runs. MPMB's pop-up menus have no title of their own,
+   * and a plain "Choose" over "Delete all the Spell Sheet(s)" didn't say what it was about (UI review 2,
+   * finding 08). The page's actions on a sheet run one after another, so one title at a time is enough.
+   */
+  private menuTitle: string | null = null;
+
+  /** Runs an action whose menus of MPMB's get this title (none: they keep the plain one). */
+  async titled<T>(title: string | undefined, run: () => Promise<T>): Promise<T> {
+    if (title === undefined) return run();
+    const outer = this.menuTitle;
+    this.menuTitle = title;
+    try {
+      return await run();
+    } finally {
+      this.menuTitle = outer;
+    }
+  }
 
   /** Set by the page; without it, links that leave MPMB's sites don't open. */
   linkQuestion: (() => LinkQuestion) | null = null;
@@ -82,7 +108,7 @@ export class PopUpStack implements PopUps {
   }
 
   menu(items: MenuItem[]): Promise<string | null> {
-    return new Promise((resolve) => this.push({ kind: 'menu', items, resolve }));
+    return new Promise((resolve) => this.push({ kind: 'menu', items, title: this.menuTitle, resolve }));
   }
 
   dialog(view: DialogView, first: boolean): Promise<DialogReply> {

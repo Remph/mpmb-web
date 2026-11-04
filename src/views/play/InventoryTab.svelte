@@ -235,7 +235,7 @@
                 class="more"
                 aria-label={fill(t.itemMenu, { name: item.name })}
                 {disabled}
-                onclick={() => change([{ click: item.button }])}>···</button
+                onclick={() => change([{ click: item.button, menuTitle: item.name }])}>···</button
               >
             </span>
           </li>
@@ -258,14 +258,22 @@
           class="more"
           aria-label={t.addFromLists}
           {disabled}
-          onclick={() => change([{ click: `${list === 'gear' ? 'Adventuring Gear' : 'Extra.Gear'} Button ${free}` }])}
-          >···</button
+          onclick={() =>
+            change([
+              {
+                click: `${list === 'gear' ? 'Adventuring Gear' : 'Extra.Gear'} Button ${free}`,
+                menuTitle: t.addFromLists,
+              },
+            ])}>···</button
         >
       </div>
     {/if}
     {#if list === 'gear'}
-      <button type="button" class="lists-menu" {disabled} onclick={() => change([{ click: 'Equipment.menu' }])}
-        >{t.addPack}</button
+      <button
+        type="button"
+        class="lists-menu"
+        {disabled}
+        onclick={() => change([{ click: 'Equipment.menu', menuTitle: t.packMenu }])}>{t.addPack}</button
       >
     {/if}
   </section>

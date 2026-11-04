@@ -1,5 +1,6 @@
 // Which elements of an MPMB dialog the app draws, and which closing buttons go to the bottom bar.
 import type { DialogElement } from '../engine/host.ts';
+import { withoutAcrobatHints } from './labels.ts';
 
 /**
  * Acrobat keeps an element with this alignment out of sight: MPMB adds such a hidden ok/cancel pair
@@ -17,8 +18,19 @@ const isFocusCatcher = (element: DialogElement): boolean =>
   Number(element.width) <= 1 &&
   Number(element.height) <= 1;
 
-/** Whether the app leaves an element out: Acrobat keeps it out of sight too, or it is only there for focus. */
-export const isUnseen = (element: DialogElement): boolean => element.alignment === OFFSCREEN || isFocusCatcher(element);
+/** A text that is nothing but MPMB's advice for Acrobat's fixed-size windows (see withoutAcrobatHints). */
+const isAcrobatHint = (element: DialogElement): boolean =>
+  element.type === 'static_text' &&
+  typeof element.name === 'string' &&
+  element.name.trim() !== '' &&
+  withoutAcrobatHints(element.name.trim()) === '';
+
+/**
+ * Whether the app leaves an element out: Acrobat keeps it out of sight too, it is only there for focus, or
+ * it is advice that only Acrobat's windows need.
+ */
+export const isUnseen = (element: DialogElement): boolean =>
+  element.alignment === OFFSCREEN || isFocusCatcher(element) || isAcrobatHint(element);
 
 /** The element types that stand for the dialog's closing buttons (OK, Cancel, Other). */
 const CLOSERS = ['ok', 'ok_cancel', 'ok_cancel_other'];

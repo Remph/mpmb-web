@@ -45,7 +45,8 @@
       <table>
         <thead><tr><th>{t.updEntry}</th><th>{t.updBefore}</th><th>{t.updNow}</th></tr></thead>
         <tbody>
-          {#each rows as change (change.field)}
+          <!-- By place: a list row that went and one that came can share a field name. -->
+          {#each rows as change, i (i)}
             <tr>
               <th scope="row">{changeLabel(change.field, t)}</th>
               <td class:empty={!change.before}>{shown(change.before)}</td>

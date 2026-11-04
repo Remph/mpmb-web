@@ -58,7 +58,10 @@ export interface OpenCharacter {
  * (`shift`: with Shift held, which opens a spell row's own menu in MPMB; `newRow`: a spell level's "+ Row"
  * there, see newSpellRow in engine/spells.ts).
  */
-export type Step = { edit: string; text: string } | { click: string; shift?: boolean; newRow?: boolean };
+export type Step =
+  | { edit: string; text: string }
+  /** menuTitle: the title for a menu of MPMB's that the click opens (MPMB's menus have none). */
+  | { click: string; shift?: boolean; newRow?: boolean; menuTitle?: string };
 
 /**
  * The fields as they will be once the worker made these steps. The page shows them at once, so the
@@ -483,9 +486,12 @@ export class Session {
     this.clearNotes();
   }
 
-  /** Clicks one of MPMB's bookmarks; what the scripts change is saved right after. */
-  runMenu(path: string[]): Promise<void> {
-    return this.work(() => this.client.bookmark(path));
+  /**
+   * Clicks one of MPMB's bookmarks; what the scripts change is saved right after. The title names a menu of
+   * MPMB's that the bookmark opens.
+   */
+  runMenu(path: string[], menuTitle?: string): Promise<void> {
+    return this.work(() => this.popUps.titled(menuTitle, () => this.client.bookmark(path)));
   }
 
   /** Imperial or metric, through MPMB's own units bookmark (the app answers its dialog). */
@@ -684,7 +690,7 @@ export class Session {
             previous.then(() =>
               'edit' in step
                 ? this.client.edit(step.edit, step.text)
-                : this.client.click(step.click, 0, step.shift, step.newRow),
+                : this.popUps.titled(step.menuTitle, () => this.client.click(step.click, 0, step.shift, step.newRow)),
             ),
           Promise.resolve(),
         );
@@ -812,7 +818,11 @@ export class Session {
     try {
       const backup = readBackup(await file.text(), SHEET_ID, keptVersions());
       const plan = planRestore(backup, this.characters);
-      const date = new Date(backup.created).toLocaleString(document.documentElement.lang || undefined);
+      // Date and time to the minute: the seconds made it read like a log (UI review 2, finding 10).
+      const date = new Date(backup.created).toLocaleString(this.t.locale, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
       const answer = await this.popUps.choose({
         title: this.t.restoreTitle,
         message: fill(this.t.restoreFrom, { date }),

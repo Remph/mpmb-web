@@ -5,7 +5,7 @@
   "Choose Feature" button becomes a link to the Build screen's Choices step, where the app has it.
 -->
 <script lang="ts">
-  import { pointsToChooseFeature } from '../../build/choose-link.ts';
+  import { pointsToChooseFeature, splitAtChooseButton } from '../../build/choose-link.ts';
   import { featureLine, linesOf } from '../../play/read.ts';
 
   interface Props {
@@ -20,13 +20,23 @@
       .filter((line) => line.trim() !== '')
       .map(featureLine),
   );
+  /**
+   * The feature each line belongs to: its own name, or the last name above it, so a link in a description's
+   * second line still leads to that feature's choice.
+   */
+  const features = $derived(
+    lines.reduce<string[]>((names, line) => {
+      const own = 'runs' in line ? line.runs.filter((run) => run.role === 'name')[0]?.text : undefined;
+      return [...names, own ?? ('heading' in line ? '' : (names.at(-1) ?? ''))];
+    }, []),
+  );
 </script>
 
 {#each lines as line, i (i)}
   {#if 'heading' in line}
     <h3>{line.heading}</h3>
   {:else}
-    {@const feature = line.runs.filter((run) => run.role === 'name')[0]?.text ?? ''}
+    {@const feature = features[i] ?? ''}
     <p>
       {#each line.runs as run, j (j)}
         {#if run.role === 'usage' && choose && pointsToChooseFeature(run.text)}<a
@@ -35,7 +45,11 @@
           >{:else if run.role === 'name'}<b class="name">{run.text}</b>{:else if run.role === 'usage'}<span
             class="usage">{run.text}</span
           >{:else if run.role === 'source'}<span class="source">{run.text}</span>{:else if run.bold}<b>{run.text}</b
-          >{:else if run.italic}<i>{run.text}</i>{:else}{run.text}{/if}
+          >{:else if run.italic}<i>{run.text}</i
+          >{:else if choose}{#each splitAtChooseButton(run.text) as part, k (k)}{#if k % 2}<a
+                class="inline"
+                href={choose.href(feature)}>{choose.label}</a
+              >{:else}{part}{/if}{/each}{:else}{run.text}{/if}
       {/each}
     </p>
   {/if}
@@ -92,6 +106,12 @@
     content: '';
     position: absolute;
     inset: -0.75rem -0.25rem;
+  }
+
+  /* MPMB's mention of the PDF's "Choose Feature" button, as a link in the running text. */
+  .inline {
+    color: var(--accent);
+    font-weight: 700;
   }
 
   .choose:hover,

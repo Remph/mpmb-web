@@ -92,9 +92,44 @@ function addFilesFirst(engine: Engine, source: object): void {
   );
 }
 
+/** The notes on the sheet's third page (Colorful) or its Additional sheet: the player's own free notes. */
+const NOTES_FIELD = 'Extra.Notes';
+
+/**
+ * The player's notes after an update: what MPMB's automation wrote on the new sheet, then the old sheet's
+ * lines the new one doesn't have. MPMB's import empties these notes on purpose ("The 'Notes' section on the
+ * 3rd page is now solely what the automation added"), so the automation can write its newer text there. But
+ * the field is also where players keep their own notes, and nothing tells them to copy those across: a
+ * player who keeps the update would lose them (UI review 2, finding 01). Lines the automation wrote on both
+ * sheets are left out, so they don't appear twice; text the automation changed between versions does, once
+ * in each wording, which is safer than losing a line the player wrote.
+ */
+export function keptNotes(before: string, now: string): string {
+  const lines = (text: string): string[] => text.split(/\r\n|\r|\n/);
+  if (before.trim() === '' || now.includes(before)) return now;
+  const automation = new Set(lines(now).map((line) => line.trim()));
+  const own = lines(before)
+    .filter((line) => line.trim() === '' || !automation.has(line.trim()))
+    // One empty line between paragraphs at most, none at the start or end.
+    .filter((line, i, all) => line.trim() !== '' || (i > 0 && all[i - 1]?.trim() !== ''))
+    .join('\r')
+    .trim();
+  if (own === '') return now;
+  return now.trim() === '' ? own : `${now.replace(/\s+$/, '')}\r\r${own}`;
+}
+
+/** Carries the player's notes across, as a player would paste them in after the import in Acrobat. */
+function keepNotes(engine: Engine, source: object): void {
+  const old = (source as { getField(name: string): { value: unknown } | null }).getField(NOTES_FIELD);
+  if (!old) return;
+  const now = String(engine.doc.states.get(NOTES_FIELD)?.value ?? '');
+  const kept = keptNotes(String(old.value ?? ''), now);
+  if (kept !== now) engine.edit(NOTES_FIELD, kept);
+}
+
 /**
  * Imports the offered document into the engine's sheet, as MPMB's bookmark does, then lets its timers run
- * and refreshes the shown text. The engine must have been made with an ImportHost; its summary is MPMB's
+ * and refreshes the shown text. The player's own notes come along (see keptNotes). The engine must have been made with an ImportHost; its summary is MPMB's
  * closing text (null when the import stopped early, after its own error pop-up).
  */
 export function importSheet(engine: Engine, source: object, host: ImportHost): string | null {
@@ -105,6 +140,7 @@ export function importSheet(engine: Engine, source: object, host: ImportHost): s
     // the other document with app.openDoc, as the app's engine offers it.
     engine.tools.realm.evaluate('DirectImport(true)', 'import');
     engine.runTimers();
+    keepNotes(engine, source);
     engine.doc.formatAll();
   } finally {
     engine.offerDocument(null);
