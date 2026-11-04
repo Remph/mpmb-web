@@ -19,7 +19,8 @@ import type { Texts } from './i18n.ts';
 import { counted, fill } from './i18n.ts';
 import { PopUpStack } from './popups/popups.svelte.ts';
 import { BackupError, backupFileName, filledPdfName, makeBackup, planRestore, readBackup } from './store/backup.ts';
-import { CharacterStore, describeCharacter, keepStorage } from './store/characters.ts';
+import { CharacterStore, copyHomebrew, describeCharacter, keepStorage } from './store/characters.ts';
+import type { UltCharges } from './homebrew/ult.ts';
 import type { CharacterMeta, PreviousVersion, StoredCharacter } from './store/characters.ts';
 import { EngineClient, EngineError } from './worker/client.ts';
 import type { Done, PopUps } from './worker/client.ts';
@@ -432,6 +433,19 @@ export class Session {
     }
   }
 
+  // ---- Homebrew (app only, never in a PDF) ----
+
+  /**
+   * The open character's ult charges. Not a sheet field, so MPMB's scripts never see it: it goes straight
+   * into the character's list entry, which backups carry along.
+   */
+  async setUlt(ult: UltCharges): Promise<void> {
+    const open = this.current;
+    if (!open || !this.store) return;
+    open.meta = { ...open.meta, homebrew: { ...open.meta.homebrew, ult: { ...ult } } };
+    await this.store.putMeta($state.snapshot(open.meta));
+  }
+
   // ---- After a sheet update (M11) ----
 
   /** The open character's last update: what changed, MPMB's notes and the copy from before. */
@@ -737,7 +751,8 @@ export class Session {
     const meta = describeCharacter(data, addOns, open.meta);
     await this.save({ meta, data });
     this.dirty = false;
-    open.meta = meta;
+    // A tap on the ult charges while this save ran is newer than `meta`; its own write came after this one.
+    open.meta = open.meta.homebrew ? { ...meta, homebrew: copyHomebrew(open.meta.homebrew) } : meta;
     open.status = 'saved';
     await this.refresh();
   }
