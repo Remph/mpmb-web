@@ -1,6 +1,8 @@
-// Backup files: characters as JSON, to keep them safe and to move them to another device. A backup
-// names the sheet (type and version) its characters were saved with, because a character is stored
-// as its differences from exactly that blank sheet.
+// Backup files: characters as JSON, to keep them safe and to move them to another device. A character
+// is stored as its differences from exactly the blank sheet it was saved with, so a backup names the
+// sheet (type and version) of the app that made it, and each character's own document info names its
+// version: one that has not been opened since the app moved to a new release is still on the older one
+// (M11), which the app keeps and updates on opening.
 import { CHARACTER_FORMAT, FORMAT_VERSION } from '../engine/sheet-data.ts';
 import type { SheetId } from '../engine/sheet-id.ts';
 import type { StoredCharacter } from './characters.ts';
@@ -106,12 +108,16 @@ function isCharacter(value: unknown): value is StoredCharacter {
     isAddOns(meta.addOns) &&
     data.format === CHARACTER_FORMAT &&
     data.version === FORMAT_VERSION &&
+    isObject(data.info) &&
     isObject(data.fields)
   );
 }
 
-/** Reads a backup file's text; throws a BackupError when it can't be restored here. */
-export function readBackup(text: string, sheet: SheetId): Backup {
+/**
+ * Reads a backup file's text; throws a BackupError when it can't be restored here. `kept`: the older
+ * versions of the sheet the app keeps (sheet-versions.ts), whose characters it can still open.
+ */
+export function readBackup(text: string, sheet: SheetId, kept: readonly string[] = []): Backup {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -122,10 +128,17 @@ export function readBackup(text: string, sheet: SheetId): Backup {
     throw new BackupError('not-a-backup');
   if (parsed.version > BACKUP_VERSION) throw new BackupError('newer-backup');
   const from = isObject(parsed.sheet) ? parsed.sheet : {};
-  if (from.type !== sheet.type || from.version !== sheet.version)
+  const versions = [sheet.version, ...kept];
+  const known = (version: unknown): boolean => typeof version === 'string' && versions.includes(version);
+  if (from.type !== sheet.type || !known(from.version))
     throw new BackupError('wrong-sheet', `${String(from.type)} v${String(from.version)}`);
   const characters = Array.isArray(parsed.characters) ? parsed.characters : [];
   if (!characters.length || !characters.every(isCharacter)) throw new BackupError('not-a-backup');
+  // Older backups' characters all have the backup's version; one of another version must be known too.
+  const unknown = (characters as StoredCharacter[])
+    .map((c) => c.data.info.SheetVersion ?? from.version)
+    .find((version) => !known(version));
+  if (unknown !== undefined) throw new BackupError('wrong-sheet', `${sheet.type} v${String(unknown)}`);
   return parsed as unknown as Backup;
 }
 

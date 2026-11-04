@@ -5,15 +5,31 @@ import type { ScoreChange } from '../engine/scores.ts';
 import type { SpellPicks, SpellSheetPicks } from '../engine/spells.ts';
 import type { AlertReply, AlertRequest, DialogReply, DialogView, MenuItem } from '../engine/host.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
-import type { ImageSlot, SheetImage } from '../engine/types.ts';
+import type { SheetPack } from '../engine/sheet-pack.ts';
+import type { ImageSlot, SheetImage, SheetImages } from '../engine/types.ts';
 import type { FieldViews } from './views.ts';
 
 /** What the page asks the engine to do. */
 export type Command =
-  /** Opens the blank sheet, or a character saved by the app. */
-  | { type: 'open'; character: CharacterData | null }
-  /** Opens a character from a filled MPMB PDF (Colorful A4 v24.2.0). */
-  | { type: 'importPdf'; bytes: ArrayBuffer }
+  /**
+   * Opens the blank sheet, or a character saved by the app. `pack`: on an older version of the sheet
+   * that the app keeps (sheet-versions.ts), instead of the current one.
+   */
+  | { type: 'open'; character: CharacterData | null; pack?: SheetPack }
+  /** Opens a character from a filled MPMB PDF (Colorful A4 v24.2.0, or the version of `pack`). */
+  | { type: 'importPdf'; bytes: ArrayBuffer; pack?: SheetPack }
+  /**
+   * The open sheet becomes the old document of an update in another worker (`migrate`): it answers that
+   * worker's requests from the port, through the shared buffer (link.ts). Its pop-ups are answered as
+   * closed from then on: the player sees the new sheet's.
+   */
+  | { type: 'serve'; port: MessagePort; buffer: SharedArrayBuffer }
+  /**
+   * Opens the blank current sheet and imports the character the other worker serves into it, with MPMB's
+   * own "Import from another sheet" (import-sheet.ts); then puts the pictures on it, which the import
+   * leaves out. Returns Migrated.
+   */
+  | { type: 'migrate'; port: MessagePort; buffer: SharedArrayBuffer; images?: SheetImages }
   /**
    * The open character written into the player's own copy of the sheet (a blank Colorful A4 v24.2.0 is
    * best); returns the filled PDF's bytes.
@@ -87,6 +103,12 @@ export interface Opened {
   addOns: AddOns;
 }
 
+/** What `migrate` returns. */
+export interface Migrated extends Opened {
+  /** MPMB's closing "Things to consider about the import" text; null when the import stopped early. */
+  summary: string | null;
+}
+
 /**
  * Why a command failed, for the page to explain in the player's language; anything else is a bug and
  * shows the worker's message.
@@ -94,8 +116,14 @@ export interface Opened {
 export type FailureCode =
   /** Not a PDF, or a PDF the reader can't take apart. */
   | 'unreadable-pdf'
-  /** A PDF, but not the sheet type and version the app ships (`detail`: what it is). */
+  /** A PDF, but not the sheet type and version the app ships (`detail`: what it is, `found`: its info). */
   | 'wrong-sheet';
+
+/** The sheet a PDF says it is (its document info), when it is not the one the app ships. */
+export interface FoundSheet {
+  type: string;
+  version: string;
+}
 
 /** One entry of MPMB's bookmarks (its menu), as the page needs it. */
 export interface MenuNode {
@@ -123,4 +151,4 @@ export type FromWorker =
   /** MPMB's bookmarks, when they changed (MPMB adds the pages it spawns). */
   | { type: 'menu'; menu: MenuNode[] }
   | { type: 'done'; id: number; result: unknown; summary: Summary }
-  | { type: 'failed'; id: number; error: string; code?: FailureCode; detail?: string };
+  | { type: 'failed'; id: number; error: string; code?: FailureCode; detail?: string; found?: FoundSheet };
