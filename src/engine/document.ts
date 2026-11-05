@@ -427,8 +427,22 @@ export class SheetDocument implements FieldOwner {
         // which switch to "3 M" with the units): as in Acrobat, the field then holds the spans' text.
         const after = isRich && Array.isArray(ev.richValue) ? JSON.stringify(ev.richValue) : before;
         const spans = after === before ? null : (JSON.parse(after) as Span[]);
-        const value = spans ? spansText(spans) : this.normalize(state, ev.value);
+        let value = spans ? spansText(spans) : this.normalize(state, ev.value);
         if (!spans && JSON.stringify(value) === JSON.stringify(state.value)) return;
+        // Acrobat validates a value a calculation changed before it stores it, and keeps the old value
+        // if Validate rejects it. MPMB relies on that: a magic item, feat or species row it renames
+        // after a choice ("Adamantine Scale Mail") gets the new name from its Calculate, and only the
+        // Validate that follows clears the note (`setVal`) that would otherwise swallow the row's next
+        // change. Spans a calculation sets (the unit labels) skip this: those fields have no Validate.
+        if (!spans && state.def.actions.V) {
+          const checked = this.runEvent(state, 'V', {
+            value: Array.isArray(value) ? this.tools.array(value) : value,
+            willCommit: true,
+            source,
+          });
+          if (checked && checked.rc === false) return;
+          if (checked) value = this.normalize(state, checked.value);
+        }
         this.commit(state, value);
         if (spans) state.spans = spans;
         this.runFormat(state);
