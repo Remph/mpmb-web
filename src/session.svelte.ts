@@ -83,7 +83,8 @@ export interface OpenCharacter {
  * there, see newSpellRow in engine/spells.ts).
  */
 export type Step =
-  | { edit: string; text: string }
+  /** cancelable: a pop-up the player cancels while MPMB applies the text cancels the edit (Engine.edit). */
+  | { edit: string; text: string; cancelable?: boolean }
   /** menuTitle: the title for a menu of MPMB's that the click opens (MPMB's menus have none). */
   | { click: string; shift?: boolean; newRow?: boolean; menuTitle?: string };
 
@@ -873,7 +874,7 @@ export class Session {
     const make = async (): Promise<void> => {
       // One after the other: each step's field events may change what the next one finds.
       for (const step of steps) {
-        if ('edit' in step) await this.client.edit(step.edit, step.text);
+        if ('edit' in step) await this.client.edit(step.edit, step.text, step.cancelable);
         else await this.popUps.titled(step.menuTitle, () => this.client.click(step.click, 0, step.shift, step.newRow));
       }
       this.waiting.forEach((wait, name) => {

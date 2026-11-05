@@ -16,7 +16,7 @@ import * as af from './af.ts';
 import { BookmarkNode } from './bookmarks.ts';
 import { runDialog } from './dialog.ts';
 import type { DialogSpec } from './dialog.ts';
-import { SheetDocument } from './document.ts';
+import { EditCancelled, SheetDocument } from './document.ts';
 import type { AcroEvent, EngineStats } from './document.ts';
 import type { FieldState } from './field.ts';
 import { copyMenu, menuItems } from './host.ts';
@@ -130,6 +130,8 @@ export class Engine {
   private images: SheetImages;
   /** The other document `app.openDoc` opens: the old sheet MPMB's import reads (see source-doc.ts). */
   private openable: object | null = null;
+  /** While an edit runs that a cancelled pop-up cancels (see edit): its field, and whether that happened. */
+  private cancelable: { field: string; cancelled: boolean } | null = null;
 
   private constructor({ sheet, host, realm, now, allowTimer }: EngineOptions) {
     this.images = { ...sheet.images };
@@ -344,7 +346,7 @@ export class Engine {
         end: () => undefined,
       }),
       alert: (a: unknown, nIcon?: unknown, nType?: unknown, cTitle?: unknown) => this.alert(a, nIcon, nType, cTitle),
-      execDialog: (spec: DialogSpec) => runDialog(spec, this.host, tools),
+      execDialog: (spec: DialogSpec) => this.cancelEditOn(runDialog(spec, this.host, tools)),
       popUpMenuEx: (...items: MenuItem[]) => this.host.popUpMenu(menuItems(copyMenu(items))),
       popUpMenu: missing(doc, 'app.popUpMenu', null),
       setTimeOut: (expr: unknown, ms: unknown) => this.addTimer(expr, Number(ms) || 0, false),
@@ -473,11 +475,57 @@ export class Engine {
 
   // ---- What a user does ----
 
-  /** Into the field, type `text`, commit, out of the field; then the timers MPMB set run. */
-  edit(name: string, text: string): boolean {
-    const ok = this.doc.edit(name, text);
+  /**
+   * Into the field, type `text`, commit, out of the field; then the timers MPMB set run.
+   *
+   * `cancelable`: a pop-up the player cancels while the field's scripts run cancels the whole edit. The
+   * scripts stop there and the field gets its old value back through its own scripts, which undo what
+   * the stopped run had applied. MPMB asks a magic item's armour or weapon type (adamantine armor: chain
+   * mail, full plate …) in a pop-up with only OK, halfway through applying the item; in Acrobat closing
+   * it anyway leaves the item half applied. In the app the pop-up can be closed, and that means "don't".
+   */
+  edit(name: string, text: string, { cancelable = false }: { cancelable?: boolean } = {}): boolean {
+    const old = this.doc.states.get(name)?.value;
+    // MPMB keeps notes on the field object for the field's later events (the form's name in setValPrepared,
+    // see doDropDownValCalcWithChoices). Notes from a cancelled run must not reach the undo below.
+    const field = cancelable ? this.doc.getField(name) : null;
+    const notes = field ? { ...field } : null;
+    this.cancelable = cancelable ? { field: name, cancelled: false } : null;
+    let ok: boolean;
+    let cancelled = false;
+    try {
+      ok = this.doc.edit(name, text);
+      cancelled = this.cancelable?.cancelled ?? false;
+    } finally {
+      this.cancelable = null;
+    }
+    // The field kept its old value; typing it again runs the scripts that put the sheet back to match it.
+    if (cancelled && typeof old === 'string') {
+      if (field && notes) {
+        const own = field as unknown as Record<string, unknown>;
+        Object.keys(own).forEach((key) => {
+          if (!(key in notes)) delete own[key];
+        });
+        Object.assign(own, notes);
+      }
+      this.doc.edit(name, old);
+    }
     this.runTimers();
-    return ok;
+    return ok && !cancelled;
+  }
+
+  /**
+   * A pop-up's result, or the end of a cancelable edit (see edit). Only in the edited field's own events:
+   * their runEvent turns the throw into a rejected value (event.rc = false).
+   */
+  private cancelEditOn(result: string): string {
+    const edit = this.cancelable;
+    const event = this.tools.realm.global.event as AcroEvent | undefined;
+    if (result === 'cancel' && edit && event?.targetName === edit.field) {
+      edit.cancelled = true;
+      throw new EditCancelled(`${edit.field}: cancelled in a pop-up`);
+    }
+    return result;
   }
 
   click(name: string, widget = 0, shift = false): void {

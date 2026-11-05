@@ -70,7 +70,9 @@
   function take(name: string) {
     const row = picking?.row ?? free;
     picking = null;
-    if (row !== null) change([{ edit: magicItemField(row), text: name }]);
+    // Cancelable: closing a pop-up MPMB opens while it applies the item ("which armor?" for adamantine
+    // armor) means "not this item after all", so the row keeps what it had instead of a half-applied item.
+    if (row !== null) change([{ edit: magicItemField(row), text: name, cancelable: true }]);
   }
 </script>
 

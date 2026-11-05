@@ -132,8 +132,9 @@ export class EngineClient {
     return this.send({ type: 'exportPdf', bytes }) as Promise<Done<Uint8Array>>;
   }
 
-  edit(field: string, text: string): Promise<Done> {
-    return this.send({ type: 'edit', field, text });
+  /** `cancelable`: a dialog the player cancels cancels the edit (see Engine.edit). */
+  edit(field: string, text: string, cancelable = false): Promise<Done> {
+    return this.send({ type: 'edit', field, text, ...(cancelable ? { cancelable } : {}) });
   }
 
   click(field: string, widget = 0, shift = false, newRow = false): Promise<Done> {

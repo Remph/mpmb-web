@@ -114,6 +114,15 @@ test('a new character gets a class, armour and a weapon, and the play view shows
   await page.getByRole('button', { name: 'Change magic items' }).click();
   await magicWindow.getByRole('button', { name: 'Remove Bag of Holding' }).click();
   await expect(magicWindow.getByText('Bag of Holding')).toHaveCount(0);
+  // An item in several forms: closing MPMB's "which armor?" pop-up cancels the whole add (fix, 2026-11-04).
+  await magicWindow.getByRole('button', { name: '+ Add a magic item' }).click();
+  await magicPick.getByRole('searchbox').fill('Adamantine Armor');
+  await magicPick.getByRole('button', { name: /^Adamantine Armor/ }).click();
+  const formQuestion = page.getByRole('dialog').filter({ hasText: 'Select Type of Armor' });
+  await formQuestion.getByRole('button', { name: 'Close', exact: true }).first().click();
+  await expect(formQuestion).toHaveCount(0);
+  await expect(magicWindow.getByText('Adamantine')).toHaveCount(0);
+  await expect(magicWindow.getByText('Nothing listed.')).toBeVisible();
   await magicWindow.getByRole('button', { name: 'Close', exact: true }).last().click();
   await page.getByRole('tab', { name: 'Combat' }).click();
 

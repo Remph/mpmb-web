@@ -37,7 +37,7 @@ export type Command =
    * best); returns the filled PDF's bytes.
    */
   | { type: 'exportPdf'; bytes: ArrayBuffer }
-  | { type: 'edit'; field: string; text: string }
+  | { type: 'edit'; field: string; text: string; cancelable?: boolean }
   /**
    * `shift`: with Shift held, as for MPMB's spell row menu. `newRow`: a spell level's "+ Row" on this
    * row's check box, MPMB's menu on a new row inserted there (newSpellRow in engine/spells.ts).

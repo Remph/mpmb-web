@@ -239,7 +239,7 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
     checkSheetType(sheet);
     return writeSheetPdf(bytes, opened().snapshot(), sheet);
   },
-  edit: ({ field, text }) => opened().edit(field, text),
+  edit: ({ field, text, cancelable }) => opened().edit(field, text, { cancelable }),
   click: ({ field, widget, shift, newRow }) =>
     newRow ? newSpellRow(opened(), field, true, ROW_MENUS) : opened().click(field, widget, shift),
   bookmark: ({ path }) => opened().clickBookmark(path),

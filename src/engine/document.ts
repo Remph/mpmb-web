@@ -81,6 +81,13 @@ export interface DocumentOptions {
   tools: RealmTools;
 }
 
+/**
+ * Thrown out of a dialog the player cancelled, to cancel the edit that opened it (see Engine.edit's
+ * `cancelable`). It ends the field's event with event.rc = false: the field keeps the value it had,
+ * as when a script rejects a value. Not an error, so it isn't logged.
+ */
+export class EditCancelled extends Error {}
+
 export class SheetDocument implements FieldOwner {
   readonly stats: EngineStats = { errors: [], missing: {}, events: 0, calcRuns: 0 };
   readonly tools: RealmTools;
@@ -290,7 +297,8 @@ export class SheetDocument implements FieldOwner {
     try {
       this.compile(code).call(g);
     } catch (err) {
-      this.logError(`${state.name} ${EVENT_NAMES[trigger]}`, err);
+      if (err instanceof EditCancelled) ev.rc = false;
+      else this.logError(`${state.name} ${EVENT_NAMES[trigger]}`, err);
     } finally {
       g.event = outer;
     }
