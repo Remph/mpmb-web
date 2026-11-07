@@ -15,6 +15,8 @@ import type { AlertReply, DialogReply, DialogView, Host, MenuItem } from '../eng
 import { ImportHost, importSheet } from '../engine/import-sheet.ts';
 import { currentRealm } from '../engine/realm.ts';
 import { mpmbScripts } from '../engine/scripts.ts';
+import { withAppLists } from '../engine/app-lists.ts';
+import { COMPANION_OPTIONS_SCRIPT, readCompanionOptions } from '../engine/companion-options.ts';
 import { CHARACTER_FORMAT, FORMAT_VERSION, applyCharacter, diffCharacter, unpackSheet } from '../engine/sheet-data.ts';
 import type { SheetPack } from '../engine/sheet-pack.ts';
 import { blankSheet } from '../engine/sheet.ts';
@@ -180,7 +182,13 @@ function sendMenu(): void {
 
 function open(sheet: SheetSnapshot, sheetHost: Host = host): Opened {
   if (engine) throw new Error('This worker already has a sheet open; open the next one in a new worker.');
-  engine = Engine.load({ sheet, scripts: sheetVersion.scripts, host: sheetHost, realm: currentRealm(), allowTimer });
+  engine = Engine.load({
+    sheet,
+    scripts: withAppLists(sheetVersion.scripts),
+    host: sheetHost,
+    realm: currentRealm(),
+    allowTimer,
+  });
   // Opening the sheet in Acrobat runs the timers MPMB set while loading (those the app allows).
   engine.runTimers();
   // Acrobat shows the text that Format scripts made when the PDF was saved; here each field's Format
@@ -261,6 +269,7 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
   pick: ({ field, answer }) => pick(answer, () => opened().click(field)),
   pickBookmark: ({ path, answer }) => pick(answer, () => opened().clickBookmark(path)),
   spells: () => readSpellsInfo(opened().evaluate(SPELLS_READ_SCRIPT)),
+  companionOptions: () => readCompanionOptions(opened().evaluate(COMPANION_OPTIONS_SCRIPT)),
   setSpells: ({ picks, sheet }) => applySpellPicks(opened(), picks, answered, sheet),
   setImage: ({ slot, image }) => opened().setImage(slot, image),
 };

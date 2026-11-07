@@ -70,6 +70,8 @@ export type Command =
   | { type: 'pickBookmark'; path: string[]; answer: string }
   /** What MPMB's spell dialogs offer and hold (SpellsInfo), read without showing them. */
   | { type: 'spells' }
+  /** The companion templates and their creatures from the loaded lists (CompanionTemplate[]). */
+  | { type: 'companionOptions' }
   /**
    * The Spells step's picks into MPMB's spell dialogs, then MPMB's "(Re)generate a Spell Sheet" with the app
    * pressing OK in those dialogs.
