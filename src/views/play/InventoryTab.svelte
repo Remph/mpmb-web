@@ -176,7 +176,7 @@
     {#if inventory.magicItems.length}
       <div class="items">
         {#each inventory.magicItems as item (item.row)}
-          {#if item.description}
+          {#if item.description || item.attunable}
             <button
               type="button"
               class="item"
@@ -194,7 +194,25 @@
         {#if openItem}
           <div class="text" id="magic-text">
             <b>{openItem.name}</b>
-            <p>{openItem.description}</p>
+            {#if openItem.description}<p>{openItem.description}</p>{/if}
+            <!-- MPMB's own attunement box: ticking it applies the item's features, unticking removes them
+                 (playtest 2026-11-07). The rules allow three; MPMB doesn't stop a fourth, so neither do we. -->
+            {#if openItem.attunable}
+              <div class="attune">
+                <button
+                  type="button"
+                  class="chip switch"
+                  class:on={openItem.attuned}
+                  aria-pressed={openItem.attuned}
+                  {disabled}
+                  onclick={() => change([{ click: `Extra.Magic Item Attuned ${openItem.row}` }])}
+                  ><span class="dot" aria-hidden="true"></span>{t.attuneSwitch}</button
+                >
+                {#if !openItem.attuned && attuned >= 3}<span class="muted"
+                    >{fill(t.attuneFull, { n: String(attuned) })}</span
+                  >{/if}
+              </div>
+            {/if}
           </div>
         {/if}
       </div>
@@ -544,6 +562,42 @@
   .text p {
     margin: 0.25rem 0 0;
     white-space: pre-line;
+  }
+
+  .attune {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.75rem;
+    margin-top: 0.5rem;
+  }
+
+  /* The switch as in the Damage window's effects: an empty ring when off, a filled dot when on. */
+  .chip.switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 44px;
+    border-radius: 22px;
+    font-weight: 500;
+  }
+
+  .dot {
+    width: 0.75rem;
+    height: 0.75rem;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+  }
+
+  .chip.on {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .chip.on .dot {
+    background: currentColor;
   }
 
   h3 {

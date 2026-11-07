@@ -17,6 +17,7 @@
     readLimitedFeatures,
     readRollMarks,
     readSpellSlotUse,
+    textRuns,
   } from '../../play/read.ts';
   import type { LimitedFeature } from '../../play/read.ts';
   import { recoveryText } from '../../play/labels.ts';
@@ -275,7 +276,7 @@
           <b
             >{rule.title}{#if rule.source}{' '}<small>· {rule.source}</small>{/if}</b
           >
-          {#each rule.lines as line, i (i)}<p>{line}</p>{/each}
+          {#each rule.lines as line, i (i)}{@render ruleLine(line)}{/each}
         </div>
       {/if}
     {/each}
@@ -343,13 +344,22 @@
             <b
               >{rule.title}{#if rule.source}{' '}<small>· {rule.source}</small>{/if}</b
             >
-            {#each rule.lines as line, i (i)}<p>{line}</p>{/each}
+            {#each rule.lines as line, i (i)}{@render ruleLine(line)}{/each}
           </div>
         {/if}
       </div>
     {/each}
   </section>
 {/if}
+
+<!-- A line of rule text with MPMB's bold and italic, as the Features tab shows it. -->
+{#snippet ruleLine(line: string)}
+  <p>
+    {#each textRuns(line) as run, k (k)}{#if run.bold && run.italic}<b><i>{run.text}</i></b>{:else if run.bold}<b
+          >{run.text}</b
+        >{:else if run.italic}<i>{run.text}</i>{:else}{run.text}{/if}{/each}
+  </p>
+{/snippet}
 
 <style>
   .panel {

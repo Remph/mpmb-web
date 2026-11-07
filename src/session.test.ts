@@ -12,7 +12,7 @@ import { SHEET_ID } from './engine/sheet-id.ts';
 import type { Entry } from './popups/popups.svelte.ts';
 import { Session } from './session.svelte.ts';
 import { makeBackup } from './store/backup.ts';
-import { describeCharacter } from './store/characters.ts';
+import { CharacterStore, describeCharacter } from './store/characters.ts';
 import type { StoredCharacter } from './store/characters.ts';
 import type { Locks } from './store/tab-lock.ts';
 import { StandInLocks } from '../test/stand-in-locks.ts';
@@ -87,6 +87,8 @@ async function startSession(
     locks?: Locks;
     sent?: Command[];
     hold?: (command: Command) => Promise<void> | undefined;
+    /** False: start the session like the page does, without waiting for its storage to open. */
+    waitForStart?: boolean;
   } = {},
 ): Promise<Session> {
   vi.stubGlobal('indexedDB', tab.browser ?? new IDBFactory());
@@ -118,7 +120,8 @@ async function startSession(
     () => new StandInWorker(answer, tab.hold),
     tab.locks,
   );
-  await session.start();
+  const starting = session.start();
+  if (tab.waitForStart !== false) await starting;
   return session;
 }
 
@@ -147,6 +150,25 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/**
+ * Runs `run` while the browser storage opens only when `run` calls `openStorage`, as on a busy first visit
+ * (the flaky deploy test, 2026-11-07).
+ */
+async function withLateStorage(run: (openStorage: () => void) => Promise<void>): Promise<void> {
+  let openStorage = (): void => undefined;
+  const late = new Promise<void>((resolve) => (openStorage = resolve));
+  const open = CharacterStore.open.bind(CharacterStore);
+  const spy = vi.spyOn(CharacterStore, 'open').mockImplementation(async (...args) => {
+    await late;
+    return open(...args);
+  });
+  try {
+    await run(openStorage);
+  } finally {
+    spy.mockRestore();
+  }
+}
+
 describe('importing PDFs', () => {
   test('saves each character and says so', async () => {
     const session = await startSession();
@@ -156,6 +178,18 @@ describe('importing PDFs', () => {
       ['ok', t.imported.replace('{name}', 'Anna')],
       ['ok', t.imported.replace('{name}', 'Bert')],
     ]);
+  });
+
+  test('right after the page opened, before the storage is open, waits for it and saves', async () => {
+    await withLateStorage(async (openStorage) => {
+      const session = await startSession({ waitForStart: false });
+      const importing = session.importPdfs([pdf(sheetOf('Anna'))]);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      openStorage();
+      await importing;
+      expect(names(session)).toEqual(['Anna']);
+      expect(session.notes.map((n) => n.kind)).toEqual(['ok']);
+    });
   });
 
   test('a PDF that is not readable is named in the note and saves nothing', async () => {
@@ -226,6 +260,19 @@ describe('restoring a backup', () => {
     expect(session.notes).toMatchObject([{ kind: 'ok' }]);
   });
 
+  test('right after the page opened, before the storage is open, waits for it and restores', async () => {
+    await withLateStorage(async (openStorage) => {
+      const session = await startSession({ waitForStart: false });
+      const restoring = session.restore(backupFile([stored('Cora', 'cora', '2026-01-02T00:00:00.000Z')]));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      openStorage();
+      await answer(session, 'restore');
+      await restoring;
+      expect(names(session)).toEqual(['Cora']);
+      expect(session.notes).toMatchObject([{ kind: 'ok' }]);
+    });
+  });
+
   test('"Cancel" changes nothing', async () => {
     const session = await startSession();
     const restoring = session.restore(backupFile([stored('Cora', 'cora', '2026-01-02T00:00:00.000Z')]));
@@ -267,6 +314,18 @@ describe('a new character', () => {
     const id = await session.create();
     expect(id).not.toBeNull();
     expect(session.characters.map((c) => c.id)).toEqual([id]);
+  });
+
+  test('right after the page opened, before the storage is open, waits for it and is saved', async () => {
+    await withLateStorage(async (openStorage) => {
+      const session = await startSession({ waitForStart: false });
+      const creating = session.create();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      openStorage();
+      const id = await creating;
+      expect(id).not.toBeNull();
+      expect(session.characters.map((c) => c.id)).toEqual([id]);
+    });
   });
 });
 

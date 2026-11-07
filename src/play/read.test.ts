@@ -215,11 +215,12 @@ describe('play view extras', () => {
 
   it('reads magic items, gear and coins', () => {
     const inventory = readInventory(paladin);
-    expect(inventory.magicItems.map((i) => [i.name, i.attuned])).toEqual([
-      ['Adamantine Plate Armor', false],
-      ['+2 Halberd', false],
-      ['Headband of Intellect', true],
-      ['Stone of Good Luck', true],
+    // Only items that need attunement can be switched (MPMB hides the box of the others).
+    expect(inventory.magicItems.map((i) => [i.name, i.attuned, i.attunable])).toEqual([
+      ['Adamantine Plate Armor', false, false],
+      ['+2 Halberd', false, false],
+      ['Headband of Intellect', true, true],
+      ['Stone of Good Luck', true, true],
     ]);
     expect(inventory.gear.map((g) => [g.name, g.amount])).toEqual([
       ['Potion of Healing', 5],

@@ -515,6 +515,8 @@ export const ui = {
     advantageAgainst: 'Vorteil gegen',
     magicItems: 'Magische Gegenstände',
     attuned: 'eingestimmt',
+    attuneSwitch: 'Eingestimmt',
+    attuneFull: 'Schon auf {n} Gegenstände eingestimmt (höchstens 3).',
     magicItemsChange: 'Ändern',
     magicItemsChangeLabel: 'Magische Gegenstände ändern',
     magicItemsLine:
@@ -1638,6 +1640,8 @@ export const ui = {
     advantageAgainst: 'Advantage against',
     magicItems: 'Magic items',
     attuned: 'attuned',
+    attuneSwitch: 'Attuned',
+    attuneFull: 'Already attuned to {n} items (the most is 3).',
     magicItemsChange: 'Change',
     magicItemsChangeLabel: 'Change magic items',
     magicItemsLine:

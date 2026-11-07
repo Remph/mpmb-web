@@ -417,6 +417,8 @@ export interface MagicItem {
   row: number;
   name: string;
   attuned: boolean;
+  /** Whether the item needs attunement: then the player can switch it on and off. */
+  attunable: boolean;
   description: string;
 }
 
@@ -514,6 +516,8 @@ export function readInventory(fields: FieldViews): Inventory {
         row,
         name: clean(valueOf(fields, `Extra.Magic Item ${row}`)),
         attuned: isOn(fields, `Extra.Magic Item Attuned ${row}`),
+        // MPMB shows the box only for an item that needs attunement.
+        attunable: isShown(fields, `Extra.Magic Item Attuned ${row}`),
         description: valueOf(fields, `Extra.Magic Item Description ${row}`),
       }))
       .filter((item) => item.name !== ''),

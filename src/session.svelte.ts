@@ -192,7 +192,20 @@ export class Session {
     return this.texts();
   }
 
-  async start(): Promise<void> {
+  /**
+   * Opens the storage and lists the characters. The list and its buttons show at once, so a restore, an
+   * import or a new character can come before the storage is open: they wait for `started` (a restore
+   * right after the page opened found no storage and saved nothing; the flaky deploy test, 2026-11-07).
+   */
+  start(): Promise<void> {
+    this.started = this.openStore();
+    return this.started;
+  }
+
+  /** What `start` is doing; done (also when it failed) before saving or listing is any use. */
+  private started: Promise<void> = Promise.resolve();
+
+  private async openStore(): Promise<void> {
     try {
       let waiting: number | undefined;
       this.store = await CharacterStore.open(indexedDB, undefined, {
@@ -264,6 +277,7 @@ export class Session {
   }
 
   private async importAfter(before: Promise<void>, files: File[]): Promise<void> {
+    await this.started;
     await before;
     this.clearNotes();
     // One after the other: each import uses the one engine worker.
@@ -400,6 +414,7 @@ export class Session {
    * and source pop-ups, as in Acrobat.
    */
   async create(): Promise<string | null> {
+    await this.started;
     await this.running;
     this.clearNotes();
     try {
@@ -1060,6 +1075,8 @@ export class Session {
   }
 
   async restore(file: File): Promise<void> {
+    // Before the plan: it compares the backup with the characters saved here, listed once storage is open.
+    await this.started;
     this.clearNotes();
     try {
       const backup = readBackup(await file.text(), SHEET_ID, keptVersions());

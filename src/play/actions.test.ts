@@ -147,6 +147,41 @@ describe('rule text for an action', () => {
     expect(ruleFor(twice, actionItem('Lay on Hands'))?.lines).toHaveLength(2);
   });
 
+  it("keeps MPMB's bold and italic marks for the view to draw", () => {
+    const marked = ruleIndex(
+      withValues(paladin, {
+        'Extra.Notes': '#◆ Test Strike# (Test 1). Deals (4)/**8**/12 damage.\rOnly *once per turn*.',
+      }),
+    );
+    expect(ruleFor(marked, actionItem('Test Strike'))?.lines).toEqual([
+      'Deals (4)/**8**/12 damage.',
+      'Only *once per turn*.',
+    ]);
+  });
+
+  it('takes the text from the third page when the feature there only says "(see third page)"', () => {
+    const features = paladin['Class Features']?.value;
+    const pointed = ruleIndex(
+      withValues(paladin, {
+        'Class Features': `${typeof features === 'string' ? features : ''}\r#◆ Mind Edge# (Rogue 3, Test 1) (see third page)`,
+        'Extra.Notes': '#◆ Mind Edge# (Rogue 3)\rWhenever I take the Attack action, I can strike with a mind edge.',
+      }),
+    );
+    const rule = ruleFor(pointed, actionItem('Mind Edge'));
+    expect(rule?.lines).toEqual(['Whenever I take the Attack action, I can strike with a mind edge.']);
+    expect(rule?.source).toBe('Rogue 3');
+  });
+
+  it('keeps "(see third page)" when no text is found anywhere', () => {
+    const features = paladin['Class Features']?.value;
+    const pointed = ruleIndex(
+      withValues(paladin, {
+        'Class Features': `${typeof features === 'string' ? features : ''}\r#◆ Mind Edge# (Rogue 3, Test 1) (see third page)`,
+      }),
+    );
+    expect(ruleFor(pointed, actionItem('Mind Edge'))?.lines).toEqual(['(see third page)']);
+  });
+
   it("reads the feature's name from MPMB's source", () => {
     expect(featureNames('Warlock: Pact of the Blade')).toEqual(['Pact of the Blade']);
     expect(featureNames('Paladin (Oath of Devotion): Sacred Weapon')).toEqual(['Sacred Weapon']);
