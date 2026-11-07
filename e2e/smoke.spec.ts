@@ -162,6 +162,17 @@ test('a new character gets a class, a species, armour and a weapon, and the play
   await expect(actionsCard.locator('.rule')).toContainText('Second Wind');
   await actionsCard.getByRole('button', { name: 'Second Wind: show the rule' }).click();
   await expect(actionsCard.locator('.rule')).toHaveCount(0);
+  // Playtest (2026-11-07): a limited feature's name opens its rule under the row, which keeps its dots.
+  const featuresCard = page.locator('section[aria-labelledby=features-title]');
+  // MPMB names the row after the feature, with its note: "Second Wind (1d10+1, regain 1/SR)".
+  const secondWind = featuresCard.getByRole('button', { name: 'Second Wind (1d10+1, regain 1/SR): show the rule' });
+  await secondWind.click();
+  await expect(featuresCard.locator('.feature-rule')).toContainText('Second Wind');
+  await expect(
+    featuresCard.getByRole('group', { name: 'Second Wind (1d10+1, regain 1/SR): 0 used, tap to change' }),
+  ).toBeVisible();
+  await secondWind.click();
+  await expect(featuresCard.locator('.feature-rule')).toHaveCount(0);
   await page.getByRole('button', { name: 'Fold the bar away' }).click();
   await expect(page.getByRole('button', { name: 'Short rest' })).toHaveCount(0);
   await page.getByRole('button', { name: /^Show the bar/ }).click();

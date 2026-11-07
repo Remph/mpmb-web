@@ -123,6 +123,25 @@ const plain = (line: string): string =>
 const BULLET = /^•\s*([^:]+):\s*(.*)$/;
 const key = (name: string): string => name.replace(/^◆\s*/, '').trim().toLowerCase();
 
+/**
+ * A part of a feature with its own name, as MPMB writes it inside the feature's text: "***Name (1/LR)***. Text",
+ * like a magic item's "***Regaining Charges***. …".
+ * A limited feature or an action is often named after such a part, not after the whole feature.
+ */
+function subFeature(line: string): { name: string; rest: string } | null {
+  const [first, ...runs] = textRuns(line.trim());
+  if (!first?.bold || !first.italic || !runs[0]?.text.startsWith('.')) return null;
+  return {
+    name: first.text.trim(),
+    rest: plain(
+      runs
+        .map((run) => run.text)
+        .join('')
+        .replace(/^\.\s*/, ''),
+    ).trim(),
+  };
+}
+
 /** The Notes box on the third page, where MPMB writes a feature's text with `toNotesPage` and `page3notes`. */
 const NOTES_FIELD = 'Extra.Notes';
 
@@ -134,8 +153,8 @@ const NOTES_FIELD = 'Extra.Notes';
  */
 export function ruleIndex(fields: FieldViews): Map<string, ActionRule> {
   const index = new Map<string, ActionRule>();
-  const add = (rule: ActionRule): void => {
-    if (rule.title && !index.has(key(rule.title))) index.set(key(rule.title), rule);
+  const add = (rule: ActionRule, name = rule.title): void => {
+    if (name && !index.has(key(name))) index.set(key(name), rule);
   };
   const addBlock = (block: FeatureText): void => {
     if (block.title) {
@@ -143,9 +162,25 @@ export function ruleIndex(fields: FieldViews): Map<string, ActionRule> {
       return;
     }
     let current: ActionRule | null = null;
+    // A named part of the current feature: its text also stays in the whole feature's text.
+    let part: ActionRule | null = null;
     for (const line of linesOf(block.text)) {
       const parsed = featureLine(line);
       const bullet = BULLET.exec(line.trim());
+      const sub = subFeature(line);
+      if (!('heading' in parsed) && sub) {
+        current?.lines.push(plain(line));
+        part = { title: sub.name, source: current?.source ?? '', lines: sub.rest ? [sub.rest] : [] };
+        add(part);
+        // "Name (1/LR or charge)" is also found as "Name".
+        add(part, actionItem(sub.name).name);
+        continue;
+      }
+      if (!('heading' in parsed) && !parsed.runs.some((run) => run.role === 'name') && !bullet && line.trim()) {
+        part?.lines.push(plain(line));
+      } else {
+        part = null;
+      }
       if ('heading' in parsed) {
         current = null;
       } else if (parsed.runs.some((run) => run.role === 'name')) {
@@ -204,3 +239,12 @@ export function ruleFor(index: Map<string, ActionRule>, item: ActionItem): Actio
   }
   return null;
 }
+
+/**
+ * The rule behind a limited feature, to read on the Combat tab: by its name without MPMB's note
+ * ("Channel Divinity (regain 1/SR)" is "Channel Divinity"), then by where MPMB says it came from.
+ */
+export const featureRule = (
+  index: Map<string, ActionRule>,
+  feature: { name: string; from: string[] },
+): ActionRule | null => ruleFor(index, actionItem(feature.name, feature.from));

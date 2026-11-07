@@ -133,6 +133,14 @@ describe('play view values', () => {
     expect(readLimitedFeatures(wizard)[1]).toMatchObject({ max: 50, pool: true, recovery: 'dawn' });
   });
 
+  it('reads a feature counted in dice as dots with its die, and where MPMB says it came from', () => {
+    const dice = withValues(paladin, { 'Limited Feature Max Usages 2': '6d8' });
+    expect(readLimitedFeatures(dice)[1]).toMatchObject({ max: 6, pool: false, die: 'd8' });
+    expect(readLimitedFeatures(paladin)[0]?.die).toBeNull();
+    // MPMB's tooltip on the row it filled: "The feature … was gained from <source>".
+    expect(readLimitedFeatures(paladin)[0]?.from.join(' | ')).toMatch(/Paladin/);
+  });
+
   it('reads spell slots per level', () => {
     expect(readSpellSlots(paladin)).toEqual([
       { level: 1, total: 6 },

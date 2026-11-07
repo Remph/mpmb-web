@@ -276,7 +276,17 @@ export interface LimitedFeature {
   pool: boolean;
   recovery: string;
   used: number;
+  /** The die of a feature counted in dice ("6d8": 6 uses of a d8), else null. */
+  die: string | null;
+  /** Where MPMB says the feature came from, from its tooltip ("Paladin: Lay on Hands"). */
+  from: string[];
 }
+
+// MPMB's tooltip on a feature it added: 'The feature "Lay on Hands" was gained from Paladin: Lay on Hands'.
+// Further sources follow after ", ".
+const GAINED_FROM = /was gained from (.+)$/s;
+// A count of dice: "6d8". Try it: https://regex101.com/?regex=%5E(%5Cd%2B)%5Cs*(d%5Cd%2B)%24&flags=i&testString=6d8
+const DICE = /^(\d+)\s*(d\d+)$/i;
 
 /** Above this many uses a feature is counted, not drawn as dots (a row of 50 dots helps nobody). */
 export const MAX_DOTS = 8;
@@ -289,16 +299,25 @@ export function readLimitedFeatures(fields: FieldViews): LimitedFeature[] {
       // Try it: https://regex101.com/?regex=%5Cd%2B&testString=40%20HP
       const match = /\d+/.exec(maxText);
       const max = match ? Number(match[0]) : null;
+      const dice = DICE.exec(maxText.trim());
+      const gained = GAINED_FROM.exec(fields[`Limited Feature ${row}`]?.userName ?? '');
       return {
         row,
         name: valueOf(fields, `Limited Feature ${row}`),
         maxText,
         max,
-        // A pool has a unit or is too big for dots: "40 HP" or "50" is a pool, "2" is not.
+        // A pool has a unit or is too big for dots: "40 HP" or "50" is a pool, "2" is not. Dice ("6d8") are
+        // used one at a time, so they are dots while they fit.
         // Try it: https://regex101.com/?regex=%5CD&testString=40%20HP
-        pool: max !== null && (max > MAX_DOTS || /\D/.test(maxText)),
+        pool: max !== null && (max > MAX_DOTS || (!dice && /\D/.test(maxText))),
         recovery: valueOf(fields, `Limited Feature Recovery ${row}`),
         used: numberOf(fields, `Limited Feature Used ${row}`) ?? 0,
+        die: dice?.[2]?.toLowerCase() ?? null,
+        from:
+          gained?.[1]
+            ?.split(', ')
+            .map((source) => source.trim())
+            .filter(Boolean) ?? [],
       };
     })
     .filter((feature) => feature.name !== '');

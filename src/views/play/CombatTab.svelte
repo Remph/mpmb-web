@@ -9,7 +9,7 @@
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import type { Step } from '../../session.svelte.ts';
-  import { readActionList, ruleFor, ruleIndex } from '../../play/actions.ts';
+  import { featureRule, readActionList, ruleFor, ruleIndex } from '../../play/actions.ts';
   import type { ActionItem, ActionRule } from '../../play/actions.ts';
   import {
     attacksPerAction,
@@ -67,6 +67,15 @@
     markFrom?.focus();
     markFrom = null;
   }
+
+  // A tap on a limited feature's name opens its text under the row (session feedback, 2026-11-07); the rows
+  // stay rows with their dots, not tiles. One open at a time.
+  const featureRules = $derived(new Map(features.map((f) => [f.row, featureRule(rules, f)])));
+  const anyFeatureRule = $derived([...featureRules.values()].some(Boolean));
+  let featureOpen: number | null = $state(null);
+  /** "6d8 · Long rest" for a feature counted in dice, else just when it comes back. */
+  const usesLine = (feature: LimitedFeature): string =>
+    [feature.die ? feature.maxText : '', recoveryText(feature.recovery, t)].filter(Boolean).join(' · ');
 
   const setUsed = (feature: LimitedFeature, used: number) =>
     change([{ edit: `Limited Feature Used ${feature.row}`, text: usedText(used) }]);
@@ -217,11 +226,24 @@
   <section class="panel" aria-labelledby="features-title">
     <div class="head">
       <h2 id="features-title">{t.limitedFeatures}</h2>
-      <span class="muted">{t.tapToUse}</span>
+      <span class="muted">{anyFeatureRule ? t.featuresTapToRead : t.tapToUse}</span>
     </div>
     {#each features as feature (feature.row)}
+      {@const rule = featureRules.get(feature.row)}
       <div class="uses">
-        <span class="name">{feature.name} <small>{recoveryText(feature.recovery, t)}</small></span>
+        {#if rule}
+          <button
+            type="button"
+            class="name read"
+            aria-expanded={featureOpen === feature.row}
+            aria-controls={`feature-rule-${feature.row}`}
+            aria-label={fill(t.actionRuleOf, { name: feature.name })}
+            onclick={() => (featureOpen = featureOpen === feature.row ? null : feature.row)}
+            >{feature.name}{' '}<small>{usesLine(feature)}</small></button
+          >
+        {:else}
+          <span class="name">{feature.name}{' '}<small>{usesLine(feature)}</small></span>
+        {/if}
         {#if feature.max === null}
           <span class="muted">{feature.maxText}</span>
         {:else if feature.pool}
@@ -248,6 +270,14 @@
           />
         {/if}
       </div>
+      {#if rule && featureOpen === feature.row}
+        <div class="rule feature-rule" id={`feature-rule-${feature.row}`}>
+          <b
+            >{rule.title}{#if rule.source}{' '}<small>· {rule.source}</small>{/if}</b
+          >
+          {#each rule.lines as line, i (i)}<p>{line}</p>{/each}
+        </div>
+      {/if}
     {/each}
   </section>
 {/if}
@@ -473,6 +503,42 @@
   .uses small {
     display: block;
     font-size: 0.8125rem;
+  }
+
+  /* A name that opens its text: still a plain row, only a ▸ says it opens (no tile, Remph 2026-11-07). */
+  button.name.read {
+    min-height: 44px;
+    padding: 0.25rem 0;
+    border: 0;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    font-weight: 700;
+    text-align: left;
+  }
+
+  button.name.read::before {
+    content: '▸ ';
+    color: var(--ink-muted);
+  }
+
+  button.name.read[aria-expanded='true']::before {
+    content: '▾ ';
+  }
+
+  button.name.read small {
+    padding-left: 0.875rem;
+    color: var(--ink-muted);
+    font-weight: 400;
+  }
+
+  button.name.read:not(:disabled):hover {
+    background: none;
+    color: var(--accent);
+  }
+
+  .feature-rule {
+    margin: 0 0 0.375rem;
   }
 
   /*

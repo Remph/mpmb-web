@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { openSheet, referenceSheet } from '../../test/characters.ts';
 import { withValues } from '../../test/fields.ts';
 import { viewsOf } from '../worker/views.ts';
-import { actionItem, featureNames, readActionList, ruleFor, ruleIndex } from './actions.ts';
+import { actionItem, featureNames, featureRule, readActionList, ruleFor, ruleIndex } from './actions.ts';
 
 const paladin = viewsOf(openSheet(referenceSheet('paladin8-warlock2')).doc);
 
@@ -156,5 +156,51 @@ describe('rule text for an action', () => {
 
   it('has nothing for an action without rule text', () => {
     expect(ruleFor(index, actionItem('Quiet Step'))).toBeNull();
+  });
+});
+
+describe('rule text for a limited feature', () => {
+  const index = ruleIndex(paladin);
+
+  it('finds it by name, without the note MPMB adds', () => {
+    expect(featureRule(index, { name: 'Lay on Hands', from: [] })?.title).toBe('Lay on Hands');
+    expect(featureRule(index, { name: 'Channel Divinity (regain 1/SR)', from: [] })?.title).toBe('Channel Divinity');
+  });
+
+  it('finds it by where it came from when the name differs', () => {
+    expect(featureRule(index, { name: 'Holy Glow', from: ['Paladin: Lay on Hands'] })?.title).toBe('Lay on Hands');
+    expect(featureRule(index, { name: 'Holy Glow', from: [] })).toBeNull();
+  });
+});
+
+describe('rule text for a named part of a feature', () => {
+  // MPMB writes the parts of a feature as "***Name***. Text" inside the feature's text.
+  const notes = [
+    '#◆ Garden Gnome# (Test 1)',
+    'A painted clay gnome.',
+    '***Tend the Beds***. During a Long Rest, the gnome waters the plants around me.',
+    'They grow a little faster.',
+    '   ***Shout (1/LR or charge)***. As a Bonus Action, the gnome shouts a warning.',
+    '#◆ Other Thing# (Test 2)',
+    'Something else.',
+  ].join('\r');
+  const index = ruleIndex(withValues(paladin, { 'Extra.Notes': notes }));
+
+  it("finds the part with its own text and the feature's source", () => {
+    expect(featureRule(index, { name: 'Tend the Beds', from: [] })).toEqual({
+      title: 'Tend the Beds',
+      source: 'Test 1',
+      lines: ['During a Long Rest, the gnome waters the plants around me.', 'They grow a little faster.'],
+    });
+  });
+
+  it('finds a part by its name without the note on its uses', () => {
+    expect(featureRule(index, { name: 'Shout', from: [] })?.lines).toEqual([
+      'As a Bonus Action, the gnome shouts a warning.',
+    ]);
+  });
+
+  it("keeps the parts in the whole feature's text", () => {
+    expect(featureRule(index, { name: 'Garden Gnome', from: [] })?.lines).toHaveLength(4);
   });
 });
