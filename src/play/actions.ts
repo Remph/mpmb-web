@@ -125,7 +125,7 @@ const key = (name: string): string => name.replace(/^◆\s*/, '').trim().toLower
 
 /**
  * A part of a feature with its own name, as MPMB writes it inside the feature's text: "***Psychic Whispers
- * (1/LR or PsiD)***. As a Magic action, …" or an add-on item's "***Echo Arsenal***. As part of a Short Rest, …".
+ * (1/LR or PsiD)***. As a Magic action, …" or a magic item's "***Regaining Charges***. …".
  * A limited feature or an action is often named after such a part, not after the whole feature.
  */
 function subFeature(line: string): { name: string; rest: string } | null {
