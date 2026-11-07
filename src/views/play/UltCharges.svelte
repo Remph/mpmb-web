@@ -4,12 +4,14 @@
   one tapped every turn; − undoes a mistap. A full meter turns + into "Use ult", which empties it (Remph
   picked this over a plain − / +, 2026-11-04). Tapping the number types it, for jumps or fixes.
   Not a sheet field: the charges are saved with the character's list entry and never go into a PDF.
+  Its window also says where the ult shows on the Combat tab's Actions card (as an action, bonus action or
+  reaction tile, or not at all) and holds its description, folded (Remph picked this, 2026-11-07).
 -->
 <script lang="ts">
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
-  import { withCharges, withMax } from '../../homebrew/ult.ts';
-  import type { UltCharges } from '../../homebrew/ult.ts';
+  import { MAX_TEXT, ULT_KINDS, withCharges, withMax } from '../../homebrew/ult.ts';
+  import type { UltCharges, UltKind } from '../../homebrew/ult.ts';
   import Modal from '../../popups/Modal.svelte';
   import NumberPad from './NumberPad.svelte';
 
@@ -46,17 +48,24 @@
   let editing = $state(false);
   let name = $state('');
   let max = $state('');
+  let kind: UltKind = $state('none');
+  let text = $state('');
+  /** The description's first line, for the folded box: the player sees what is there without opening it. */
+  const preview = $derived(text.trim().split(/\r?\n/)[0] ?? '');
 
   function edit() {
     name = ult.name;
     max = String(ult.max);
+    kind = ult.kind;
+    text = ult.text;
     editing = true;
   }
 
   function save() {
     editing = false;
     const n = Number(max);
-    onchange(withMax({ ...ult, name: name.trim().slice(0, 60) }, Number.isFinite(n) && n > 0 ? n : ult.max));
+    const next = { ...ult, name: name.trim().slice(0, 60), kind, text: text.trim().slice(0, MAX_TEXT) };
+    onchange(withMax(next, Number.isFinite(n) && n > 0 ? n : ult.max));
   }
 </script>
 
@@ -135,7 +144,21 @@
         >{t.ultMax}
         <input type="number" inputmode="numeric" min="1" max="99" required bind:value={max} /></label
       >
-      <p class="hint">{t.ultEditHint}</p>
+      <fieldset>
+        <legend>{t.ultShowAs}</legend>
+        <div class="kinds">
+          {#each ULT_KINDS as k (k)}
+            <button type="button" aria-pressed={kind === k} onclick={() => (kind = k)}>{t[`ultKind${k}`]}</button>
+          {/each}
+        </div>
+      </fieldset>
+      <!-- Folded: most edits change the name or the charges, and a long rule would push those out of sight. -->
+      <details class="text">
+        <summary><span class="label">{t.ultText}</span><span class="preview">{preview || t.ultTextEmpty}</span></summary
+        >
+        <textarea aria-label={t.ultText} rows="8" maxlength={MAX_TEXT} bind:value={text}></textarea>
+      </details>
+      <p class="hint">{t.ultTextHint} {t.ultEditHint}</p>
     </form>
     {#snippet actions()}
       <button type="button" onclick={() => (editing = false)}>{t.cancel}</button>
@@ -265,8 +288,10 @@
     font-weight: 700;
   }
 
+  /* minmax(0, …): the folded description's one-line preview must not widen the window on a phone. */
   form {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.75rem;
   }
 
@@ -274,6 +299,100 @@
     display: grid;
     gap: 0.25rem;
     font-weight: 600;
+  }
+
+  fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  legend {
+    padding: 0;
+    margin-bottom: 0.25rem;
+    font-weight: 600;
+  }
+
+  /* Four even buttons, two by two (four across would squeeze "Bonusaktion"); the picked one filled. */
+  .kinds {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.25rem;
+  }
+
+  .kinds button {
+    padding: 0 0.5rem;
+    font-weight: 600;
+  }
+
+  .kinds button[aria-pressed='true'] {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+
+  .text {
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+  }
+
+  summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0 0.75rem;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  summary::before {
+    content: '▸';
+    color: var(--accent);
+  }
+
+  .text[open] summary::before {
+    content: '▾';
+  }
+
+  .label {
+    flex: none;
+    font-weight: 600;
+  }
+
+  /* One line of what is there; open, the box shows it all. */
+  .preview {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--ink-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .text[open] .preview {
+    display: none;
+  }
+
+  .text textarea {
+    display: block;
+    width: calc(100% - 1.5rem);
+    margin: 0 0.75rem 0.75rem;
+  }
+
+  textarea {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-weight: 400;
+    line-height: 1.4;
+    resize: vertical;
   }
 
   input {

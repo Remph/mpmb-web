@@ -349,7 +349,7 @@ describe('changes on the open character (tech review 2026-11-04)', () => {
     await openNew(session);
     const before = session.current?.meta.updated ?? '';
     await new Promise((resolve) => setTimeout(resolve, 5));
-    await session.setUlt({ name: 'Ult', charges: 2, max: 5 });
+    await session.setUlt({ name: 'Ult', charges: 2, max: 5, kind: 'none', text: '' });
     expect((session.current?.meta.updated ?? '') > before).toBe(true);
     expect(session.characters[0]?.updated).toBe(session.current?.meta.updated);
   });

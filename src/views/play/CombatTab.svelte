@@ -23,6 +23,8 @@
   import { slotClicks, usedText } from '../../play/rules.ts';
   import type { FieldViews } from '../../worker/views.ts';
   import { homebrew } from '../../homebrew/switches.svelte.ts';
+  import { ultLines } from '../../homebrew/ult.ts';
+  import type { UltCharges } from '../../homebrew/ult.ts';
   import AmmoPanel from './AmmoPanel.svelte';
   import Dots from './Dots.svelte';
   import EdgePopUp from './EdgePopUp.svelte';
@@ -35,10 +37,12 @@
     characterId: string;
     disabled: boolean;
     change: (steps: Step[]) => void;
+    /** The ult (homebrew), or null while its switch is off: a tile among the actions if the player put it there. */
+    ult?: UltCharges | null;
     t: Texts;
   }
 
-  let { fields, characterId, disabled, change, t }: Props = $props();
+  let { fields, characterId, disabled, change, ult = null, t }: Props = $props();
 
   const attacks = $derived(readAttacks(fields));
   const perAction = $derived(attacksPerAction(fields));
@@ -84,9 +88,25 @@
   interface ActionGroup {
     kind: 'action' | 'bonus' | 'reaction';
     label: string;
-    items: { item: ActionItem; rule: ActionRule | null }[];
+    items: { item: ActionItem; rule: ActionRule | null; ult?: boolean }[];
     basic: string[];
   }
+  /** The ult's tile, first in its row: the one action the player waits a whole fight for. */
+  const ultTile = $derived.by(() => {
+    if (!ult || ult.kind === 'none') return null;
+    const lines = ultLines(ult);
+    const name = ult.name || t.ultEditTitle;
+    const full = ult.charges >= ult.max;
+    return {
+      kind: ult.kind,
+      full,
+      entry: {
+        item: { name, note: full ? t.ultReady : `${ult.charges}/${ult.max}`, from: [] },
+        rule: lines.length ? { title: name, source: t.homebrewSource, lines } : null,
+        ult: true,
+      },
+    };
+  });
   const groups = $derived(
     (
       [
@@ -98,7 +118,10 @@
       .map(([kind, label, items, basic]): ActionGroup => ({
         kind,
         label,
-        items: items.map((item) => ({ item, rule: ruleFor(rules, item) })),
+        items: [
+          ...(ultTile?.kind === kind ? [ultTile.entry] : []),
+          ...items.map((item) => ({ item, rule: ruleFor(rules, item) })),
+        ],
         basic: [...basic],
       }))
       .filter((group) => group.items.length || group.basic.length),
@@ -250,19 +273,24 @@
       <div class="group {group.kind}">
         <span class="kind">{group.label}</span>
         <div class="chips">
-          {#each group.items as { item, rule: itemRule }, i (i)}
+          {#each group.items as { item, rule: itemRule, ult: isUlt }, i (i)}
             {#if itemRule}
               <button
                 type="button"
                 class="chip"
+                class:ult={isUlt}
+                class:ready={isUlt && ultTile?.full}
                 aria-expanded={ruleOpen === ruleKey(group, i)}
                 aria-controls={`rule-${group.kind}`}
-                aria-label={fill(t.actionRuleOf, { name: item.note ? `${item.name} (${item.note})` : item.name })}
+                aria-label={fill(t.actionRuleOf, {
+                  // The ult's note is its charges, which its own card reads out; the name is what it is.
+                  name: item.note && !isUlt ? `${item.name} (${item.note})` : item.name,
+                })}
                 onclick={() => (ruleOpen = ruleOpen === ruleKey(group, i) ? null : ruleKey(group, i))}
                 >{item.name}{#if item.note}<small>{item.note}</small>{/if}</button
               >
             {:else}
-              <span class="chip"
+              <span class="chip" class:ult={isUlt} class:ready={isUlt && ultTile?.full}
                 >{item.name}{#if item.note}<small>{item.note}</small>{/if}</span
               >
             {/if}
@@ -549,6 +577,28 @@
 
   button.chip:not(.more)[aria-expanded='true'] small {
     color: var(--surface);
+  }
+
+  /*
+   * The ult: a ring in the kind's colour sets it apart from the sheet's actions, and its charges ride along
+   * as the note. Full, the ring turns the app's accent and the note a "Ready" pill, as on the ult card, so
+   * it shows from across the table. A shadow, not a wider border: the tile keeps its size.
+   */
+  .chip.ult {
+    border-color: var(--k);
+  }
+
+  .chip.ult.ready:not([aria-expanded='true']) {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+
+  .chip.ult.ready:not([aria-expanded='true']) small {
+    padding: 0 0.375rem;
+    border-radius: 1rem;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 700;
   }
 
   /* What every creature can do: quieter than the character's own. */

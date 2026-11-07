@@ -59,7 +59,9 @@ describe('describeCharacter', () => {
   });
 
   test('keeps the homebrew values (ult charges) across saves, as a copy', () => {
-    const homebrew = { ult: { name: 'Oathbound Judgement', max: 30, charges: 18 } };
+    const homebrew = {
+      ult: { name: 'Oathbound Judgement', max: 30, charges: 18, kind: 'bonus' as const, text: 'Rule.' },
+    };
     const meta = describeCharacter(sheetOf({}), NO_ADD_ONS, { id: 'a', created: '2026-01-01T00:00:00.000Z', homebrew });
     expect(meta.homebrew).toEqual(homebrew);
     expect(meta.homebrew?.ult).not.toBe(homebrew.ult);
