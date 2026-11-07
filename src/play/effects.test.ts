@@ -134,4 +134,10 @@ describe('readEffects', () => {
     expect(effects[1]?.name).toHaveLength(40);
     expect(readEffects(undefined)).toEqual([]);
   });
+
+  it('gives a repeated id a new one, so each switch keeps its own key', () => {
+    const ids = readEffects([{ id: 'a' }, { id: 'a' }, { id: 'a-1' }, {}]).map((e) => e.id);
+    expect(new Set(ids).size).toBe(4);
+    expect(ids[0]).toBe('a');
+  });
 });
