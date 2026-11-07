@@ -473,7 +473,15 @@
           </div>
           <div id="tab-panel" role="tabpanel" aria-labelledby={`tab-${shownTab}`}>
             {#if shownTab === 'combat'}
-              <CombatTab {fields} characterId={open.meta.id} {disabled} {change} {ult} {t} />
+              <CombatTab
+                {fields}
+                characterId={open.meta.id}
+                {disabled}
+                {change}
+                {ult}
+                onsetup={(row, set) => void session.setAttackSetup(row, set)}
+                {t}
+              />
             {:else if shownTab === 'spells'}
               <SpellsTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
             {:else if shownTab === 'checks'}

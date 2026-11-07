@@ -30,6 +30,8 @@
   import { shown, valueOf } from '../../play/read.ts';
   import type { Step } from '../../session.svelte.ts';
   import type { FieldViews } from '../../worker/views.ts';
+  import type { AttackSetup as AttackSetupValues } from '../../play/attack-setup.ts';
+  import AttackSetup from '../play/AttackSetup.svelte';
   import GearPick from './GearPick.svelte';
 
   interface Props {
@@ -37,10 +39,12 @@
     fields: FieldViews;
     disabled: boolean;
     change: (steps: Step[]) => void;
+    /** An attack row's proficiency or ability (the chip's window); the session remembers it. */
+    onsetup: (row: number, set: Partial<AttackSetupValues>) => void;
     t: Texts;
   }
 
-  let { info, fields, disabled, change, t }: Props = $props();
+  let { info, fields, disabled, change, onsetup, t }: Props = $props();
 
   /** The open list: armour, or the attack row a weapon goes into. */
   let picking = $state<{ kind: 'armour' } | { kind: 'weapon'; row: number } | null>(null);
@@ -214,7 +218,11 @@
       <li class="weapon" class:empty={!attack.name}>
         <span class="n" aria-hidden="true">{row}</span>
         {#if attack.name}
-          <span class="name"><b>{attack.name}</b><small>{attack.line}</small></span>
+          <span class="name"
+            ><b>{attack.name}</b><small>{attack.line}</small><span class="setup"
+              ><AttackSetup {row} name={attack.name} {fields} {disabled} onset={onsetup} {change} {t} /></span
+            ></span
+          >
           <span class="nums">
             {#if attack.toHit}<span class="hit" title={t.gearToHit}>{attack.toHit}</span>{/if}
             {#if attack.damage}<span class="dmg" title={t.gearDamage}
@@ -453,6 +461,10 @@
     display: grid;
     min-width: 0;
     line-height: 1.25;
+  }
+
+  .setup {
+    padding: 0.375rem 0 0.25rem;
   }
 
   .name small {

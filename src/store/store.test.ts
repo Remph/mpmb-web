@@ -81,9 +81,11 @@ describe('describeCharacter', () => {
       weaponAbility: '' as const,
       applied,
     };
-    const homebrew = { effects: [effect], acEdge: 'dis' as const };
+    const choice = { row: 2, weapon: 'Dagger', proficient: true, ability: 'Int' as const };
+    const homebrew = { effects: [effect], acEdge: 'dis' as const, attackChoices: [choice] };
     const meta = describeCharacter(sheetOf({}), NO_ADD_ONS, { id: 'a', created: '2026-01-01T00:00:00.000Z', homebrew });
     expect(meta.homebrew).toEqual(homebrew);
+    expect(meta.homebrew?.attackChoices?.[0]).not.toBe(choice);
     expect(meta.homebrew?.effects?.[0]).not.toBe(effect);
     expect(meta.homebrew?.effects?.[0]?.applied?.ac).not.toBe(applied.ac);
   });

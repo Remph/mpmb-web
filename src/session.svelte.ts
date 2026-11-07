@@ -17,6 +17,8 @@ import { FF } from './engine/types.ts';
 import type { ImageSlot, SheetImage, SheetImages } from './engine/types.ts';
 import { fitImages, fitPicture } from './play/pictures.ts';
 import { followMaxHp } from './play/rules.ts';
+import { keepChoices, readChoices, setupSteps, withChoice } from './play/attack-setup.ts';
+import type { AttackSetup } from './play/attack-setup.ts';
 import type { Texts } from './i18n.ts';
 import { counted, fill } from './i18n.ts';
 import { PopUpStack } from './popups/popups.svelte.ts';
@@ -593,6 +595,19 @@ export class Session {
     return this.setHomebrew({ acEdge: edge || undefined });
   }
 
+  /**
+   * Sets an attack row's proficiency or ability, as the PDF's two boxes in front of the row do, and
+   * remembers it: MPMB sets the boxes again when it recalculates the weapons (src/play/attack-setup.ts).
+   */
+  async setAttackSetup(row: number, set: Partial<AttackSetup>): Promise<void> {
+    const open = this.current;
+    if (!open || readOnly(open.status)) return;
+    const steps = setupSteps(open.fields, row, set);
+    const choices = withChoice(open.fields, readChoices(open.meta.homebrew?.attackChoices), row, set);
+    await this.setHomebrew({ attackChoices: choices });
+    await this.change(steps);
+  }
+
   private async setHomebrew(values: CharacterHomebrew): Promise<void> {
     const open = this.current;
     if (!open || !this.store || !this.tabLock.holds(open.meta.id)) return;
@@ -736,7 +751,12 @@ export class Session {
    * Only the last piece of work in line saves, for all of them (finding 4a). `onFail` tidies up after
    * a failure, before the error note.
    */
-  private queue(open: OpenCharacter, job: () => Promise<void>, onFail?: () => void): Promise<void> {
+  private queue(
+    open: OpenCharacter,
+    job: () => Promise<void>,
+    onFail?: () => void,
+    own: Set<string> = new Set(),
+  ): Promise<void> {
     this.queued++;
     const before = this.running;
     const run = async (): Promise<void> => {
@@ -745,7 +765,7 @@ export class Session {
         try {
           if (this.current !== open || readOnly(open.status)) return;
           open.status = 'working';
-          await this.followingMaxHp(job);
+          await this.followingMaxHp(job, own);
           open.fields = this.shownFields();
         } finally {
           this.queued--;
@@ -906,12 +926,19 @@ export class Session {
    * Runs a change on the open sheet; when it changed the maximum hit points (a level, Constitution, a feat),
    * MPMB's "current maximum" box moves along (see followMaxHp). Here rather than in the level-up buttons:
    * MPMB raises the maximum from many places, and every one of them would leave the box behind.
+   * Attack rows' boxes the player set by hand come back the same way when MPMB set them again (a new
+   * level recalculates the weapons); `own` names the fields the change wrote itself, which stay.
    */
-  private async followingMaxHp(job: () => Promise<unknown>): Promise<void> {
+  private async followingMaxHp(job: () => Promise<unknown>, own: Set<string> = new Set()): Promise<void> {
     const before = { ...this.client.fields };
     await job();
     for (const [name, text] of Object.entries(followMaxHp(before, this.client.fields)))
       await this.client.edit(name, text);
+    const choices = readChoices(this.current?.meta.homebrew?.attackChoices);
+    for (const step of keepChoices(before, this.client.fields, choices, own)) {
+      if ('edit' in step) await this.client.edit(step.edit, step.text);
+      else await this.client.click(step.click);
+    }
   }
 
   /**
@@ -939,7 +966,8 @@ export class Session {
         if (wait.change === id) this.waiting.delete(name);
       });
     };
-    return this.queue(open, make, () => this.waiting.clear());
+    const own = new Set(steps.map((step) => ('edit' in step ? step.edit : step.click)));
+    return this.queue(open, make, () => this.waiting.clear(), own);
   }
 
   /**
