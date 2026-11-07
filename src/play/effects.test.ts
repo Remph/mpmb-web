@@ -100,6 +100,11 @@ describe('switching an effect on and off', () => {
     expect(switchOn(fields, effect({ weaponAbility: 'Int' })).steps).toEqual([]);
   });
 
+  it('keeps a weapon the character is not proficient with', () => {
+    const fields = withValues(viewsOf(wizard().doc), { 'Attack.1.Proficiency': 'Off' });
+    expect(weaponRows(fields, 'Int')).toEqual([]);
+  });
+
   it('changes nothing for an effect without values', () => {
     const fields = viewsOf(wizard().doc);
     expect(switchOn(fields, effect({}))).toEqual({ steps: [], applied: { attacks: [] } });

@@ -457,7 +457,7 @@ export const ui = {
     effectIsOn: 'Ist an. Schalte es aus, um es zu ändern.',
     addEffectLong: 'Effekt hinzufügen',
     effectsHint:
-      'Ausgeschaltet kommen die alten Werte zurück, außer du hast sie inzwischen selbst geändert. Ein höherer eigener Modifikator einer Waffe bleibt.',
+      'Ausgeschaltet kommen die alten Werte zurück, außer du hast sie inzwischen selbst geändert. Waffen ohne Übung und Waffen mit höherem eigenem Modifikator bleiben, wie sie sind.',
     attackRolls: 'Angriffswürfe',
     attackRollsOf: 'Angriffswurf {name}',
     attackRollsNote: 'Gilt für jeden Angriffswurf, wie das Kästchen im PDF.',
@@ -1556,7 +1556,7 @@ export const ui = {
     effectIsOn: 'It’s on. Switch it off to change it.',
     addEffectLong: 'Add effect',
     effectsHint:
-      'Switched off, the old values come back, unless you changed them yourself in the meantime. A weapon whose own modifier is higher keeps it.',
+      'Switched off, the old values come back, unless you changed them yourself in the meantime. Weapons you aren’t proficient with, or whose own modifier is higher, stay as they are.',
     attackRolls: 'Attack rolls',
     attackRollsOf: '{name} attack roll',
     attackRollsNote: 'Counts for every attack roll, like the PDF’s box.',

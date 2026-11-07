@@ -7,7 +7,7 @@
 // sheet values, so a printed or filled PDF shows them while they are on.
 import type { Step } from '../session.svelte.ts';
 import type { FieldViews } from '../worker/views.ts';
-import { ABILITIES, numberOf, readAttacks, valueOf } from './read.ts';
+import { ABILITIES, isOn, numberOf, readAttacks, valueOf } from './read.ts';
 
 export type EffectAbility = (typeof ABILITIES)[number];
 
@@ -122,7 +122,10 @@ export function readEffects(value: unknown): Effect[] {
 /** The modifier of an ability as the sheet has it (0 when the field is empty). */
 const modifier = (fields: FieldViews, ability: string): number => numberOf(fields, `${ability} Mod`) ?? 0;
 
-/** The attacks the switch would change: weapon rows on Str or Dex whose modifier is not higher. */
+/**
+ * The attacks the switch would change: weapon rows on Str or Dex that the character is proficient with and
+ * whose own modifier is not higher.
+ */
 export function weaponRows(fields: FieldViews, ability: EffectAbility | ''): { row: number; name: string }[] {
   if (!ability) return [];
   return readAttacks(fields).flatMap(({ row, name }) => {
@@ -130,6 +133,9 @@ export function weaponRows(fields: FieldViews, ability: EffectAbility | ''): { r
     // "Use Int instead of Str or Dex" is a choice the player makes when it helps: a weapon whose own
     // ability is higher keeps it.
     if (!WEAPON_MODS.has(mod) || modifier(fields, mod.replace(' Mod', '')) > modifier(fields, ability)) return [];
+    // Features like this work with weapons the character is trained with (MPMB's own scripts for them test
+    // the row's proficiency box too); a weapon without proficiency keeps its ability.
+    if (!isOn(fields, `Attack.${row}.Proficiency`)) return [];
     return [{ row, name }];
   });
 }
