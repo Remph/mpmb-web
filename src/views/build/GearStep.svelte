@@ -220,7 +220,7 @@
         {#if attack.name}
           <span class="name"
             ><b>{attack.name}</b><small>{attack.line}</small><span class="setup"
-              ><AttackSetup {row} name={attack.name} {fields} {disabled} onset={onsetup} {t} /></span
+              ><AttackSetup {row} name={attack.name} {fields} {disabled} onset={onsetup} {change} {t} /></span
             ></span
           >
           <span class="nums">

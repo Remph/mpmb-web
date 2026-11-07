@@ -113,3 +113,52 @@ export function readChoices(value: unknown): SetupChoice[] {
     return [choice];
   });
 }
+
+// The PDF's blue "Attack Mods" boxes under each row (they don't print): extra to hit (or DC) and damage on
+// top of what MPMB works out, a number or an ability like "Int" ("Cha+1" too). MPMB adds the damage bonus at
+// the end of the damage text, so "1d8/1d8" with "Int" becomes "1d8/1d8+5". A weapon's recalculation keeps
+// them; another weapon in the row gets its own.
+export const hitBonusField = (row: number): string => `BlueText.Attack.${row}.To Hit Bonus`;
+export const damageBonusField = (row: number): string => `BlueText.Attack.${row}.Damage Bonus`;
+
+/** "dc" in the to-hit box is MPMB's mark for a row the target saves against: it stays, the player never sees it. */
+const DC_MARK = 'dc';
+/** A plain zero is MPMB's value for "no bonus"; the window shows it empty. */
+const shownBonus = (value: string): string => (value === '0' ? '' : value);
+
+export interface AttackBonuses {
+  /** What the player sees and types: "1", "Int", "" (the "dc" mark taken out). */
+  hit: string;
+  damage: string;
+  /** A saving throw row: the to-hit bonus raises the DC. */
+  dc: boolean;
+}
+
+export function readBonuses(fields: FieldViews, row: number): AttackBonuses {
+  const hit = valueOf(fields, hitBonusField(row));
+  const dc = hit.toLowerCase().startsWith(DC_MARK);
+  const rest = dc ? hit.slice(DC_MARK.length).trim() : hit;
+  return {
+    hit: shownBonus(rest.startsWith('+') ? rest.slice(1) : rest),
+    damage: shownBonus(valueOf(fields, damageBonusField(row))),
+    dc,
+  };
+}
+
+/** The to-hit box's value for what the player typed, with the DC mark kept on a saving throw row. */
+function hitText(typed: string, dc: boolean): string {
+  if (!dc) return typed;
+  if (!typed) return DC_MARK;
+  return typed.startsWith('+') || typed.startsWith('-') ? `${DC_MARK}${typed}` : `${DC_MARK}+${typed}`;
+}
+
+/** The steps that write the boxes; nothing for a box that already holds the typed bonus. */
+export function bonusSteps(fields: FieldViews, row: number, typed: Partial<Omit<AttackBonuses, 'dc'>>): Step[] {
+  const now = readBonuses(fields, row);
+  const steps: Step[] = [];
+  const hit = typed.hit?.trim();
+  const damage = typed.damage?.trim();
+  if (hit !== undefined && hit !== now.hit) steps.push({ edit: hitBonusField(row), text: hitText(hit, now.dc) });
+  if (damage !== undefined && damage !== now.damage) steps.push({ edit: damageBonusField(row), text: damage });
+  return steps;
+}

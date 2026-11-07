@@ -7,9 +7,10 @@
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import Modal from '../../popups/Modal.svelte';
-  import { readSetup } from '../../play/attack-setup.ts';
+  import { bonusSteps, readBonuses, readSetup } from '../../play/attack-setup.ts';
   import type { AttackAbility, AttackSetup } from '../../play/attack-setup.ts';
   import { ABILITIES, shown } from '../../play/read.ts';
+  import type { Step } from '../../session.svelte.ts';
   import type { FieldViews } from '../../worker/views.ts';
 
   interface Props {
@@ -18,12 +19,15 @@
     fields: FieldViews;
     disabled: boolean;
     onset: (row: number, set: Partial<AttackSetup>) => void;
+    /** For the blue bonus boxes: MPMB keeps them itself, so they are plain field changes. */
+    change: (steps: Step[]) => void;
     t: Texts;
   }
 
-  let { row, name, fields, disabled, onset, t }: Props = $props();
+  let { row, name, fields, disabled, onset, change, t }: Props = $props();
 
   const setup = $derived(readSetup(fields, row));
+  const bonuses = $derived(readBonuses(fields, row));
   const CHOICES: (AttackAbility | '')[] = ['', ...ABILITIES];
   /** MPMB's numbers for the row: "+8 · 2d8+5", "DC 16 · 2d6". */
   const numbers = $derived(
@@ -96,6 +100,32 @@
         {/each}
       </div>
     </div>
+    <div class="part">
+      <span class="label">{t.attackSetupBonuses}</span>
+      <div class="bonuses">
+        <label
+          >{bonuses.dc ? t.attackSetupDcBonus : t.attackSetupHitBonus}<input
+            type="text"
+            maxlength="20"
+            placeholder="0"
+            value={bonuses.hit}
+            {disabled}
+            onchange={(e) => change(bonusSteps(fields, row, { hit: e.currentTarget.value }))}
+          /></label
+        >
+        <label
+          >{t.attackSetupDamageBonus}<input
+            type="text"
+            maxlength="20"
+            placeholder="0"
+            value={bonuses.damage}
+            {disabled}
+            onchange={(e) => change(bonusSteps(fields, row, { damage: e.currentTarget.value }))}
+          /></label
+        >
+      </div>
+      <p class="note">{t.attackSetupBonusHint}</p>
+    </div>
     {#if numbers || before}
       <!-- Live: MPMB's numbers after each tap, with the ones from before when they changed. -->
       <p class="numbers" aria-live="polite">
@@ -160,6 +190,39 @@
     background: var(--accent-soft);
     color: var(--accent);
     font-weight: 700;
+  }
+
+  .bonuses {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .bonuses label {
+    display: grid;
+    flex: 1 1 8rem;
+    gap: 0.25rem;
+    min-width: 0;
+    color: var(--ink-muted);
+    font-size: 0.875rem;
+  }
+
+  input {
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-weight: 700;
+  }
+
+  .note {
+    margin: 0;
+    color: var(--ink-muted);
+    font-size: 0.875rem;
   }
 
   .numbers {

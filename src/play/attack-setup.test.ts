@@ -8,7 +8,15 @@ import { withValues } from '../../test/fields.ts';
 import type { Engine } from '../engine/engine.ts';
 import type { Step } from '../session.svelte.ts';
 import { viewsOf } from '../worker/views.ts';
-import { keepChoices, readChoices, readSetup, setupSteps, withChoice } from './attack-setup.ts';
+import {
+  bonusSteps,
+  keepChoices,
+  readBonuses,
+  readChoices,
+  readSetup,
+  setupSteps,
+  withChoice,
+} from './attack-setup.ts';
 
 const wizard = (): Engine => openSheet(referenceSheet('wizard10-evoker'));
 /** The steps as the worker makes them. */
@@ -113,5 +121,36 @@ describe('the choices the app remembers', () => {
       { row: 2, weapon: 'Sling' },
     ]);
     expect(readChoices(undefined)).toEqual([]);
+  });
+});
+
+describe("the PDF's blue bonus boxes", () => {
+  it('adds a number or an ability to the to hit and the damage, and MPMB works them out', () => {
+    const engine = wizard();
+    const start = viewsOf(engine.doc);
+    // The staff's +2 sits in both boxes on this sheet.
+    expect(readBonuses(start, 1)).toEqual({ hit: '2', damage: '2', dc: false });
+    run(engine, bonusSteps(start, 1, { hit: 'Int+2', damage: 'Int' }));
+    const after = viewsOf(engine.doc);
+    // To hit: Str -1, proficiency +4, Int +3 and 2. Damage: Str -1 and Int +3.
+    expect(after['Attack.1.To Hit']?.value).toBe('+8');
+    expect(after['Attack.1.Damage']?.value).toBe('1d6+2');
+    expect(readBonuses(after, 1)).toMatchObject({ hit: 'Int+2', damage: 'Int' });
+    expect(bonusSteps(after, 1, { hit: 'Int+2', damage: ' Int ' })).toEqual([]);
+  });
+
+  it("keeps MPMB's DC mark on a row the target saves against", () => {
+    const engine = wizard();
+    engine.edit('Attack.2.Weapon Selection', 'Sacred Flame');
+    const before = viewsOf(engine.doc);
+    const dc = before['Attack.2.To Hit']?.value ?? '';
+    expect(dc).toMatch(/^DC \d+$/);
+    expect(readBonuses(before, 2)).toEqual({ hit: '', damage: '', dc: true });
+    run(engine, bonusSteps(before, 2, { hit: '1' }));
+    const after = viewsOf(engine.doc);
+    expect(after['Attack.2.To Hit']?.value).toBe(`DC ${Number(dc.slice(3)) + 1}`);
+    expect(readBonuses(after, 2)).toEqual({ hit: '1', damage: '', dc: true });
+    run(engine, bonusSteps(after, 2, { hit: '' }));
+    expect(viewsOf(engine.doc)['Attack.2.To Hit']?.value).toBe(dc);
   });
 });

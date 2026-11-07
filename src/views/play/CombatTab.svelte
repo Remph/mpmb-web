@@ -159,7 +159,7 @@
     <div class="attack">
       <span class="title"
         ><span class="name">{attack.name}</span>
-        <AttackSetup row={attack.row} name={attack.name} {fields} {disabled} onset={onsetup} {t} /></span
+        <AttackSetup row={attack.row} name={attack.name} {fields} {disabled} onset={onsetup} {change} {t} /></span
       >
       <span class="hit">
         {#if isAttackRoll(attack.toHit)}
