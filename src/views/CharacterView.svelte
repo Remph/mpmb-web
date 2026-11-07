@@ -40,6 +40,7 @@
   } from '../play/companions.ts';
   import { homebrew } from '../homebrew/switches.svelte.ts';
   import { readUlt } from '../homebrew/ult.ts';
+  import { readEffects } from '../play/effects.ts';
   import { valueOf } from '../play/read.ts';
   import { flushSync } from 'svelte';
   import PrintSheet from './print/PrintSheet.svelte';
@@ -144,6 +145,8 @@
   const change = (steps: Step[]) => void session.change(steps);
   /** The ult charges card only while its homebrew switch is on; the values stay with the character either way. */
   const ult = $derived(homebrew.switches.ultCharges ? readUlt(open.meta.homebrew?.ult) : null);
+  const effects = $derived(readEffects(open.meta.homebrew?.effects));
+  const acEdge = $derived(open.meta.homebrew?.acEdge ?? '');
   /**
    * A new character before its class is chosen: MPMB's sheet has 0 hit points, death saves and empty scores,
    * which looked like a dying character. A card that leads to the Build screen takes the hit point box's
@@ -362,7 +365,18 @@
               <a href={buildHref}>{t.menuBuild}</a>
             </section>
           {:else}
-            <Vitals {fields} {disabled} {change} {ult} onult={(u) => void session.setUlt(u)} {t} />
+            <Vitals
+              {fields}
+              {disabled}
+              {change}
+              {ult}
+              onult={(u) => void session.setUlt(u)}
+              {effects}
+              oneffects={(list) => void session.setEffects(list)}
+              {acEdge}
+              onacedge={(edge) => void session.setAcEdge(edge)}
+              {t}
+            />
           {/if}
         </div>
 
