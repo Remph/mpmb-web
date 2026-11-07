@@ -3,7 +3,7 @@
 // Utilize", "Opportunity Attack"), and features sometimes land twice ("Rallying Cry" and "Rallying Cry
 // (Rallying Cry)"). The card shows the character's own actions as chips and folds the basic ones away.
 import type { FieldViews } from '../worker/views.ts';
-import type { FeatureText } from './read.ts';
+import type { FeatureText, TextRun } from './read.ts';
 import { readNotesPages } from './notes.ts';
 import { featureLine, linesOf, readFeatures, readInventory, rows, textRuns, valueOf } from './read.ts';
 
@@ -110,14 +110,37 @@ export interface ActionRule {
   title: string;
   /** Where it comes from, as MPMB writes it: "Paladin 1, SRD'24 53", or "Magic item". */
   source: string;
-  /** Plain lines, MPMB's bold and italic marks taken off. */
+  /**
+   * The lines with MPMB's bold and italic marks kept (a bold "8" in "4, 8 or 12"): the view draws them with `textRuns`,
+   * as the Features tab does (playtest 2026-11-07: the bold level was lost).
+   */
   lines: string[];
 }
 
-const plain = (line: string): string =>
-  textRuns(line)
-    .map((run) => run.text)
+/** Runs back in MPMB's marks, for a line that was taken apart to find a feature's name. */
+const marked = (runs: TextRun[]): string =>
+  runs
+    .map((run) => {
+      const mark = run.bold && run.italic ? '***' : run.bold ? '**' : run.italic ? '*' : '';
+      // A mark around spaces isn't one: "** x**" would show its stars. Keep the spaces outside.
+      const [, before = '', text = '', after = ''] = /^(\s*)(.*?)(\s*)$/s.exec(run.text) ?? [];
+      return mark && text ? `${before}${mark}${text}${mark}${after}` : run.text;
+    })
     .join('');
+
+/**
+ * A line that only sends the reader elsewhere: MPMB writes "(see third page)" after a class feature whose text
+ * it put on the third page (some subclass features from add-on scripts), so the text there is the rule. Try it:
+ * https://regex101.com/?regex=%5E%5B(%5B%5D%3F%5Cs*(%3F%3Asee%5Cs%2B)%3F(%3F%3Athe%5Cs%2B)%3F(%3F%3Athird%20page%7Cnotes(%3F%3A%20page)%3F)%5Cs*%5B)%5C%5D%5D%3F%5C.%3F%24&flags=i&testString=(see%20third%20page)
+ */
+const POINTER = /^[([]?\s*(?:see\s+)?(?:the\s+)?(?:third page|notes(?: page)?)\s*[)\]]?\.?$/i;
+const pointsElsewhere = (line: string): boolean =>
+  POINTER.test(
+    textRuns(line)
+      .map((run) => run.text)
+      .join('')
+      .trim(),
+  );
 // A species trait some add-on scripts write as "• Stone Hide: My base AC is …". Try it:
 // https://regex101.com/?regex=%5E%E2%80%A2%5Cs*(%5B%5E%3A%5D%2B)%3A%5Cs*(.*)%24&testString=%E2%80%A2%20Stone%20Hide%3A%20My%20base%20AC
 const BULLET = /^•\s*([^:]+):\s*(.*)$/;
@@ -133,14 +156,13 @@ function subFeature(line: string): { name: string; rest: string } | null {
   if (!first?.bold || !first.italic || !runs[0]?.text.startsWith('.')) return null;
   return {
     name: first.text.trim(),
-    rest: plain(
-      runs
-        .map((run) => run.text)
-        .join('')
-        .replace(/^\.\s*/, ''),
-    ).trim(),
+    rest: marked(runs)
+      .replace(/^\.\s*/, '')
+      .trim(),
   };
 }
+
+const trimmed = (line: string): string => line.trim();
 
 /** The Notes box on the third page, where MPMB writes a feature's text with `toNotesPage` and `page3notes`. */
 const NOTES_FIELD = 'Extra.Notes';
@@ -152,13 +174,16 @@ const NOTES_FIELD = 'Extra.Notes';
  * The text runs until the next name or heading.
  */
 export function ruleIndex(fields: FieldViews): Map<string, ActionRule> {
-  const index = new Map<string, ActionRule>();
+  // Every block found under a name, in order; the first with text of its own wins (see the end).
+  const found = new Map<string, ActionRule[]>();
   const add = (rule: ActionRule, name = rule.title): void => {
-    if (name && !index.has(key(name))) index.set(key(name), rule);
+    if (!name) return;
+    const list = found.get(key(name)) ?? [];
+    if (!list.includes(rule)) found.set(key(name), [...list, rule]);
   };
   const addBlock = (block: FeatureText): void => {
     if (block.title) {
-      add({ title: block.title, source: '', lines: linesOf(block.text).map(plain).filter(Boolean) });
+      add({ title: block.title, source: '', lines: linesOf(block.text).map(trimmed).filter(Boolean) });
       return;
     }
     let current: ActionRule | null = null;
@@ -169,7 +194,7 @@ export function ruleIndex(fields: FieldViews): Map<string, ActionRule> {
       const bullet = BULLET.exec(line.trim());
       const sub = subFeature(line);
       if (!('heading' in parsed) && sub) {
-        current?.lines.push(plain(line));
+        current?.lines.push(line.trim());
         part = { title: sub.name, source: current?.source ?? '', lines: sub.rest ? [sub.rest] : [] };
         add(part);
         // "Name (1/LR or charge)" is also found as "Name".
@@ -177,7 +202,7 @@ export function ruleIndex(fields: FieldViews): Map<string, ActionRule> {
         continue;
       }
       if (!('heading' in parsed) && !parsed.runs.some((run) => run.role === 'name') && !bullet && line.trim()) {
-        part?.lines.push(plain(line));
+        part?.lines.push(line.trim());
       } else {
         part = null;
       }
@@ -186,30 +211,38 @@ export function ruleIndex(fields: FieldViews): Map<string, ActionRule> {
       } else if (parsed.runs.some((run) => run.role === 'name')) {
         const name = parsed.runs.find((run) => run.role === 'name')?.text ?? '';
         const source = parsed.runs.find((run) => run.role === 'source')?.text.replace(/^\(|\)$/g, '') ?? '';
-        const rest = parsed.runs
-          .filter((run) => run.role === null)
-          .map((run) => run.text)
-          .join('')
+        const rest = marked(parsed.runs.filter((run) => run.role === null))
           .replace(/^\.\s*/, '')
           .trim();
         current = { title: name.replace(/^◆\s*/, ''), source, lines: rest ? [rest] : [] };
         add(current);
       } else if (bullet) {
-        current = { title: (bullet[1] ?? '').trim(), source: '', lines: [plain(bullet[2] ?? '')] };
+        current = { title: (bullet[1] ?? '').trim(), source: '', lines: [(bullet[2] ?? '').trim()] };
         add(current);
       } else if (current && line.trim()) {
-        current.lines.push(plain(line));
+        current.lines.push(line.trim());
       }
     }
   };
   readFeatures(fields).forEach(addBlock);
   for (const item of readInventory(fields).magicItems) {
-    add({ title: item.name, source: '', lines: linesOf(item.description).map(plain).filter(Boolean) });
+    add({ title: item.name, source: '', lines: linesOf(item.description).map(trimmed).filter(Boolean) });
   }
   // The notes last: a feature written there again (a class feature's longer text) keeps the first one.
   [valueOf(fields, NOTES_FIELD), ...readNotesPages(fields).flatMap((page) => [page.left, page.right])]
     .filter(Boolean)
     .forEach((text) => addBlock({ title: '', text }));
+  // The first block keeps its place: a feature written again in the notes (a class feature's longer text) keeps
+  // the first one. But a block that only says "(see third page)" gives way to the one with the text, and lends
+  // it its source. With no text anywhere (SRD Monk's Focus: its options are on the third page under their own
+  // names), the pointer stays: it still tells the player where to look.
+  const index = new Map<string, ActionRule>();
+  for (const [name, rules] of found) {
+    const own = rules.map((rule) => ({ ...rule, lines: rule.lines.filter((line) => !pointsElsewhere(line)) }));
+    const first = rules[0];
+    const best = own.find((rule) => rule.lines.length) ?? first;
+    if (best) index.set(name, { ...best, source: best.source || (first?.source ?? '') });
+  }
   return index;
 }
 
