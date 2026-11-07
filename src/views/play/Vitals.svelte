@@ -24,6 +24,7 @@
   import Stepper from './Stepper.svelte';
   import EdgePopUp from './EdgePopUp.svelte';
   import UltCharges from './UltCharges.svelte';
+  import SpeedWindow from './SpeedWindow.svelte';
   import type { UltCharges as Ult } from '../../homebrew/ult.ts';
   import { shownTiles, statColor, statSoft } from '../../play/stat-colors.ts';
 
@@ -88,6 +89,14 @@
   const initiativeMark = $derived(readRollMarks(fields).initiative);
   const initiativeEdge = $derived(edgeOf(initiativeMark));
   let marking = $state(false);
+  /** Tapping Speed opens its window; focus goes back to the tile afterwards, as for initiative. */
+  let editingSpeed = $state(false);
+  let speedTile: HTMLButtonElement | undefined = $state();
+  async function closeSpeed() {
+    editingSpeed = false;
+    await tick();
+    speedTile?.focus();
+  }
   let initiativeTile: HTMLButtonElement | undefined = $state();
   /** Focus goes back to the tile once the pop-up is gone (while it is open the page is inert). */
   async function closeMark() {
@@ -204,6 +213,19 @@
             >{/if}</span
         ></button
       >
+    {:else if tile.kind === 'speed'}
+      <button
+        type="button"
+        class="tile"
+        style:--stat={statColor(tile.kind)}
+        style:--stat-soft={statSoft(tile.kind)}
+        aria-haspopup="dialog"
+        aria-label={fill(t.speedEditLabel, { value: tile.value })}
+        {disabled}
+        bind:this={speedTile}
+        onclick={() => (editingSpeed = true)}
+        ><span class="k">{tile.label}</span><span class="v">{tile.value}</span></button
+      >
     {:else}
       <div class="tile" style:--stat={statColor(tile.kind)} style:--stat-soft={statSoft(tile.kind)}>
         <span class="k">{tile.label}</span><span class="v">{tile.value}</span>
@@ -271,6 +293,10 @@
     onclose={() => void closeMark()}
     {t}
   />
+{/if}
+
+{#if editingSpeed}
+  <SpeedWindow {fields} {change} onclose={() => void closeSpeed()} {t} />
 {/if}
 
 {#if pad === 'damage'}
@@ -571,7 +597,7 @@
     color: var(--stat);
   }
 
-  /* Initiative's tile is a button (it opens the advantage pop-up) but looks like the others. */
+  /* Initiative's and Speed's tiles are buttons (they open a pop-up) but look like the others. */
   button.tile {
     align-items: stretch;
     min-height: 56px;

@@ -1,5 +1,5 @@
 // A smoke test of the built app in a real browser: the start page, new characters built from scratch
-// (class, armour, a weapon; a wizard's spells), the play view showing what MPMB worked out, the print sheet
+// (class, species, armour, a weapon; a wizard's spells), the play view showing what MPMB worked out, the print sheet
 // and filling MPMB's PDF. It catches
 // what unit tests can't: the worker, the page's headers, the pop-ups and the routes working together.
 import fs from 'node:fs';
@@ -8,7 +8,7 @@ import { expect, test } from '@playwright/test';
 /** Loading MPMB's scripts on a blank sheet takes a while in a fresh browser. */
 const STARTUP = 120_000;
 
-test('a new character gets a class, armour and a weapon, and the play view shows them', async ({ page }) => {
+test('a new character gets a class, a species, armour and a weapon, and the play view shows them', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   // MPMB's reminder of what a change affected ("Changes alert") may come after any step: closed, as a
@@ -38,6 +38,18 @@ test('a new character gets a class, armour and a weapon, and the play view shows
     .click();
   await expect(rail.getByRole('button', { name: /Class & level/ })).toContainText('Fighter 1');
 
+  // Species: a dwarf, for the walking speed MPMB fills in.
+  await rail.getByRole('button', { name: /Species/ }).click();
+  await page.getByRole('searchbox', { name: 'Search species …' }).fill('Dwarf');
+  await page
+    .getByRole('button', { name: /^Dwarf/ })
+    .first()
+    .click();
+  await page.getByRole('button', { name: 'Take Dwarf' }).click();
+  // MPMB asks for the dwarf's two languages; its defaults are fine here.
+  await page.getByRole('dialog', { name: 'Ask user' }).getByRole('button', { name: 'OK', exact: true }).click();
+  await expect(rail.getByRole('button', { name: /Species/ })).toContainText('Dwarf');
+
   // Armour & weapons: chain mail gives AC 16, a longsword gets MPMB's to hit.
   await rail.getByRole('button', { name: /Armour & weapons/ }).click();
   await page.getByRole('button', { name: /No armour/ }).click();
@@ -61,6 +73,21 @@ test('a new character gets a class, armour and a weapon, and the play view shows
   await page.getByRole('link', { name: 'Done: to the play view' }).click();
   await expect(page.locator('.attack').filter({ hasText: 'Longsword' })).toBeVisible();
   await expect(page.getByText('Armor class').locator('..')).toContainText('16');
+
+  // Speed (2026-11-07): the tile opens a window with MPMB's sources; a typed speed goes onto the sheet as in the
+  // PDF, and MPMB keeps it.
+  await page.getByRole('button', { name: /^Speed 30 ft, change$/ }).click();
+  const speedWindow = page.getByRole('dialog', { name: 'Speed' });
+  await expect(speedWindow.locator('li')).toContainText(['Dwarf [30 ft]']);
+  // MPMB reads a typed number in the sheet's unit, so the window names it.
+  await expect(speedWindow).toContainText("the sheet's unit (ft)");
+  // An empty speed would hide the tile and the way back to this window.
+  await speedWindow.getByRole('textbox', { name: 'Speed', exact: true }).fill(' ');
+  await expect(speedWindow.getByRole('button', { name: 'Apply' })).toBeDisabled();
+  await speedWindow.getByRole('textbox', { name: 'Speed', exact: true }).fill('35 ft');
+  await speedWindow.getByRole('button', { name: 'Apply' }).click();
+  await expect(speedWindow).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Speed 35 ft, change$/ })).toBeVisible();
 
   // The parity leftovers: arrows from MPMB's list, two shots, half of them picked up again; the attack
   // rolls with advantage; experience points added in the Profile tab, without the Build screen. (Without ability scores this
