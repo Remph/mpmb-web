@@ -123,6 +123,25 @@ const plain = (line: string): string =>
 const BULLET = /^•\s*([^:]+):\s*(.*)$/;
 const key = (name: string): string => name.replace(/^◆\s*/, '').trim().toLowerCase();
 
+/**
+ * A part of a feature with its own name, as MPMB writes it inside the feature's text: "***Psychic Whispers
+ * (1/LR or PsiD)***. As a Magic action, …" or an add-on item's "***Echo Arsenal***. As part of a Short Rest, …".
+ * A limited feature or an action is often named after such a part, not after the whole feature.
+ */
+function subFeature(line: string): { name: string; rest: string } | null {
+  const [first, ...runs] = textRuns(line.trim());
+  if (!first?.bold || !first.italic || !runs[0]?.text.startsWith('.')) return null;
+  return {
+    name: first.text.trim(),
+    rest: plain(
+      runs
+        .map((run) => run.text)
+        .join('')
+        .replace(/^\.\s*/, ''),
+    ).trim(),
+  };
+}
+
 /** The Notes box on the third page, where MPMB writes a feature's text with `toNotesPage` and `page3notes`. */
 const NOTES_FIELD = 'Extra.Notes';
 
@@ -134,8 +153,8 @@ const NOTES_FIELD = 'Extra.Notes';
  */
 export function ruleIndex(fields: FieldViews): Map<string, ActionRule> {
   const index = new Map<string, ActionRule>();
-  const add = (rule: ActionRule): void => {
-    if (rule.title && !index.has(key(rule.title))) index.set(key(rule.title), rule);
+  const add = (rule: ActionRule, name = rule.title): void => {
+    if (name && !index.has(key(name))) index.set(key(name), rule);
   };
   const addBlock = (block: FeatureText): void => {
     if (block.title) {
@@ -143,9 +162,25 @@ export function ruleIndex(fields: FieldViews): Map<string, ActionRule> {
       return;
     }
     let current: ActionRule | null = null;
+    // A named part of the current feature: its text also stays in the whole feature's text.
+    let part: ActionRule | null = null;
     for (const line of linesOf(block.text)) {
       const parsed = featureLine(line);
       const bullet = BULLET.exec(line.trim());
+      const sub = subFeature(line);
+      if (!('heading' in parsed) && sub) {
+        current?.lines.push(plain(line));
+        part = { title: sub.name, source: current?.source ?? '', lines: sub.rest ? [sub.rest] : [] };
+        add(part);
+        // "Psychic Whispers (1/LR or PsiD)" is also found as "Psychic Whispers".
+        add(part, actionItem(sub.name).name);
+        continue;
+      }
+      if (!('heading' in parsed) && !parsed.runs.some((run) => run.role === 'name') && !bullet && line.trim()) {
+        part?.lines.push(plain(line));
+      } else {
+        part = null;
+      }
       if ('heading' in parsed) {
         current = null;
       } else if (parsed.runs.some((run) => run.role === 'name')) {
