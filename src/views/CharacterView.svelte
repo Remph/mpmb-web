@@ -605,8 +605,9 @@
     text-decoration: none;
   }
 
-  /* A companion that disappeared: its numbers stay readable but step back behind the way to bring it back. */
-  .play.gone .middle,
+  /* A companion that disappeared: its numbers stay readable but step back behind the way to bring it back.
+     The tab row keeps its full colour: dimmed, the tabs would look switched off but still work. */
+  .play.gone #tab-panel,
   .play.gone .right {
     opacity: 0.5;
   }

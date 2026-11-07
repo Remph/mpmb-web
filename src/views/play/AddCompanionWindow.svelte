@@ -55,7 +55,19 @@
       const creature = same ?? first.creatures[0];
       if (creature) choose(first, creature, page.hitDice);
     } else if (first?.known && first.creatures[0]) choose(first, first.creatures[0], null);
+    reveal = untrack(() => picked);
   });
+
+  /**
+   * Cast again, the page's creature can be far down a long list (an owl among Find Familiar's thirty): the
+   * window scrolls to it once, or it offers "Summon" with nothing visibly picked.
+   */
+  let reveal = $state<string | null>(null);
+  const revealIf = (id: string) => (el: HTMLElement) => {
+    if (reveal !== id) return;
+    el.scrollIntoView({ block: 'center' });
+    reveal = null;
+  };
 
   function choose(tpl: CompanionTemplate, c: CompanionCreature, wanted: number | null) {
     picked = idOf(tpl, c);
@@ -118,7 +130,7 @@
         <legend>{tpl.menuName}</legend>
         {#each open ? tpl.creatures : tpl.creatures.slice(0, FIRST_SHOWN) as c (idOf(tpl, c))}
           {@const id = idOf(tpl, c)}
-          <label class="opt" class:on={picked === id}>
+          <label class="opt" class:on={picked === id} {@attach revealIf(id)}>
             <input
               type="radio"
               name="companion"
