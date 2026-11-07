@@ -1061,7 +1061,7 @@ export const ui = {
     speedModefly: 'Fliegen',
     speedModeswim: 'Schwimmen',
     speedEditHint:
-      'Wie im PDF: MPMB merkt sich, was du hier änderst, als Zusatz zu Volk, Klasse und Talenten. Die Einheit (m oder ft) mit eintippen.',
+      'Wie im PDF: MPMB merkt sich, was du hier änderst, als Zusatz zu Volk, Klasse und Talenten. Eine Zahl gilt in der Einheit des Bogens ({unit}), egal welche Einheit dahinter steht.',
     speedEditLabel: 'Bewegung {value}, ändern',
     ultMore: '+1 Ladung',
     ultLess: 'Eine Ladung weniger',
@@ -2111,7 +2111,7 @@ export const ui = {
     speedModefly: 'Flying',
     speedModeswim: 'Swimming',
     speedEditHint:
-      'As in the PDF: MPMB keeps what you change here as an extra on top of species, class and feats. Type the unit too (m or ft).',
+      "As in the PDF: MPMB keeps what you change here as an extra on top of species, class and feats. A number counts in the sheet's unit ({unit}), whatever unit follows it.",
     speedEditLabel: 'Speed {value}, change',
     ultMore: '+1 charge',
     ultLess: 'One charge less',

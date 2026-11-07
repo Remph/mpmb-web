@@ -79,6 +79,11 @@ test('a new character gets a class, a species, armour and a weapon, and the play
   await page.getByRole('button', { name: /^Speed 30 ft, change$/ }).click();
   const speedWindow = page.getByRole('dialog', { name: 'Speed' });
   await expect(speedWindow.locator('li')).toContainText(['Dwarf [30 ft]']);
+  // MPMB reads a typed number in the sheet's unit, so the window names it.
+  await expect(speedWindow).toContainText("the sheet's unit (ft)");
+  // An empty speed would hide the tile and the way back to this window.
+  await speedWindow.getByRole('textbox', { name: 'Speed', exact: true }).fill(' ');
+  await expect(speedWindow.getByRole('button', { name: 'Apply' })).toBeDisabled();
   await speedWindow.getByRole('textbox', { name: 'Speed', exact: true }).fill('35 ft');
   await speedWindow.getByRole('button', { name: 'Apply' }).click();
   await expect(speedWindow).toHaveCount(0);

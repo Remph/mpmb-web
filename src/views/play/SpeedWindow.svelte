@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
-  import type { Texts } from '../../i18n.ts';
+  import { fill, type Texts } from '../../i18n.ts';
   import type { Step } from '../../session.svelte.ts';
   import type { FieldViews } from '../../worker/views.ts';
   import Modal from '../../popups/Modal.svelte';
@@ -27,10 +27,16 @@
   let speed = $state(before.speed);
   let encumbered = $state(before.encumbered);
   const sources = $derived(speedSources(fields['Speed']?.userName));
+  // MPMB reads the first number as the sheet's unit, whatever unit is typed after it ("30 ft" on a metric
+  // sheet becomes 30 m); it counts as metric unless the sheet says imperial, as in SetProf.
+  const unit = $derived(valueOf(fields, 'Unit System') === 'imperial' ? 'ft' : 'm');
+  // An empty Speed would hide the tile, and with it the way back here, until MPMB next works out speed.
+  const blank = $derived(speed.trim() === '');
   /** A flying or swimming speed sits on its own line (MPMB joins them with ",\n"); Firefox can't size a box to its text. */
   const rows = (text: string): number => Math.max(1, text.split('\n').length);
 
   function save() {
+    if (blank) return;
     const steps = speedSteps(before, { speed, encumbered });
     if (steps.length) change(steps);
     onclose();
@@ -60,11 +66,11 @@
         {/each}
       </div>
     {/if}
-    <p class="hint">{t.speedEditHint}</p>
+    <p class="hint">{fill(t.speedEditHint, { unit })}</p>
   </form>
   {#snippet actions()}
     <button type="button" onclick={onclose}>{t.cancel}</button>
-    <button type="submit" form="speed-form" class="primary">{t.apply}</button>
+    <button type="submit" form="speed-form" class="primary" disabled={blank}>{t.apply}</button>
   {/snippet}
 </Modal>
 
