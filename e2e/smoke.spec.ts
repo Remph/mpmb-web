@@ -189,6 +189,29 @@ test('a new character gets a class, a species, armour and a weapon, and the play
   await expect(ult.getByText('Ready')).toBeVisible();
   await ult.getByRole('button', { name: 'Use ult' }).dblclick();
   await expect(ult.getByRole('button', { name: 'Ult charges: 0 of 30' })).toBeVisible();
+  // The ult as a tile among the actions (2026-11-07): off the card until the player picks a row; a tap on the
+  // tile shows the description they typed.
+  await expect(actionsCard.locator('.chip.ult')).toHaveCount(0);
+  await ult.getByRole('button', { name: 'Edit', exact: true }).click();
+  const ultWindow = page.getByRole('dialog', { name: 'Ultimate ability' });
+  await ultWindow.getByLabel('Name', { exact: true }).fill('Battle Roar');
+  await ultWindow.getByRole('button', { name: 'Bonus action', exact: true }).click();
+  await ultWindow.getByText('Description', { exact: true }).click();
+  await ultWindow
+    .getByRole('textbox', { name: 'Description' })
+    .fill('You roar.\n\nEach enemy within 9 m is Frightened.');
+  await ultWindow.getByRole('button', { name: 'Apply', exact: true }).click();
+  const ultTile = actionsCard.getByRole('button', { name: 'Battle Roar: show the rule' });
+  await expect(actionsCard.locator('.group.bonus .chip').first()).toContainText('Battle Roar0/30');
+  await ultTile.click();
+  await expect(actionsCard.locator('.rule p')).toHaveText(['You roar.', 'Each enemy within 9 m is Frightened.']);
+  // Taking the tile off the card while its rule is open closes the rule, rather than opening the rule of the
+  // tile that moves into its place (Second Wind; review of #61).
+  await ult.getByRole('button', { name: 'Edit', exact: true }).click();
+  await ultWindow.getByRole('button', { name: 'Don’t show', exact: true }).click();
+  await ultWindow.getByRole('button', { name: 'Apply', exact: true }).click();
+  await expect(actionsCard.locator('.chip.ult')).toHaveCount(0);
+  await expect(actionsCard.locator('.rule')).toHaveCount(0);
 
   // Print (M10): the print window offers the parts this fighter has (no spells, no notes), and the print
   // sheet appears for the browser's print with the attack on it. window.print() itself would wait for a

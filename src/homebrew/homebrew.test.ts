@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'vitest';
 import { parseSwitches } from './switches.svelte.ts';
-import { DEFAULT_ULT, MAX_CHARGES, readUlt, withCharges, withMax } from './ult.ts';
+import { DEFAULT_ULT, MAX_CHARGES, MAX_TEXT, readUlt, ultLines, withCharges, withMax } from './ult.ts';
+import type { UltCharges } from './ult.ts';
 
 describe('ult charges', () => {
-  const ult = { name: 'Oathbound Judgement', max: 30, charges: 18 };
+  const ult: UltCharges = { name: 'Oathbound Judgement', max: 30, charges: 18, kind: 'none', text: '' };
 
   test('charges stay between 0 and the maximum', () => {
     expect(withCharges(ult, 19).charges).toBe(19);
@@ -21,8 +22,30 @@ describe('ult charges', () => {
   test('a missing or broken entry (old or hand-edited backup) becomes a valid one', () => {
     expect(readUlt(undefined)).toEqual(DEFAULT_ULT);
     expect(readUlt({ name: 7, max: 'x', charges: Infinity })).toEqual(DEFAULT_ULT);
-    expect(readUlt({ name: 'Rage', max: 25, charges: 99 })).toEqual({ name: 'Rage', max: 25, charges: 25 });
+    expect(readUlt({ name: 'Rage', max: 25, charges: 99 })).toEqual({
+      ...DEFAULT_ULT,
+      name: 'Rage',
+      max: 25,
+      charges: 25,
+    });
     expect(readUlt(ult)).toEqual(ult);
+  });
+
+  test('where it shows and its text: entries from before stay off the Actions card', () => {
+    expect(readUlt({ name: 'Rage', max: 25, charges: 3 })).toMatchObject({ kind: 'none', text: '' });
+    expect(readUlt({ ...ult, kind: 'bonus', text: 'Roar.' })).toMatchObject({ kind: 'bonus', text: 'Roar.' });
+    expect(readUlt({ ...ult, kind: 'free', text: 42 })).toMatchObject({ kind: 'none', text: '' });
+    expect(readUlt({ ...ult, text: 'x'.repeat(MAX_TEXT + 10) }).text).toHaveLength(MAX_TEXT);
+  });
+
+  test('the text becomes one paragraph per typed line, blank lines dropped', () => {
+    const text = 'As an action, you shout.\r\n\n  • Each enemy takes 2d6 Thunder damage.  \n\nCharges: +1 per turn.';
+    expect(ultLines({ ...ult, text })).toEqual([
+      'As an action, you shout.',
+      '• Each enemy takes 2d6 Thunder damage.',
+      'Charges: +1 per turn.',
+    ]);
+    expect(ultLines(ult)).toEqual([]);
   });
 });
 
