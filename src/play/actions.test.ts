@@ -172,6 +172,16 @@ describe('rule text for an action', () => {
     expect(rule?.source).toBe('Rogue 3');
   });
 
+  it('keeps "(see third page)" when no text is found anywhere', () => {
+    const features = paladin['Class Features']?.value;
+    const pointed = ruleIndex(
+      withValues(paladin, {
+        'Class Features': `${typeof features === 'string' ? features : ''}\r#◆ Mind Edge# (Rogue 3, Test 1) (see third page)`,
+      }),
+    );
+    expect(ruleFor(pointed, actionItem('Mind Edge'))?.lines).toEqual(['(see third page)']);
+  });
+
   it("reads the feature's name from MPMB's source", () => {
     expect(featureNames('Warlock: Pact of the Blade')).toEqual(['Pact of the Blade']);
     expect(featureNames('Paladin (Oath of Devotion): Sacred Weapon')).toEqual(['Sacred Weapon']);

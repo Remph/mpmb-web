@@ -234,11 +234,12 @@ export function ruleIndex(fields: FieldViews): Map<string, ActionRule> {
     .forEach((text) => addBlock({ title: '', text }));
   // The first block keeps its place: a feature written again in the notes (a class feature's longer text) keeps
   // the first one. But a block that only says "(see third page)" gives way to the one with the text, and lends
-  // it its source.
+  // it its source. With no text anywhere (SRD Monk's Focus: its options are on the third page under their own
+  // names), the pointer stays: it still tells the player where to look.
   const index = new Map<string, ActionRule>();
   for (const [name, rules] of found) {
     const own = rules.map((rule) => ({ ...rule, lines: rule.lines.filter((line) => !pointsElsewhere(line)) }));
-    const first = own[0];
+    const first = rules[0];
     const best = own.find((rule) => rule.lines.length) ?? first;
     if (best) index.set(name, { ...best, source: best.source || (first?.source ?? '') });
   }

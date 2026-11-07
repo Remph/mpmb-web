@@ -150,6 +150,25 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/**
+ * Runs `run` while the browser storage opens only when `run` calls `openStorage`, as on a busy first visit
+ * (the flaky deploy test, 2026-11-07).
+ */
+async function withLateStorage(run: (openStorage: () => void) => Promise<void>): Promise<void> {
+  let openStorage = (): void => undefined;
+  const late = new Promise<void>((resolve) => (openStorage = resolve));
+  const open = CharacterStore.open.bind(CharacterStore);
+  const spy = vi.spyOn(CharacterStore, 'open').mockImplementation(async (...args) => {
+    await late;
+    return open(...args);
+  });
+  try {
+    await run(openStorage);
+  } finally {
+    spy.mockRestore();
+  }
+}
+
 describe('importing PDFs', () => {
   test('saves each character and says so', async () => {
     const session = await startSession();
@@ -159,6 +178,18 @@ describe('importing PDFs', () => {
       ['ok', t.imported.replace('{name}', 'Anna')],
       ['ok', t.imported.replace('{name}', 'Bert')],
     ]);
+  });
+
+  test('right after the page opened, before the storage is open, waits for it and saves', async () => {
+    await withLateStorage(async (openStorage) => {
+      const session = await startSession({ waitForStart: false });
+      const importing = session.importPdfs([pdf(sheetOf('Anna'))]);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      openStorage();
+      await importing;
+      expect(names(session)).toEqual(['Anna']);
+      expect(session.notes.map((n) => n.kind)).toEqual(['ok']);
+    });
   });
 
   test('a PDF that is not readable is named in the note and saves nothing', async () => {
@@ -230,15 +261,7 @@ describe('restoring a backup', () => {
   });
 
   test('right after the page opened, before the storage is open, waits for it and restores', async () => {
-    // The storage opens late, as on a busy first visit (the flaky deploy test, 2026-11-07).
-    let openStorage = (): void => undefined;
-    const late = new Promise<void>((resolve) => (openStorage = resolve));
-    const open = CharacterStore.open.bind(CharacterStore);
-    const spy = vi.spyOn(CharacterStore, 'open').mockImplementation(async (...args) => {
-      await late;
-      return open(...args);
-    });
-    try {
+    await withLateStorage(async (openStorage) => {
       const session = await startSession({ waitForStart: false });
       const restoring = session.restore(backupFile([stored('Cora', 'cora', '2026-01-02T00:00:00.000Z')]));
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -247,9 +270,7 @@ describe('restoring a backup', () => {
       await restoring;
       expect(names(session)).toEqual(['Cora']);
       expect(session.notes).toMatchObject([{ kind: 'ok' }]);
-    } finally {
-      spy.mockRestore();
-    }
+    });
   });
 
   test('"Cancel" changes nothing', async () => {
@@ -293,6 +314,18 @@ describe('a new character', () => {
     const id = await session.create();
     expect(id).not.toBeNull();
     expect(session.characters.map((c) => c.id)).toEqual([id]);
+  });
+
+  test('right after the page opened, before the storage is open, waits for it and is saved', async () => {
+    await withLateStorage(async (openStorage) => {
+      const session = await startSession({ waitForStart: false });
+      const creating = session.create();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      openStorage();
+      const id = await creating;
+      expect(id).not.toBeNull();
+      expect(session.characters.map((c) => c.id)).toEqual([id]);
+    });
   });
 });
 
