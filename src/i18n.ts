@@ -458,6 +458,18 @@ export const ui = {
     addEffectLong: 'Effekt hinzufügen',
     effectsHint:
       'Ausgeschaltet kommen die alten Werte zurück, außer du hast sie inzwischen selbst geändert. Waffen ohne Übung und Waffen mit höherem eigenem Modifikator bleiben, wie sie sind.',
+    attackSetupChip: '{ability} · {prof}',
+    attackSetupProf: '✓ geübt',
+    attackSetupNotProf: 'nicht geübt',
+    attackSetupNoAbility: '—',
+    attackSetupLabel: 'Übung und Attribut von {name}: {state}',
+    attackSetupIntro: 'Die zwei Kästchen des Bogens vor diesem Angriff, wie im PDF. MPMB rechnet die Werte damit aus.',
+    attackSetupProficient: 'Geübt',
+    attackSetupAbility: 'Attribut',
+    attackSetupNone: 'keins',
+    attackSetupNow: 'Jetzt',
+    attackSetupHint:
+      'Die App behält, was du hier einstellst, auch wenn MPMB die Waffen neu berechnet (etwa bei einer neuen Stufe). Eine andere Waffe in dieser Zeile bekommt wieder MPMBs eigene Einstellung.',
     attackRolls: 'Angriffswürfe',
     attackRollsOf: 'Angriffswurf {name}',
     attackRollsNote: 'Gilt für jeden Angriffswurf, wie das Kästchen im PDF.',
@@ -1559,6 +1571,19 @@ export const ui = {
     addEffectLong: 'Add effect',
     effectsHint:
       'Switched off, the old values come back, unless you changed them yourself in the meantime. Weapons you aren’t proficient with, or whose own modifier is higher, stay as they are.',
+    attackSetupChip: '{ability} · {prof}',
+    attackSetupProf: '✓ prof.',
+    attackSetupNotProf: 'not prof.',
+    attackSetupNoAbility: '—',
+    attackSetupLabel: 'Proficiency and ability of {name}: {state}',
+    attackSetupIntro:
+      'The sheet’s two boxes in front of this attack, as in the PDF. MPMB works out the numbers from them.',
+    attackSetupProficient: 'Proficient',
+    attackSetupAbility: 'Ability',
+    attackSetupNone: 'none',
+    attackSetupNow: 'Now',
+    attackSetupHint:
+      'The app keeps what you set here when MPMB recalculates the weapons (a new level, for example). Another weapon in this row gets MPMB’s own settings again.',
     attackRolls: 'Attack rolls',
     attackRollsOf: '{name} attack roll',
     attackRollsNote: 'Counts for every attack roll, like the PDF’s box.',

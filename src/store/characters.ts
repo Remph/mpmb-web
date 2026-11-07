@@ -7,6 +7,7 @@ import type { AddOns } from '../engine/add-ons.ts';
 import type { SheetChange } from '../engine/sheet-changes.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
 import type { UltCharges } from '../homebrew/ult.ts';
+import type { SetupChoice } from '../play/attack-setup.ts';
 import type { Effect } from '../play/effects.ts';
 
 export interface CharacterMeta {
@@ -39,6 +40,8 @@ export interface CharacterHomebrew {
   effects?: Effect[];
   /** Whether attack rolls against the character have advantage or disadvantage (the sheet has no box for it). */
   acEdge?: 'adv' | 'dis';
+  /** Attack rows' proficiency and ability as the player set them by hand (src/play/attack-setup.ts). */
+  attackChoices?: SetupChoice[];
 }
 
 /** A character moved to a new release of MPMB's sheet with MPMB's own import (M11). */
@@ -260,11 +263,12 @@ export function describeCharacter(
 
 /** A plain copy (the page's values can be reactive proxies, which IndexedDB can't store). */
 export function copyHomebrew(homebrew: CharacterHomebrew): CharacterHomebrew {
-  const { ult, effects, acEdge } = homebrew;
+  const { ult, effects, acEdge, attackChoices } = homebrew;
   return {
     ...(ult ? { ult: { ...ult } } : {}),
     ...(effects ? { effects: effects.map(copyEffect) } : {}),
     ...(acEdge ? { acEdge } : {}),
+    ...(attackChoices ? { attackChoices: attackChoices.map((c) => ({ ...c })) } : {}),
   };
 }
 

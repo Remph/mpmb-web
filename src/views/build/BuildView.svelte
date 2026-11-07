@@ -208,7 +208,7 @@
     {:else if step === 'feats'}
       <FeatsStep {info} {fields} {disabled} {change} {t} />
     {:else if step === 'gear'}
-      <GearStep {info} {fields} {disabled} {change} {t} />
+      <GearStep {info} {fields} {disabled} {change} onsetup={(row, set) => void session.setAttackSetup(row, set)} {t} />
     {:else if step === 'choices'}
       <ChoicesStep {info} wanted={choice} {disabled} {pick} {t} />
     {:else if step === 'spells'}

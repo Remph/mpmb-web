@@ -9,6 +9,7 @@
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import type { Step } from '../../session.svelte.ts';
+  import type { AttackSetup as AttackSetupValues } from '../../play/attack-setup.ts';
   import { featureRule, readActionList, ruleFor, ruleIndex } from '../../play/actions.ts';
   import type { ActionItem, ActionRule } from '../../play/actions.ts';
   import {
@@ -29,6 +30,7 @@
   import AmmoPanel from './AmmoPanel.svelte';
   import Dots from './Dots.svelte';
   import EdgePopUp from './EdgePopUp.svelte';
+  import AttackSetup from './AttackSetup.svelte';
   import NumberPad from './NumberPad.svelte';
   import Stepper from './Stepper.svelte';
 
@@ -40,10 +42,12 @@
     change: (steps: Step[]) => void;
     /** The ult (homebrew), or null while its switch is off: a tile among the actions if the player put it there. */
     ult?: UltCharges | null;
+    /** An attack row's proficiency or ability (the chip's window); the session remembers it. */
+    onsetup: (row: number, set: Partial<AttackSetupValues>) => void;
     t: Texts;
   }
 
-  let { fields, characterId, disabled, change, ult = null, t }: Props = $props();
+  let { fields, characterId, disabled, change, ult = null, onsetup, t }: Props = $props();
 
   const attacks = $derived(readAttacks(fields));
   const perAction = $derived(attacksPerAction(fields));
@@ -153,7 +157,10 @@
   </div>
   {#each attacks as attack (attack.row)}
     <div class="attack">
-      <span class="name">{attack.name}</span>
+      <span class="title"
+        ><span class="name">{attack.name}</span>
+        <AttackSetup row={attack.row} name={attack.name} {fields} {disabled} onset={onsetup} {t} /></span
+      >
       <span class="hit">
         {#if isAttackRoll(attack.toHit)}
           <button
@@ -424,6 +431,14 @@
   .attack:first-of-type {
     padding-top: 0;
     border-top: 0;
+  }
+
+  .title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+    min-width: 0;
   }
 
   .attack .name {
