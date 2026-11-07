@@ -124,8 +124,8 @@ const BULLET = /^•\s*([^:]+):\s*(.*)$/;
 const key = (name: string): string => name.replace(/^◆\s*/, '').trim().toLowerCase();
 
 /**
- * A part of a feature with its own name, as MPMB writes it inside the feature's text: "***Psychic Whispers
- * (1/LR or PsiD)***. As a Magic action, …" or a magic item's "***Regaining Charges***. …".
+ * A part of a feature with its own name, as MPMB writes it inside the feature's text: "***Name (1/LR)***. Text",
+ * like a magic item's "***Regaining Charges***. …".
  * A limited feature or an action is often named after such a part, not after the whole feature.
  */
 function subFeature(line: string): { name: string; rest: string } | null {
@@ -172,7 +172,7 @@ export function ruleIndex(fields: FieldViews): Map<string, ActionRule> {
         current?.lines.push(plain(line));
         part = { title: sub.name, source: current?.source ?? '', lines: sub.rest ? [sub.rest] : [] };
         add(part);
-        // "Psychic Whispers (1/LR or PsiD)" is also found as "Psychic Whispers".
+        // "Name (1/LR or charge)" is also found as "Name".
         add(part, actionItem(sub.name).name);
         continue;
       }
@@ -242,7 +242,7 @@ export function ruleFor(index: Map<string, ActionRule>, item: ActionItem): Actio
 
 /**
  * The rule behind a limited feature, to read on the Combat tab: by its name without MPMB's note
- * ("Psionic Energy Dice (regain 1/SR)" is "Psionic Energy Dice"), then by where MPMB says it came from.
+ * ("Channel Divinity (regain 1/SR)" is "Channel Divinity"), then by where MPMB says it came from.
  */
 export const featureRule = (
   index: Map<string, ActionRule>,

@@ -176,34 +176,31 @@ describe('rule text for a limited feature', () => {
 describe('rule text for a named part of a feature', () => {
   // MPMB writes the parts of a feature as "***Name***. Text" inside the feature's text.
   const notes = [
-    '#◆ Humming Watch# (Homebrew 1)',
-    'A small brass watch.',
-    '***Bound Blades***. During a Short Rest, I can bind up to three daggers to the watch.',
-    'They wait inside it until I call them.',
-    '   ***Recall (1/LR or charge)***. As a Bonus Action, I call a bound dagger to my hand.',
-    '#◆ Other Thing# (Homebrew 2)',
+    '#◆ Garden Gnome# (Test 1)',
+    'A painted clay gnome.',
+    '***Tend the Beds***. During a Long Rest, the gnome waters the plants around me.',
+    'They grow a little faster.',
+    '   ***Shout (1/LR or charge)***. As a Bonus Action, the gnome shouts a warning.',
+    '#◆ Other Thing# (Test 2)',
     'Something else.',
   ].join('\r');
   const index = ruleIndex(withValues(paladin, { 'Extra.Notes': notes }));
 
   it("finds the part with its own text and the feature's source", () => {
-    expect(featureRule(index, { name: 'Bound Blades', from: [] })).toEqual({
-      title: 'Bound Blades',
-      source: 'Homebrew 1',
-      lines: [
-        'During a Short Rest, I can bind up to three daggers to the watch.',
-        'They wait inside it until I call them.',
-      ],
+    expect(featureRule(index, { name: 'Tend the Beds', from: [] })).toEqual({
+      title: 'Tend the Beds',
+      source: 'Test 1',
+      lines: ['During a Long Rest, the gnome waters the plants around me.', 'They grow a little faster.'],
     });
   });
 
   it('finds a part by its name without the note on its uses', () => {
-    expect(featureRule(index, { name: 'Recall', from: [] })?.lines).toEqual([
-      'As a Bonus Action, I call a bound dagger to my hand.',
+    expect(featureRule(index, { name: 'Shout', from: [] })?.lines).toEqual([
+      'As a Bonus Action, the gnome shouts a warning.',
     ]);
   });
 
   it("keeps the parts in the whole feature's text", () => {
-    expect(featureRule(index, { name: 'Humming Watch', from: [] })?.lines).toHaveLength(4);
+    expect(featureRule(index, { name: 'Garden Gnome', from: [] })?.lines).toHaveLength(4);
   });
 });

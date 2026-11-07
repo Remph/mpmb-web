@@ -276,14 +276,14 @@ export interface LimitedFeature {
   pool: boolean;
   recovery: string;
   used: number;
-  /** The die of a feature counted in dice ("6d8": 6 uses of a d8, like a Soulknife's psionic dice), else null. */
+  /** The die of a feature counted in dice ("6d8": 6 uses of a d8), else null. */
   die: string | null;
-  /** Where MPMB says the feature came from, from its tooltip ("Rogue (Soulknife): Psionic Power"). */
+  /** Where MPMB says the feature came from, from its tooltip ("Paladin: Lay on Hands"). */
   from: string[];
 }
 
-// MPMB's tooltip on a feature it added: 'The feature "Psionic Energy Dice" was gained from Rogue (Soulknife):
-// Psionic Power'. Further sources follow after ", ".
+// MPMB's tooltip on a feature it added: 'The feature "Lay on Hands" was gained from Paladin: Lay on Hands'.
+// Further sources follow after ", ".
 const GAINED_FROM = /was gained from (.+)$/s;
 // A count of dice: "6d8". Try it: https://regex101.com/?regex=%5E(%5Cd%2B)%5Cs*(d%5Cd%2B)%24&flags=i&testString=6d8
 const DICE = /^(\d+)\s*(d\d+)$/i;
