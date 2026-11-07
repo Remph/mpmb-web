@@ -12,7 +12,7 @@ import { SHEET_ID } from './engine/sheet-id.ts';
 import type { Entry } from './popups/popups.svelte.ts';
 import { Session } from './session.svelte.ts';
 import { makeBackup } from './store/backup.ts';
-import { describeCharacter } from './store/characters.ts';
+import { CharacterStore, describeCharacter } from './store/characters.ts';
 import type { StoredCharacter } from './store/characters.ts';
 import type { Locks } from './store/tab-lock.ts';
 import { StandInLocks } from '../test/stand-in-locks.ts';
@@ -87,6 +87,8 @@ async function startSession(
     locks?: Locks;
     sent?: Command[];
     hold?: (command: Command) => Promise<void> | undefined;
+    /** False: start the session like the page does, without waiting for its storage to open. */
+    waitForStart?: boolean;
   } = {},
 ): Promise<Session> {
   vi.stubGlobal('indexedDB', tab.browser ?? new IDBFactory());
@@ -118,7 +120,8 @@ async function startSession(
     () => new StandInWorker(answer, tab.hold),
     tab.locks,
   );
-  await session.start();
+  const starting = session.start();
+  if (tab.waitForStart !== false) await starting;
   return session;
 }
 
@@ -224,6 +227,29 @@ describe('restoring a backup', () => {
     expect(names(session)).toEqual(['Anna', 'Cora']);
     expect(session.characters.find((c) => c.id === anna.id)?.updated).toBe('2026-01-01T00:00:00.000Z');
     expect(session.notes).toMatchObject([{ kind: 'ok' }]);
+  });
+
+  test('right after the page opened, before the storage is open, waits for it and restores', async () => {
+    // The storage opens late, as on a busy first visit (the flaky deploy test, 2026-11-07).
+    let openStorage = (): void => undefined;
+    const late = new Promise<void>((resolve) => (openStorage = resolve));
+    const open = CharacterStore.open.bind(CharacterStore);
+    const spy = vi.spyOn(CharacterStore, 'open').mockImplementation(async (...args) => {
+      await late;
+      return open(...args);
+    });
+    try {
+      const session = await startSession({ waitForStart: false });
+      const restoring = session.restore(backupFile([stored('Cora', 'cora', '2026-01-02T00:00:00.000Z')]));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      openStorage();
+      await answer(session, 'restore');
+      await restoring;
+      expect(names(session)).toEqual(['Cora']);
+      expect(session.notes).toMatchObject([{ kind: 'ok' }]);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   test('"Cancel" changes nothing', async () => {
