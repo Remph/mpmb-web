@@ -204,3 +204,12 @@ export function ruleFor(index: Map<string, ActionRule>, item: ActionItem): Actio
   }
   return null;
 }
+
+/**
+ * The rule behind a limited feature, to read on the Combat tab: by its name without MPMB's note
+ * ("Psionic Energy Dice (regain 1/SR)" is "Psionic Energy Dice"), then by where MPMB says it came from.
+ */
+export const featureRule = (
+  index: Map<string, ActionRule>,
+  feature: { name: string; from: string[] },
+): ActionRule | null => ruleFor(index, actionItem(feature.name, feature.from));

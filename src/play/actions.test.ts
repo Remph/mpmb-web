@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { openSheet, referenceSheet } from '../../test/characters.ts';
 import { withValues } from '../../test/fields.ts';
 import { viewsOf } from '../worker/views.ts';
-import { actionItem, featureNames, readActionList, ruleFor, ruleIndex } from './actions.ts';
+import { actionItem, featureNames, featureRule, readActionList, ruleFor, ruleIndex } from './actions.ts';
 
 const paladin = viewsOf(openSheet(referenceSheet('paladin8-warlock2')).doc);
 
@@ -156,5 +156,19 @@ describe('rule text for an action', () => {
 
   it('has nothing for an action without rule text', () => {
     expect(ruleFor(index, actionItem('Quiet Step'))).toBeNull();
+  });
+});
+
+describe('rule text for a limited feature', () => {
+  const index = ruleIndex(paladin);
+
+  it('finds it by name, without the note MPMB adds', () => {
+    expect(featureRule(index, { name: 'Lay on Hands', from: [] })?.title).toBe('Lay on Hands');
+    expect(featureRule(index, { name: 'Channel Divinity (regain 1/SR)', from: [] })?.title).toBe('Channel Divinity');
+  });
+
+  it('finds it by where it came from when the name differs', () => {
+    expect(featureRule(index, { name: 'Holy Glow', from: ['Paladin: Lay on Hands'] })?.title).toBe('Lay on Hands');
+    expect(featureRule(index, { name: 'Holy Glow', from: [] })).toBeNull();
   });
 });
