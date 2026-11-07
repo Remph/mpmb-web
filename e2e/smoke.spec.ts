@@ -205,7 +205,13 @@ test('a new character gets a class, a species, armour and a weapon, and the play
   await expect(actionsCard.locator('.group.bonus .chip').first()).toContainText('Battle Roar0/30');
   await ultTile.click();
   await expect(actionsCard.locator('.rule p')).toHaveText(['You roar.', 'Each enemy within 9 m is Frightened.']);
-  await ultTile.click();
+  // Taking the tile off the card while its rule is open closes the rule, rather than opening the rule of the
+  // tile that moves into its place (Second Wind; review of #61).
+  await ult.getByRole('button', { name: 'Edit', exact: true }).click();
+  await ultWindow.getByRole('button', { name: 'Don’t show', exact: true }).click();
+  await ultWindow.getByRole('button', { name: 'Apply', exact: true }).click();
+  await expect(actionsCard.locator('.chip.ult')).toHaveCount(0);
+  await expect(actionsCard.locator('.rule')).toHaveCount(0);
 
   // Print (M10): the print window offers the parts this fighter has (no spells, no notes), and the print
   // sheet appears for the browser's print with the attack on it. window.print() itself would wait for a

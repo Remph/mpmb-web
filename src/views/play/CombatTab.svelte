@@ -88,7 +88,8 @@
   interface ActionGroup {
     kind: 'action' | 'bonus' | 'reaction';
     label: string;
-    items: { item: ActionItem; rule: ActionRule | null; ult?: boolean }[];
+    /** key: which tile's rule is open; the ult's is its own, so its tile coming or going doesn't open another's. */
+    items: { item: ActionItem; rule: ActionRule | null; key: string; ult?: boolean }[];
     basic: string[];
   }
   /** The ult's tile, first in its row: the one action the player waits a whole fight for. */
@@ -103,6 +104,7 @@
       entry: {
         item: { name, note: full ? t.ultReady : `${ult.charges}/${ult.max}`, from: [] },
         rule: lines.length ? { title: name, source: t.homebrewSource, lines } : null,
+        key: 'ult',
         ult: true,
       },
     };
@@ -120,7 +122,7 @@
         label,
         items: [
           ...(ultTile?.kind === kind ? [ultTile.entry] : []),
-          ...items.map((item) => ({ item, rule: ruleFor(rules, item) })),
+          ...items.map((item, i) => ({ item, rule: ruleFor(rules, item), key: String(i) })),
         ],
         basic: [...basic],
       }))
@@ -129,7 +131,7 @@
   const anyRule = $derived(groups.some((g) => g.items.some((i) => i.rule)));
   let ruleOpen: string | null = $state(null);
   let basicOpen = $state(false);
-  const ruleKey = (group: ActionGroup, i: number): string => `${group.kind}-${i}`;
+  const ruleKey = (group: ActionGroup, i: number): string => `${group.kind}-${group.items[i]?.key ?? i}`;
   const POOL_STEP = 1;
 </script>
 
