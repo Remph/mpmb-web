@@ -1,7 +1,8 @@
 <!--
   The left column while a companion is shown: who it is, its hit points (the same damage and healing rules
   as the character's), the numbers checked every round, and MPMB's own Companion Options menu, which adds a
-  creature, changes it, resets the page or removes it.
+  creature, changes it, resets the page or removes it. A companion from a spell that is down to 0 HP is gone
+  (`gone`, the spell's name): its hit points give way to the way to cast the spell again.
 -->
 <script lang="ts">
   import { fill } from '../../i18n.ts';
@@ -18,10 +19,13 @@
     companion: Companion;
     disabled: boolean;
     change: (steps: Step[]) => void;
+    /** The spell that brings the companion back when it disappeared at 0 HP; null while it is there. */
+    gone: string | null;
+    oncastagain: () => void;
     t: Texts;
   }
 
-  let { companion, disabled, change, t }: Props = $props();
+  let { companion, disabled, change, gone, oncastagain, t }: Props = $props();
 
   const hp = $derived(companion.hp);
   const current = $derived(hp.current ?? hp.max ?? 0);
@@ -83,7 +87,16 @@
   <button type="button" class="options" class:primary={empty} {disabled} onclick={options}>{t.companionOptions}</button>
 </section>
 
-{#if hp.max !== null}
+{#if gone !== null}
+  <section class="hp gone" aria-labelledby="companion-hp-title">
+    <h2 id="companion-hp-title">{t.hpTitle}</h2>
+    <p class="numbers"><span class="now">0</span> <span class="max">/ {hp.max}</span></p>
+    <p class="gone-text">{fill(t.companionGoneText, { spell: gone })}</p>
+    <button type="button" class="primary again" {disabled} onclick={oncastagain}
+      >{fill(t.companionCastAgain, { spell: gone })}</button
+    >
+  </section>
+{:else if hp.max !== null}
   <section class="hp" aria-labelledby="companion-hp-title">
     <div class="head">
       <h2 id="companion-hp-title">{t.hpTitle}</h2>
@@ -100,7 +113,7 @@
 {/if}
 
 {#if tiles.length}
-  <div class="tiles">
+  <div class="tiles" class:dim={gone !== null}>
     {#each tiles as tile (tile.label)}
       <div class="tile stat" style:--stat={statColor(tile.kind)} style:--stat-soft={statSoft(tile.kind)}>
         <span class="k">{tile.label}</span><span class="v">{tile.value}</span>
@@ -111,6 +124,7 @@
 {#each lines as line (line.label)}
   <div
     class="tile line"
+    class:dim={gone !== null}
     class:stat={line.kind !== null}
     style:--stat={line.kind && statColor(line.kind)}
     style:--stat-soft={line.kind && statSoft(line.kind)}
@@ -200,6 +214,31 @@
     padding: 0.75rem;
     border-radius: 0.75rem;
     background: var(--hp-soft);
+  }
+
+  /* Gone: no colour of its own, so the one thing that stands out is the way to bring it back. */
+  .hp.gone {
+    border: 2px dashed var(--line);
+    background: var(--surface);
+  }
+
+  .gone .now {
+    color: var(--ink-muted);
+  }
+
+  .gone-text {
+    margin: 0.5rem 0 0.625rem;
+    color: var(--ink-muted);
+    line-height: 1.35;
+  }
+
+  .again {
+    width: 100%;
+    font-weight: 700;
+  }
+
+  .dim {
+    opacity: 0.5;
   }
 
   .temp {

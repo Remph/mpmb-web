@@ -6,6 +6,7 @@ import { parseScriptFiles, scriptName } from './build/add-ons.ts';
 import type { BuilderInfo, UnitSystem } from './engine/builder.ts';
 import type { ScoreChange } from './engine/scores.ts';
 import type { SpellPicks, SpellSheetPicks, SpellsInfo } from './engine/spells.ts';
+import type { CompanionTemplate } from './engine/companion-options.ts';
 import { sheetChanges } from './engine/sheet-changes.ts';
 import type { FieldValues } from './engine/sheet-changes.ts';
 import type { CharacterData } from './engine/sheet-data.ts';
@@ -755,6 +756,19 @@ export class Session {
     if (!open || this.current !== open || readOnly(open.status)) return null;
     try {
       return await this.client.builder();
+    } catch (err) {
+      this.note('error', this.explain(err));
+      return null;
+    }
+  }
+
+  /** The companion templates and creatures the sheet's lists offer, for "Add a companion"; null like builderInfo. */
+  async companionOptions(): Promise<CompanionTemplate[] | null> {
+    const open = this.current;
+    await this.running;
+    if (!open || this.current !== open || readOnly(open.status)) return null;
+    try {
+      return await this.client.companionOptions();
     } catch (err) {
       this.note('error', this.explain(err));
       return null;

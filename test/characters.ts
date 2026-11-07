@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import { Engine } from '../src/engine/engine.ts';
 import type { Host } from '../src/engine/host.ts';
+import { withAppLists } from '../src/engine/app-lists.ts';
 import { mpmbScripts } from '../src/engine/scripts.ts';
 import type { CharacterData } from '../src/engine/sheet-data.ts';
 import { blankSheet, characterSheet } from '../src/engine/sheet.ts';
@@ -27,7 +28,7 @@ export function referenceSheet(name: ReferenceCharacter): SheetSnapshot {
  * then run every Format script for the text each field shows.
  */
 export function openSheet(sheet: SheetSnapshot = blankSheet(), host: Host = new ScriptedHost()): Engine {
-  const engine = Engine.load({ sheet, scripts: mpmbScripts, host, realm: vmRealm(), allowTimer });
+  const engine = Engine.load({ sheet, scripts: withAppLists(mpmbScripts), host, realm: vmRealm(), allowTimer });
   engine.runTimers();
   engine.doc.formatAll();
   return engine;
