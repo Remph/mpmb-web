@@ -2,18 +2,26 @@ import { describe, expect, it } from 'vitest';
 import { openSheet, referenceSheet } from '../../test/characters.ts';
 import { withValues } from '../../test/fields.ts';
 import { viewsOf } from '../worker/views.ts';
-import { actionItem, readActionList, ruleFor, ruleIndex } from './actions.ts';
+import { actionItem, featureNames, readActionList, ruleFor, ruleIndex } from './actions.ts';
 
 const paladin = viewsOf(openSheet(referenceSheet('paladin8-warlock2')).doc);
+
+// The reference warlock with the invocation Pact of the Blade, chosen as MPMB's "Choose Feature" menu does: its
+// bonus action is named "Conjure/Bond Pact Weapon", and MPMB writes its text to the third page's Notes.
+const bladeLock = (() => {
+  const engine = openSheet(referenceSheet('paladin8-warlock2'));
+  engine.evaluate('ClassFeatureOptions(["warlock", "eldritch invocations", "pact of the blade", "extra"])');
+  return viewsOf(engine.doc);
+})();
 
 describe('actions card', () => {
   it("folds MPMB's basic actions away and keeps the character's own", () => {
     expect(readActionList(paladin)).toEqual({
       action: [],
       bonusAction: [
-        { name: 'Lay on Hands', note: '' },
-        { name: 'Divine Sense', note: 'Channel Divinity' },
-        { name: 'Draconic Flight', note: '' },
+        { name: 'Lay on Hands', note: '', from: ['Paladin: Lay on Hands'] },
+        { name: 'Divine Sense', note: 'Channel Divinity', from: ['Paladin: Divine Sense'] },
+        { name: 'Draconic Flight', note: '', from: ['Silver Dragonborn: Draconic Flight'] },
       ],
       reaction: [],
       basic: [
@@ -39,9 +47,17 @@ describe('actions card', () => {
     expect(actionItem('Gem of Brightness (blinding flash)')).toEqual({
       name: 'Gem of Brightness',
       note: 'blinding flash',
+      from: [],
     });
-    expect(actionItem('Rallying Cry (Rallying Cry)')).toEqual({ name: 'Rallying Cry', note: '' });
-    expect(actionItem('Quiet Step')).toEqual({ name: 'Quiet Step', note: '' });
+    expect(actionItem('Rallying Cry (Rallying Cry)')).toEqual({ name: 'Rallying Cry', note: '', from: [] });
+    expect(actionItem('Quiet Step')).toEqual({ name: 'Quiet Step', note: '', from: [] });
+  });
+
+  it('keeps where an action came from when the same action is typed in again', () => {
+    const typed = readActionList(withValues(paladin, { 'Bonus Action 5': 'Lay on Hands' }));
+    expect(typed.bonusAction.filter((a) => a.name === 'Lay on Hands')).toEqual([
+      { name: 'Lay on Hands', note: '', from: ['Paladin: Lay on Hands'] },
+    ]);
   });
 
   it('shows an action only once per kind', () => {
@@ -53,10 +69,10 @@ describe('actions card', () => {
     });
     const list = readActionList(doubled);
     expect(list.bonusAction.filter((a) => a.name === 'Rallying Cry')).toHaveLength(1);
-    expect(list.reaction).toEqual([{ name: 'Gem of Brightness', note: 'light' }]);
+    expect(list.reaction).toEqual([{ name: 'Gem of Brightness', note: 'light', from: [] }]);
     expect(list.action).toEqual([
-      { name: 'Gem of Brightness', note: 'beam' },
-      { name: 'Wand of Web', note: 'web' },
+      { name: 'Gem of Brightness', note: 'beam', from: [] },
+      { name: 'Wand of Web', note: 'web', from: [] },
     ]);
   });
 });
@@ -65,7 +81,7 @@ describe('rule text for an action', () => {
   const index = ruleIndex(paladin);
 
   it('finds class features with their source and text', () => {
-    const rule = ruleFor(index, { name: 'Lay on Hands', note: '' });
+    const rule = ruleFor(index, actionItem('Lay on Hands'));
     expect(rule?.title).toBe('Lay on Hands');
     expect(rule?.source).toBe("Paladin 1, SRD'24 53");
     expect(rule?.lines[0]).toMatch(/^As a Bonus Action, I can draw from my pool/);
@@ -73,7 +89,7 @@ describe('rule text for an action', () => {
   });
 
   it('finds species traits written on one line', () => {
-    const rule = ruleFor(index, { name: 'Draconic Flight', note: '' });
+    const rule = ruleFor(index, actionItem('Draconic Flight'));
     expect(rule?.source).toBe('level 5');
     expect(rule?.lines).toEqual([expect.stringMatching(/^As a Bonus Action once per Long Rest/)]);
   });
@@ -85,13 +101,49 @@ describe('rule text for an action', () => {
           '**Test Folk**\r• Stone Hide: My base AC is 13 + Dex mod. As an action, I can blend in with rocks.',
       }),
     );
-    expect(ruleFor(custom, { name: 'Stone Hide', note: '' })?.lines).toEqual([
+    expect(ruleFor(custom, actionItem('Stone Hide'))?.lines).toEqual([
       'My base AC is 13 + Dex mod. As an action, I can blend in with rocks.',
     ]);
-    expect(ruleFor(index, { name: 'Lay on Hands - Poison', note: '' })?.title).toBe('Lay on Hands');
+    expect(ruleFor(index, actionItem('Lay on Hands - Poison'))?.title).toBe('Lay on Hands');
+  });
+
+  it('finds a feature MPMB wrote to the Notes through where the action came from', () => {
+    const item = readActionList(bladeLock).bonusAction.find((a) => a.name === 'Conjure/Bond Pact Weapon');
+    expect(item?.from).toEqual(['Warlock: Pact of the Blade']);
+    const rule = item && ruleFor(ruleIndex(bladeLock), item);
+    expect(rule?.title).toBe('Pact of the Blade');
+    expect(rule?.source).toBe("Eldritch Invocation, SRD'24 74");
+    expect(rule?.lines[0]).toMatch(/^As a Bonus Action, I can bond with a magical weapon/);
+    expect(rule?.lines).toHaveLength(3);
+  });
+
+  it('finds a feature on an extra notes page', () => {
+    const noted = ruleIndex(
+      withValues(paladin, {
+        'P5.ASnotes.Notes.Right':
+          "#◆ Gaze of Two Minds# (Eldritch Invocation, SRD'24 73)\rAs a Bonus Action, I can touch a willing creature.",
+      }),
+    );
+    expect(ruleFor(noted, actionItem('Gaze of Two Minds'))?.lines).toEqual([
+      'As a Bonus Action, I can touch a willing creature.',
+    ]);
+  });
+
+  it('keeps the first text when a feature is in the notes again', () => {
+    const twice = ruleIndex(
+      withValues(paladin, { 'Extra.Notes': "#◆ Lay on Hands# (Paladin 1, SRD'24 53)\rA shorter copy." }),
+    );
+    expect(ruleFor(twice, actionItem('Lay on Hands'))?.lines).toHaveLength(2);
+  });
+
+  it("reads the feature's name from MPMB's source", () => {
+    expect(featureNames('Warlock: Pact of the Blade')).toEqual(['Pact of the Blade']);
+    expect(featureNames('Paladin (Oath of Devotion): Sacred Weapon')).toEqual(['Sacred Weapon']);
+    expect(featureNames('Wand of Web (magic item)')).toEqual(['Wand of Web (magic item)', 'Wand of Web']);
+    expect(featureNames('Default action')).toEqual(['Default action']);
   });
 
   it('has nothing for an action without rule text', () => {
-    expect(ruleFor(index, { name: 'Quiet Step', note: '' })).toBeNull();
+    expect(ruleFor(index, actionItem('Quiet Step'))).toBeNull();
   });
 });
