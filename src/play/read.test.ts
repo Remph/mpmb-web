@@ -294,6 +294,12 @@ describe('play view extras', () => {
       { text: ' (Paladin 1) ', bold: false, italic: false },
       { text: 'Divine Smite', bold: false, italic: true },
     ]);
+    // Bold and italic at once: an invocation's option, a feat's header.
+    expect(textRuns('• ***Aerial or Aquatic***. It gains')).toEqual([
+      { text: '• ', bold: false, italic: false },
+      { text: 'Aerial or Aquatic', bold: true, italic: true },
+      { text: '. It gains', bold: false, italic: false },
+    ]);
     expect(readFeatures(paladin).map((f) => f.title)).toEqual(['', '', 'Magic Initiate [Cleric]', 'Acolyte']);
   });
 

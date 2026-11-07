@@ -4,6 +4,9 @@
 // this reads them, and a pick presses the same button with the menu answered in the player's place, so
 // MPMB applies it exactly as after the player's own pick (the worker's `pick` command).
 
+import { linesOf, textRuns } from '../play/read.ts';
+import type { TextRun } from '../play/read.ts';
+
 /** One entry of an MPMB menu, as the read script hands it out. */
 export interface RawMenuItem {
   name: string;
@@ -13,6 +16,11 @@ export interface RawMenuItem {
   enabled: boolean;
   /** MPMB's short description of the option, where its lists have one. */
   description: string;
+  /**
+   * The longer rule text where MPMB's lists have one (a feat's descriptionFull, a species variant's traits),
+   * lines separated by "\n", with MPMB's bold and italic marks.
+   */
+  full: string;
   children: RawMenuItem[];
 }
 
@@ -35,7 +43,13 @@ export interface ChoiceOption {
   chosen: boolean;
   /** False where MPMB greys it out (a prerequisite the character doesn't meet). */
   enabled: boolean;
+  /** MPMB's short text, as on the sheet; may run over several lines. */
   description: string;
+  /**
+   * All of its text, to read under the option, a paragraph per entry with MPMB's bold and italic: the longer
+   * rule text where MPMB has one, else the whole description. Empty where MPMB has neither.
+   */
+  full: TextRun[][];
 }
 
 export interface ChoiceSection {
@@ -82,6 +96,17 @@ const WITH_SOURCE = /^([^\t]*)\t\s*\[(.*)\]\s*$/;
 
 const isSeparator = (item: RawMenuItem): boolean => item.name === '-';
 
+/** MPMB's text without its bold and italic marks ("I can cast *Mage Armor*"), line by line. */
+const plainLines = (text: string): string[] =>
+  linesOf(text)
+    .map((line) =>
+      textRuns(line)
+        .map((run) => run.text)
+        .join('')
+        .trim(),
+    )
+    .filter(Boolean);
+
 function optionOf(item: RawMenuItem): ChoiceOption {
   const match = WITH_SOURCE.exec(item.name);
   return {
@@ -90,7 +115,10 @@ function optionOf(item: RawMenuItem): ChoiceOption {
     value: item.value,
     chosen: item.marked,
     enabled: item.enabled,
-    description: item.description.trim(),
+    description: plainLines(item.description).join('\n'),
+    full: linesOf(item.full.trim() || item.description)
+      .map((line) => textRuns(line.trim()))
+      .filter((runs) => runs.length),
   };
 }
 
@@ -214,12 +242,31 @@ export function choicesOf(raw: RawChoices): Choice[] {
  */
 export const CHOICES_SCRIPT = `(function () {
   var desc = function (obj) { return obj && obj.description ? String(obj.description) : ''; };
+  // MPMB's own formatting of a descriptionFull (paragraphs and tables), with its marks kept.
+  var full = function (obj) {
+    return obj && obj.descriptionFull ? String(formatDescriptionFull(obj.descriptionFull, true)) : '';
+  };
+  var texts = function (obj, fallback) {
+    return { description: desc(obj) || desc(fallback), full: full(obj) || full(fallback) };
+  };
   // The option behind a class feature menu entry: "paladin#fighting style#Defense##add".
   var classDesc = function (value) {
     var parts = value.split('#');
     var cl = CurrentClasses[parts[0]];
     var fea = cl && cl.features[parts[1]];
-    return parts.length > 2 && fea ? desc(fea[String(parts[2]).toLowerCase()]) : '';
+    var opt = parts.length > 2 && fea ? fea[String(parts[2]).toLowerCase()] : null;
+    // Lessons of the First Ones has no text of its own: each of its options is an origin feat (MPMB's
+    // invocationMeta names it), whose text says what the player gets.
+    var meta = opt && opt.invocationMeta;
+    var feat = meta && meta.feat && FeatsList[meta.feat];
+    if (feat && !desc(opt)) return texts(meta.choice ? feat[meta.choice] : null, feat);
+    return texts(opt);
+  };
+  // A species variant: "dragonborn#silver"; its traits are the variant's text.
+  var raceDesc = function (value) {
+    var sub = RaceSubList[value.replace('#', '-')];
+    var trait = sub && sub.trait;
+    return { description: '', full: trait ? String(isArray(trait) ? trait.join('\\n') : trait) : '' };
   };
   var copy = function (items, describe) {
     var out = [];
@@ -228,9 +275,10 @@ export const CHOICES_SCRIPT = `(function () {
       var it = arr[i];
       if (!it) continue;
       var value = it.cReturn ? String(it.cReturn) : '';
+      var text = value && describe ? describe(value) : { description: '', full: '' };
       out.push({
         name: String(it.cName), value: value, marked: !!it.bMarked, enabled: it.bEnabled !== false,
-        description: value && describe ? describe(value) : '', children: copy(it.oSubMenu, describe)
+        description: text.description, full: text.full, children: copy(it.oSubMenu, describe)
       });
     }
     return out;
@@ -242,7 +290,7 @@ export const CHOICES_SCRIPT = `(function () {
   var race = Menus.raceoptions;
   if (race.length && race[0].cReturn !== 'nothing') {
     var raceName = What('Race') || (RaceList[CurrentRace.known] ? RaceList[CurrentRace.known].name : '');
-    out.species = { name: String(raceName), items: copy(race) };
+    out.species = { name: String(raceName), items: copy(race, raceDesc) };
   }
 
   for (var n = 1; n <= FieldNumbers.feats; n++) {
@@ -250,7 +298,7 @@ export const CHOICES_SCRIPT = `(function () {
     var feat = key && FeatsList[key];
     if (!feat || !feat.choices) continue;
     MakeFeatMenu_FeatOptions('justMenu', n);
-    var featDesc = function (value) { return desc(feat[value.split('#')[2]]) || desc(feat); };
+    var featDesc = function (value) { return texts(feat[value.split('#')[2]], feat); };
     for (var m = 0; m < Menus.feats.length; m++) {
       var entry = Menus.feats[m];
       if (entry.oSubMenu && /^Change type of /.test(entry.cName)) {

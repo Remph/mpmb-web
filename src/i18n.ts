@@ -625,6 +625,7 @@ export const ui = {
       'Gerade gibt es nichts zu wählen. Bringt eine Stufe, die Spezies oder ein Talent eine Auswahl, steht sie hier.',
     buildSearchOptions: 'Optionen durchsuchen',
     buildTakeBack: '{name} wieder abwählen',
+    buildOptionText: 'Ganzer Text: {name}',
     buildChoicesOpen: '{n} noch offen',
     buildChoicesDone: 'Alles gewählt',
     buildModifiersLine:
@@ -1679,6 +1680,7 @@ export const ui = {
       'Nothing to choose right now. When a level, the species or a feat brings a choice, it shows up here.',
     buildSearchOptions: 'Search the options',
     buildTakeBack: 'Take back {name}',
+    buildOptionText: 'Full text: {name}',
     buildChoicesOpen: '{n} still open',
     buildChoicesDone: 'All chosen',
     buildModifiersLine:

@@ -4,6 +4,7 @@
   still open; on the other the options of the choice in view. A tap on an option picks it right away,
   through MPMB's own menu (the app answers it in the player's place), so MPMB applies it as after a pick
   in the PDF. Where several may be chosen (invocations), a second tap on a chosen one takes it back.
+  The arrow beside an option opens its whole text under it, without picking it.
 -->
 <script lang="ts">
   import { choiceNamed } from '../../build/choose-link.ts';
@@ -32,6 +33,14 @@
   let selectedId = $state('');
   let query = $state('');
   let pending = $state('');
+  /** The options whose whole text is open, by choice and option; several may be open to compare them. */
+  let opened = $state<string[]>([]);
+  const openKey = (choice: Choice, option: ChoiceOption): string => `${choice.id}\n${option.value}`;
+
+  function toggleText(choice: Choice, option: ChoiceOption) {
+    const key = openKey(choice, option);
+    opened = opened.includes(key) ? opened.filter((k) => k !== key) : [...opened, key];
+  }
   let detailCard: HTMLElement | undefined = $state();
 
   // The choice in view: the one the player tapped, else the feature's they came from, else the first
@@ -169,7 +178,8 @@
       {#each sections as section, s (s)}
         {#if section.heading}<p class="heading">{section.heading}</p>{/if}
         <ul>
-          {#each section.options as option (option.value)}
+          {#each section.options as option, o (option.value)}
+            {@const open = opened.includes(openKey(selected, option))}
             <li>
               <button
                 type="button"
@@ -189,6 +199,30 @@
                 </span>
                 {#if option.source}<span class="source">{option.source}</span>{/if}
               </button>
+              {#if option.full.length}
+                <!-- Its own button, as tapping the option picks it: reading an option must not choose it, and
+                     works for one MPMB greys out too (an invocation for a later level). The text opens outside
+                     the option, so a greyed-out one reads as clearly as the rest. -->
+                <button
+                  type="button"
+                  class="more"
+                  aria-expanded={open}
+                  aria-controls={`full-${s}-${o}`}
+                  aria-label={fill(t.buildOptionText, { name: option.label })}
+                  onclick={() => selected && toggleText(selected, option)}
+                  ><span class="chevron" aria-hidden="true"></span></button
+                >
+              {/if}
+              {#if open}
+                <div class="full" id={`full-${s}-${o}`} lang="en">
+                  {#each option.full as runs, r (r)}
+                    <p>
+                      {#each runs as run, k (k)}{#if run.bold}<b>{run.text}</b>{:else if run.italic}<i>{run.text}</i
+                          >{:else}{run.text}{/if}{/each}
+                    </p>
+                  {/each}
+                </div>
+              {/if}
             </li>
           {/each}
         </ul>
@@ -336,11 +370,19 @@
     margin-top: 0;
   }
 
+  /* The option and its arrow side by side; the open text below both. */
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+  }
+
   .option {
     display: flex;
+    flex: 1;
     align-items: center;
     gap: 0.75rem;
-    width: 100%;
+    min-width: 0;
     min-height: 48px;
     padding: 0.375rem 0.75rem;
     text-align: left;
@@ -382,7 +424,7 @@
     line-height: 1.3;
   }
 
-  /* MPMB's descriptions run long; two lines tell the options apart, the sheet has the full text. */
+  /* MPMB's descriptions run long; two lines tell the options apart, the arrow opens the rest. */
   .option small {
     display: -webkit-box;
     overflow: hidden;
@@ -397,6 +439,51 @@
     flex: none;
     color: var(--ink-muted);
     font-size: 0.8125rem;
+  }
+
+  .more {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 44px;
+    padding: 0;
+  }
+
+  .more[aria-expanded='true'] {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* A chevron pointing down; it turns up while the text is open. */
+  .chevron {
+    width: 0.625rem;
+    height: 0.625rem;
+    margin-top: -0.3125rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+  }
+
+  .more[aria-expanded='true'] .chevron {
+    margin-top: 0.3125rem;
+    transform: rotate(-135deg);
+  }
+
+  .full {
+    flex-basis: 100%;
+    padding: 0.625rem 0.75rem;
+    border-radius: 0.5rem;
+    background: var(--paper);
+    font-size: 0.9375rem;
+    line-height: 1.4;
+  }
+
+  .full p {
+    margin: 0.25rem 0 0;
+  }
+
+  .full p:first-child {
+    margin-top: 0;
   }
 
   /* Below 1000 px the rail leaves too little room for two columns (iPad upright: about 560 px). */

@@ -4,7 +4,7 @@ import { describe, expect, test } from 'vitest';
 import { BUILDER_INFO_SCRIPT, readBuilderInfo } from '../src/engine/builder.ts';
 import type { BuilderInfo } from '../src/engine/builder.ts';
 import { offers } from '../src/engine/choices.ts';
-import type { Choice } from '../src/engine/choices.ts';
+import type { Choice, ChoiceOption } from '../src/engine/choices.ts';
 import type { Engine } from '../src/engine/engine.ts';
 import type { MenuItem } from '../src/engine/host.ts';
 import { openSheet, referenceSheet } from './characters.ts';
@@ -119,5 +119,41 @@ describe('the choices from MPMB menus', () => {
     expect(engine.doc.getField('Feat Name 1')?.value).toBe('Magic Initiate [Druid]');
     expect(infoOf(engine).choices.filter((c) => c.kind === 'feat')[0]?.chosen).toEqual(['Druid']);
     expect(engine.stats.errors).toEqual([]);
+  });
+});
+
+describe('the full text of an option', () => {
+  const options = (choice: Choice | undefined) => choice?.sections.flatMap((s) => s.options) ?? [];
+  const text = (option: ChoiceOption | undefined): string[] =>
+    option?.full.map((runs) => runs.map((run) => run.text).join('')) ?? [];
+
+  test('invocations keep all of their text, without MPMB’s marks', () => {
+    const info = infoOf(openSheet(referenceSheet('paladin8-warlock2')));
+    const invocations = options(named(info, 'Eldritch Invocation'));
+    const armor = invocations.filter((o) => o.label === 'Armor of Shadows')[0];
+    expect(armor?.description).toBe('I can cast Mage Armor on myself without expending a spell slot.');
+    const chain = invocations.filter((o) => o.label.startsWith('Investment of the Chain Master'))[0];
+    expect(chain?.description).toMatch(/^• Aerial or Aquatic\. It gains a Fly or Swim speed/m);
+    // Without a longer rule text, all of the description is there to read, with MPMB's emphasis.
+    expect(chain?.full[1]?.[1]).toEqual({ text: 'Aerial or Aquatic', bold: true, italic: true });
+    expect(armor?.full[0]?.[1]).toEqual({ text: 'Mage Armor', bold: false, italic: true });
+    // Lessons of the First Ones has no text of its own: each option shows its origin feat's.
+    const lessons = invocations.filter((o) => o.label === 'Lessons of the First Ones: Alert')[0];
+    expect(lessons?.description).not.toBe('');
+    expect(text(lessons).join(' ')).toMatch(/Initiative Swap/);
+    // MPMB's headers ("***Initiative Swap***") come out bold, without a stray mark.
+    expect(lessons?.full[2]?.[0]).toEqual({ text: 'Initiative Swap', bold: true, italic: true });
+    expect(text(lessons).some((line) => line.includes('*'))).toBe(false);
+  });
+
+  test('feat forms and species variants bring their rule text', () => {
+    const { choices } = infoOf(openSheet(referenceSheet('paladin8-warlock2')));
+    const druid = options(choices.filter((c) => c.kind === 'feat')[0]).filter((o) => o.label === 'Druid')[0];
+    expect(text(druid).join(' ')).toMatch(/cantrip/i);
+    const gold = options(choices.filter((c) => c.kind === 'species')[0]).filter(
+      (o) => o.label === 'Gold Dragonborn',
+    )[0];
+    expect(text(gold)[0]).toBe('Gold Dragonborn');
+    expect(text(gold).join(' ')).toMatch(/Fire/);
   });
 });

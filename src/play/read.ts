@@ -529,17 +529,18 @@ export function readFeatures(fields: FieldViews): FeatureText[] {
   ].filter((block) => block.text !== '');
 }
 
-/** A run of text with MPMB's emphasis: **bold**, #bold#, ##bold## and *italic*. */
+/** A run of text with MPMB's emphasis: **bold**, #bold#, ##bold##, *italic* and ***both***. */
 export interface TextRun {
   text: string;
   bold: boolean;
   italic: boolean;
 }
 
-// MPMB's marks: "**Silver Dragonborn**", "#◆ Lay on Hands#", "##◆ Breath Weapon##" and "*Divine Smite*"
-// are runs; "40 HP" in between is plain. Try it:
-// https://regex101.com/?regex=%5C*%5C*(.%2B%3F)%5C*%5C*%7C%23%23(.%2B%3F)%23%23%7C%23(.%2B%3F)%23%7C%5C*(.%2B%3F)%5C*&testString=%23%E2%97%86%20Lay%20on%20Hands%23%20(Paladin%201)%20*Divine%20Smite*
-const MARKS = /\*\*(.+?)\*\*|##(.+?)##|#(.+?)#|\*(.+?)\*/g;
+// MPMB's marks: "**Silver Dragonborn**", "#◆ Lay on Hands#", "##◆ Breath Weapon##", "*Divine Smite*" and
+// "***Aerial or Aquatic***" (an invocation's option, a descriptionFull's header) are runs; "40 HP" in
+// between is plain. Try it:
+// https://regex101.com/?regex=%5C*%5C*%5C*(.%2B%3F)%5C*%5C*%5C*%7C%5C*%5C*(.%2B%3F)%5C*%5C*%7C%23%23(.%2B%3F)%23%23%7C%23(.%2B%3F)%23%7C%5C*(.%2B%3F)%5C*&testString=%23%E2%97%86%20Lay%20on%20Hands%23%20(Paladin%201)%20*Divine%20Smite*%20%E2%80%A2%20***Aerial%20or%20Aquatic***.
+const MARKS = /\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|##(.+?)##|#(.+?)#|\*(.+?)\*/g;
 
 /** One line of MPMB's feature text as runs. Lines are separated by "\r" in the field. */
 export function textRuns(line: string): TextRun[] {
@@ -550,8 +551,12 @@ export function textRuns(line: string): TextRun[] {
   let at = 0;
   [...line.matchAll(MARKS)].forEach((m) => {
     plain(line.slice(at, m.index));
-    const [, b1, b2, b3, italic] = m;
-    runs.push({ text: b1 ?? b2 ?? b3 ?? italic ?? '', bold: italic === undefined, italic: italic !== undefined });
+    const [, both, b1, b2, b3, italic] = m;
+    runs.push({
+      text: both ?? b1 ?? b2 ?? b3 ?? italic ?? '',
+      bold: italic === undefined,
+      italic: both !== undefined || italic !== undefined,
+    });
     at = m.index + m[0].length;
   });
   plain(line.slice(at));
