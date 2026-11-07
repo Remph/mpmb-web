@@ -117,6 +117,17 @@ describe('rule text for an action', () => {
     expect(rule?.lines).toHaveLength(3);
   });
 
+  it("forgets where an action came from once the player types over MPMB's row", () => {
+    const row = Object.keys(bladeLock).find(
+      (name) => /^Bonus Action \d+$/.test(name) && bladeLock[name]?.value === 'Conjure/Bond Pact Weapon',
+    );
+    expect(row).toBeDefined();
+    const typed = withValues(bladeLock, { [row ?? '']: 'Quiet Step' });
+    const item = readActionList(typed).bonusAction.find((a) => a.name === 'Quiet Step');
+    expect(item?.from).toEqual([]);
+    expect(item && ruleFor(ruleIndex(typed), item)).toBeNull();
+  });
+
   it('finds a feature on an extra notes page', () => {
     const noted = ruleIndex(
       withValues(paladin, {

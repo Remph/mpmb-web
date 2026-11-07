@@ -58,10 +58,15 @@ export function actionItem(text: string, from: string[] = []): ActionItem {
 }
 
 // MPMB's AddAction keeps the action and where it came from in the row's submitName, joined by "#!#":
-// "Conjure/Bond Pact Weapon#!#Warlock: Pact of the Blade". A row the player typed has no source.
+// "Conjure/Bond Pact Weapon#!#Warlock: Pact of the Blade". A row the player typed has no source. Typing over
+// a row MPMB filled leaves its submitName as it was (the field has no script to clear it), so the sources
+// count only while the row still holds the action they were written for, as MPMB's own AddAction checks.
 const SOURCE_MARK = '#!#';
-const sourcesOf = (submitName: string | undefined): string[] =>
-  submitName?.includes(SOURCE_MARK) ? submitName.split(SOURCE_MARK).slice(1).filter(Boolean) : [];
+function sourcesOf(submitName: string | undefined, value: string): string[] {
+  if (!submitName?.includes(SOURCE_MARK)) return [];
+  const [action, ...sources] = submitName.split(SOURCE_MARK);
+  return action?.trim() === value ? sources.filter(Boolean) : [];
+}
 
 export function readActionList(fields: FieldViews): ActionList {
   const basic: string[] = [];
@@ -70,9 +75,10 @@ export function readActionList(fields: FieldViews): ActionList {
     rows(fields, `${label} `)
       .map((n) => `${label} ${n}`)
       .forEach((field) => {
-        const from = sourcesOf(fields[field]?.submitName);
+        const value = valueOf(fields, field);
+        const from = sourcesOf(fields[field]?.submitName, value);
         // MPMB puts several actions in one row: "Dash / Disengage / Dodge / Hide".
-        valueOf(fields, field)
+        value
           .split(' / ')
           .map((text) => actionItem(text, from))
           .forEach((item) => {
