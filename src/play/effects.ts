@@ -103,13 +103,22 @@ function readApplied(value: unknown): Applied | null {
 /** Whatever a stored or restored entry holds, made into valid effects (old or hand-edited backups). */
 export function readEffects(value: unknown): Effect[] {
   if (!Array.isArray(value)) return [];
+  // The ids key the card's switches: a repeated one (a copied entry in a hand-edited backup) would make
+  // Svelte's keyed list fail, so a repeat gets a new id.
+  const ids = new Set<string>();
+  const free = (id: string, i: number): string => (ids.has(id) ? free(`${id}-${i}`, i) : id);
+  const uniqueId = (wanted: string, i: number): string => {
+    const id = free(wanted || `effect-${i}`, i);
+    ids.add(id);
+    return id;
+  };
   return value
     .filter(isObject)
     .slice(0, MAX_EFFECTS)
     .map((v, i) => {
       const n = typeof v.acNumber === 'number' && Number.isFinite(v.acNumber) ? Math.round(v.acNumber) : 0;
       return {
-        id: text(v.id, MAX_ID) || `effect-${i}`,
+        id: uniqueId(text(v.id, MAX_ID), i),
         name: text(v.name, MAX_NAME),
         acAbility: isAbility(v.acAbility) ? v.acAbility : '',
         acNumber: Math.max(-MAX_AC_NUMBER, Math.min(MAX_AC_NUMBER, n)),
