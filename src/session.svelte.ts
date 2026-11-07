@@ -15,6 +15,7 @@ import { keptVersions, loadSheetPack } from './sheet-versions.ts';
 import { FF } from './engine/types.ts';
 import type { ImageSlot, SheetImage, SheetImages } from './engine/types.ts';
 import { fitImages, fitPicture } from './play/pictures.ts';
+import { followMaxHp } from './play/rules.ts';
 import type { Texts } from './i18n.ts';
 import { counted, fill } from './i18n.ts';
 import { PopUpStack } from './popups/popups.svelte.ts';
@@ -712,7 +713,7 @@ export class Session {
         try {
           if (this.current !== open || readOnly(open.status)) return;
           open.status = 'working';
-          await job();
+          await this.followingMaxHp(job);
           open.fields = this.shownFields();
         } finally {
           this.queued--;
@@ -845,7 +846,7 @@ export class Session {
     open.status = 'working';
     const run = async (): Promise<void> => {
       try {
-        await job();
+        await this.followingMaxHp(job);
         await this.saveOpen();
       } catch (err) {
         open.status = 'error';
@@ -854,6 +855,18 @@ export class Session {
     };
     this.running = run();
     return this.running;
+  }
+
+  /**
+   * Runs a change on the open sheet; when it changed the maximum hit points (a level, Constitution, a feat),
+   * MPMB's "current maximum" box moves along (see followMaxHp). Here rather than in the level-up buttons:
+   * MPMB raises the maximum from many places, and every one of them would leave the box behind.
+   */
+  private async followingMaxHp(job: () => Promise<unknown>): Promise<void> {
+    const before = { ...this.client.fields };
+    await job();
+    for (const [name, text] of Object.entries(followMaxHp(before, this.client.fields)))
+      await this.client.edit(name, text);
   }
 
   /**

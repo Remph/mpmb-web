@@ -9,6 +9,7 @@ import {
   applyHealing,
   dawn,
   dawnFeatures,
+  followMaxHp,
   longRest,
   pactSlots,
   rollRegain,
@@ -76,6 +77,37 @@ describe('hit points', () => {
     expect(tickedDeathSaves(paladin)).toEqual([]);
     const dying = withValues(paladin, { 'HP Current': '0', 'Death Save Success2': 'Yes', 'Death Save Fail1': 'Yes' });
     expect(tickedDeathSaves(dying)).toEqual(['Death Save Success2', 'Death Save Fail1']);
+  });
+});
+
+describe('a new maximum', () => {
+  const max = readHitPoints(paladin).max!;
+
+  it('takes along a box that only repeats the maximum, so a level up shows no lowered maximum', () => {
+    // Players often copy the maximum into the "current maximum" box in Acrobat (both group sheets did).
+    const before = withValues(paladin, { 'HP Max Current': String(max) });
+    const after = withValues(before, { 'HP Max': String(max + 9) });
+    expect(followMaxHp(before, after)).toEqual({ 'HP Max Current': String(max + 9) });
+    expect(readHitPoints(withValues(after, followMaxHp(before, after))).lowered).toBeNull();
+  });
+
+  it('keeps what an attack took off a lowered maximum', () => {
+    const before = withValues(paladin, { 'HP Max Current': String(max - 16) });
+    expect(followMaxHp(before, withValues(before, { 'HP Max': String(max + 9) }))).toEqual({
+      'HP Max Current': String(max - 7),
+    });
+    // A level less (the Build screen's minus): down by as much, never below 0.
+    expect(followMaxHp(before, withValues(before, { 'HP Max': String(max - 200) }))).toEqual({
+      'HP Max Current': '0',
+    });
+  });
+
+  it('changes nothing when the box is empty or the maximum stays', () => {
+    expect(followMaxHp(paladin, withValues(paladin, { 'HP Max': String(max + 9) }))).toEqual({});
+    const boxed = withValues(paladin, { 'HP Max Current': String(max - 16) });
+    expect(followMaxHp(boxed, withValues(boxed, { 'HP Current': '3' }))).toEqual({});
+    // A maximum the player cleared (MPMB set to "don't change") is no new maximum to follow.
+    expect(followMaxHp(boxed, withValues(boxed, { 'HP Max': '' }))).toEqual({});
   });
 });
 

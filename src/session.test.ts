@@ -331,6 +331,26 @@ describe('changes on the open character (tech review 2026-11-04)', () => {
     expect(sent.at(-1)).toMatchObject({ type: 'open', character: { fields: { Notes: { value: 'three' } } } });
   });
 
+  test('a new maximum takes the "current maximum" box along (level up, 2026-11-07)', async () => {
+    const sent: Command[] = [];
+    const session = await startSession({ sent });
+    await openNew(session);
+    // The box repeats the maximum, as players type it in Acrobat; the stand-in's edit of "HP Max" plays
+    // MPMB raising the maximum after a level up.
+    await session.change([
+      { edit: 'HP Max', text: '76' },
+      { edit: 'HP Max Current', text: '76' },
+    ]);
+    sent.length = 0;
+    await session.change([{ edit: 'HP Max', text: '85' }]);
+    expect(sent.filter((c) => c.type === 'edit')).toEqual([
+      expect.objectContaining({ field: 'HP Max', text: '85' }),
+      expect.objectContaining({ field: 'HP Max Current', text: '85' }),
+    ]);
+    expect(session.current?.fields['HP Max Current']?.value).toBe('85');
+    expect(sent.filter((c) => c.type === 'save')).toHaveLength(1);
+  });
+
   test('a failed change offers to reopen the character, which loads what was saved (finding 6)', async () => {
     const session = await startSession();
     await openNew(session);

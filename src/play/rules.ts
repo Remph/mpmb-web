@@ -4,6 +4,7 @@
 import type { FieldViews } from '../worker/views.ts';
 import {
   isOn,
+  numberOf,
   readConditions,
   readHitPoints,
   readLimitedFeatures,
@@ -50,6 +51,22 @@ export function applyDamage(hp: HpNow, amount: number, lowersMax = false): HpCha
 export function applyHealing(hp: HpNow, amount: number): HpChange {
   const top = maxNow(hp) ?? Infinity;
   return { current: Math.min(top, currentOf(hp) + amount), temp: hp.temp ?? 0, lowered: hp.lowered ?? null };
+}
+
+/**
+ * What a new maximum (a level up or down, Constitution, a feat) does to MPMB's "current maximum" box: it
+ * moves by as much as the maximum did. Acrobat leaves the box alone, but the app reads a number there
+ * below the maximum as a lowered maximum (Life Drain): a box that only repeated the old maximum, as
+ * players often type it, would otherwise show the new levels' hit points as lost, and a real lowered
+ * maximum keeps what the attack took off. Empty when nothing needs to change, or when the change
+ * itself wrote the box.
+ */
+export function followMaxHp(before: FieldViews, after: FieldViews): Record<string, string> {
+  const [oldMax, newMax] = [numberOf(before, 'HP Max'), numberOf(after, 'HP Max')];
+  const box = numberOf(before, 'HP Max Current');
+  if (oldMax === null || newMax === null || oldMax === newMax || box === null) return {};
+  if (numberOf(after, 'HP Max Current') !== box) return {};
+  return { 'HP Max Current': String(Math.max(0, box + newMax - oldMax)) };
 }
 
 /** Field edits a rest makes: values to store (empty clears) and check boxes to untick. */
