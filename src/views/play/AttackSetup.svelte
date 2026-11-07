@@ -57,6 +57,16 @@
     before = numbers;
     open = true;
   }
+
+  /**
+   * A bonus box applies on its change event, which a browser fires on blur. The X takes the focus first, but
+   * Escape closes with the focus still in the box and the typed bonus would be lost: blur it before closing,
+   * so both ways keep what was typed, like every other choice in this window.
+   */
+  function close() {
+    if (document.activeElement instanceof HTMLInputElement) document.activeElement.blur();
+    open = false;
+  }
 </script>
 
 <button
@@ -70,7 +80,7 @@
 >
 
 {#if open}
-  <Modal title={name} onescape={() => (open = false)} closeLabel={t.close}>
+  <Modal title={name} onescape={close} closeLabel={t.close}>
     <p class="hint">{t.attackSetupIntro}</p>
     <div class="part">
       <span class="label" id={`prof-${row}`}>{t.attackSetupProficient}</span>
@@ -107,6 +117,9 @@
           >{bonuses.dc ? t.attackSetupDcBonus : t.attackSetupHitBonus}<input
             type="text"
             maxlength="20"
+            autocomplete="off"
+            autocorrect="off"
+            spellcheck="false"
             placeholder="0"
             value={bonuses.hit}
             {disabled}
@@ -117,6 +130,9 @@
           >{t.attackSetupDamageBonus}<input
             type="text"
             maxlength="20"
+            autocomplete="off"
+            autocorrect="off"
+            spellcheck="false"
             placeholder="0"
             value={bonuses.damage}
             {disabled}
@@ -147,14 +163,15 @@
     font-size: 0.8125rem;
     font-weight: 600;
     white-space: nowrap;
-    /* The visible chip is 32 px; the tap area reaches 44 px (touch first). */
+    /* The visible chip is 32 px; the tap area reaches 44 px (touch first). The pseudo-element's inset counts
+       from inside the 1 px border, so 7 px each way: 30 + 14 = 44. */
     position: relative;
   }
 
   .chip::after {
     content: '';
     position: absolute;
-    inset: -6px 0;
+    inset: -7px 0;
   }
 
   .chip.odd {

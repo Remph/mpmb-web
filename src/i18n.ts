@@ -1581,8 +1581,7 @@ export const ui = {
     attackSetupNotProf: 'not prof.',
     attackSetupNoAbility: '—',
     attackSetupLabel: 'Proficiency and ability of {name}: {state}',
-    attackSetupIntro:
-      'The sheet’s two boxes in front of this attack, as in the PDF. MPMB works out the numbers from them.',
+    attackSetupIntro: 'The sheet’s boxes for this attack, as in the PDF. MPMB works out the numbers from them.',
     attackSetupProficient: 'Proficient',
     attackSetupAbility: 'Ability',
     attackSetupNone: 'none',
