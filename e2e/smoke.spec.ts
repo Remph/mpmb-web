@@ -404,6 +404,16 @@ test('a character saved on an older sheet is updated when it opens, and the vers
   await damagePad.getByRole('checkbox', { name: /^Lowers max HP too/ }).check();
   await damagePad.getByRole('button', { name: 'Take damage' }).click();
   await expect(page.getByText('Max lowered by 3')).toBeVisible();
+  // A level up raises the maximum; the hit points the hit took stay lost, no more (hotfix 2026-11-07: the
+  // box kept its old number, and the new level's hit points showed as lowered too).
+  await page.getByRole('button', { name: 'Sheet menu' }).click();
+  await page.getByRole('button', { name: /^Level up/ }).click();
+  await page.getByRole('dialog', { name: 'Level up to 11' }).getByRole('button', { name: 'Level up' }).click();
+  const changesAlert = page.getByRole('dialog', { name: 'Changes alert' });
+  await changesAlert.getByRole('button', { name: 'Close', exact: true }).last().click();
+  await page.getByRole('link', { name: 'Done: to the play view' }).click();
+  await expect(page.getByRole('button', { name: /^Restore max HP to 68/ })).toBeVisible();
+  await expect(page.getByText('Max lowered by 3')).toBeVisible();
   await page.getByRole('button', { name: /^Restore max HP to/ }).click();
   await expect(page.getByText(/^Max lowered by/)).toHaveCount(0);
   // The next opening of the paladin tries again.
