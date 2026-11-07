@@ -33,7 +33,8 @@ import { CharacterStore, copyHomebrew, describeCharacter, keepStorage } from './
 import { TabLock, browserLocks } from './store/tab-lock.ts';
 import type { Locks } from './store/tab-lock.ts';
 import type { UltCharges } from './homebrew/ult.ts';
-import type { CharacterMeta, PreviousVersion, StoredCharacter } from './store/characters.ts';
+import type { CharacterHomebrew, CharacterMeta, PreviousVersion, StoredCharacter } from './store/characters.ts';
+import type { Effect } from './play/effects.ts';
 import { EngineClient, EngineError } from './worker/client.ts';
 import type { Done, PopUps, WorkerLike } from './worker/client.ts';
 import { createLink } from './worker/link.ts';
@@ -562,13 +563,28 @@ export class Session {
    * The open character's ult charges. Not a sheet field, so MPMB's scripts never see it: it goes straight
    * into the character's list entry, which backups carry along.
    */
-  async setUlt(ult: UltCharges): Promise<void> {
+  setUlt(ult: UltCharges): Promise<void> {
+    return this.setHomebrew({ ult: { ...ult } });
+  }
+
+  /** The open character's effects (src/play/effects.ts), kept like the ult charges. */
+  setEffects(effects: Effect[]): Promise<void> {
+    return this.setHomebrew(copyHomebrew({ effects }));
+  }
+
+  /** Advantage or disadvantage on attack rolls against the open character; '' for neither. */
+  setAcEdge(edge: '' | 'adv' | 'dis'): Promise<void> {
+    return this.setHomebrew({ acEdge: edge || undefined });
+  }
+
+  private async setHomebrew(values: CharacterHomebrew): Promise<void> {
     const open = this.current;
     if (!open || !this.store || !this.tabLock.holds(open.meta.id)) return;
     // A change like any other: the list moves it up, and a backup restore's "older than here" sees it
     // (tech review 2026-11-04, finding 13).
     const updated = new Date().toISOString();
-    open.meta = { ...open.meta, updated, homebrew: { ...open.meta.homebrew, ult: { ...ult } } };
+    const homebrew = copyHomebrew({ ...open.meta.homebrew, ...values });
+    open.meta = { ...open.meta, updated, homebrew };
     await this.store.putMeta($state.snapshot(open.meta));
     await this.refresh();
   }

@@ -68,6 +68,26 @@ describe('describeCharacter', () => {
     expect(describeCharacter(sheetOf({}), NO_ADD_ONS, null)).not.toHaveProperty('homebrew');
   });
 
+  test('keeps the effects and the mark on attacks against the character, as copies', () => {
+    const applied = {
+      ac: { field: 1 as const, before: '', beforeNote: '', value: '2', note: 'Shield Stance' },
+      attacks: [],
+    };
+    const effect = {
+      id: 'e',
+      name: 'Shield Stance',
+      acAbility: '' as const,
+      acNumber: 2,
+      weaponAbility: '' as const,
+      applied,
+    };
+    const homebrew = { effects: [effect], acEdge: 'dis' as const };
+    const meta = describeCharacter(sheetOf({}), NO_ADD_ONS, { id: 'a', created: '2026-01-01T00:00:00.000Z', homebrew });
+    expect(meta.homebrew).toEqual(homebrew);
+    expect(meta.homebrew?.effects?.[0]).not.toBe(effect);
+    expect(meta.homebrew?.effects?.[0]?.applied?.ac).not.toBe(applied.ac);
+  });
+
   test('a new character gets a new id; empty fields give empty texts', () => {
     const one = describeCharacter(sheetOf({}), NO_ADD_ONS, null);
     const two = describeCharacter(sheetOf({}), NO_ADD_ONS, null);

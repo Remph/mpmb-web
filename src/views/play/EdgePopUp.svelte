@@ -17,6 +17,10 @@
     state: Advantage;
     /** The prefix of MPMB's boxes: "Ste", "Str ST", "Init", "Att". */
     boxes: string;
+    /** Instead of MPMB's boxes: a mark the app keeps itself (attacks against the character have none). */
+    onmark?: (to: Edge) => void;
+    /** Instead of the PDF note in the hint. */
+    hint?: string;
     /** A line under the choices, when the mark means more than one roll ("every attack roll"). */
     note?: string;
     disabled: boolean;
@@ -25,7 +29,7 @@
     t: Texts;
   }
 
-  let { title, roll, state, boxes, note = '', disabled, change, onclose, t }: Props = $props();
+  let { title, roll, state, boxes, onmark, hint = '', note = '', disabled, change, onclose, t }: Props = $props();
 
   const CHOICES: [Edge, 'rollNormal' | 'rollAdvantage' | 'rollDisadvantage'][] = [
     ['', 'rollNormal'],
@@ -35,6 +39,10 @@
   const current = $derived(edgeOf(state));
 
   function mark(to: Edge) {
+    if (onmark) {
+      if (to !== current) onmark(to);
+      return onclose();
+    }
     const steps = markSteps(state, boxes, to);
     if (steps.length) change(steps);
     onclose();
@@ -43,7 +51,8 @@
 
 <Modal {title} onescape={onclose} closeLabel={t.close}>
   {#if roll}<p class="roll">{roll}</p>{/if}
-  <div class="choices">
+  <!-- Against the character the colours swap: enemies rolling with disadvantage is good news. -->
+  <div class="choices" class:against={!!onmark}>
     {#each CHOICES as [to, text] (to)}
       <button type="button" class="choice {to}" aria-pressed={current === to} {disabled} onclick={() => mark(to)}
         >{#if to}<span aria-hidden="true">{ARROW[to]}</span>{/if}
@@ -52,7 +61,7 @@
     {/each}
   </div>
   {#if note}<p class="hint">{note}</p>{/if}
-  <p class="hint">{t.edgeHint}</p>
+  <p class="hint">{hint || t.edgeHint}</p>
 </Modal>
 
 <style>
@@ -102,6 +111,22 @@
 
   .choice.dis[aria-pressed='true'] {
     background: var(--hp-soft);
+  }
+
+  .against .choice.adv {
+    color: var(--hp);
+  }
+
+  .against .choice.dis {
+    color: var(--ok);
+  }
+
+  .against .choice.adv[aria-pressed='true'] {
+    background: var(--hp-soft);
+  }
+
+  .against .choice.dis[aria-pressed='true'] {
+    background: color-mix(in srgb, var(--ok) 14%, var(--surface));
   }
 
   .choice:hover:not(:disabled, [aria-pressed='true']) {

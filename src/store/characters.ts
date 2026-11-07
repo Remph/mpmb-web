@@ -7,6 +7,7 @@ import type { AddOns } from '../engine/add-ons.ts';
 import type { SheetChange } from '../engine/sheet-changes.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
 import type { UltCharges } from '../homebrew/ult.ts';
+import type { Effect } from '../play/effects.ts';
 
 export interface CharacterMeta {
   id: string;
@@ -28,9 +29,16 @@ export interface CharacterMeta {
   homebrew?: CharacterHomebrew;
 }
 
-/** A character's homebrew values. Kept even while its switch is off, so turning it on again finds them. */
+/**
+ * A character's values that live only in the app, never in a PDF: homebrew (kept even while its switch is
+ * off, so turning it on again finds them) and the play view's own marks.
+ */
 export interface CharacterHomebrew {
   ult?: UltCharges;
+  /** Features the player switches on and off (src/play/effects.ts). */
+  effects?: Effect[];
+  /** Whether attack rolls against the character have advantage or disadvantage (the sheet has no box for it). */
+  acEdge?: 'adv' | 'dis';
 }
 
 /** A character moved to a new release of MPMB's sheet with MPMB's own import (M11). */
@@ -252,8 +260,21 @@ export function describeCharacter(
 
 /** A plain copy (the page's values can be reactive proxies, which IndexedDB can't store). */
 export function copyHomebrew(homebrew: CharacterHomebrew): CharacterHomebrew {
-  return homebrew.ult ? { ult: { ...homebrew.ult } } : {};
+  const { ult, effects, acEdge } = homebrew;
+  return {
+    ...(ult ? { ult: { ...ult } } : {}),
+    ...(effects ? { effects: effects.map(copyEffect) } : {}),
+    ...(acEdge ? { acEdge } : {}),
+  };
 }
+
+const copyEffect = (effect: Effect): Effect => ({
+  ...effect,
+  applied: effect.applied && {
+    ...(effect.applied.ac ? { ac: { ...effect.applied.ac } } : {}),
+    attacks: effect.applied.attacks.map((a) => ({ ...a })),
+  },
+});
 
 /**
  * Asks the browser to keep the site's data even when the disk runs low; otherwise it may clear it

@@ -8,6 +8,10 @@
   import type { Step } from '../../session.svelte.ts';
   import { tick } from 'svelte';
   import { ARROW, edgeOf } from '../../play/edge.ts';
+  import type { Edge } from '../../play/edge.ts';
+  import { effectOn, switchOff, switchOn } from '../../play/effects.ts';
+  import type { Effect } from '../../play/effects.ts';
+  import EffectsWindow from './EffectsWindow.svelte';
   import {
     CONDITIONS,
     readConditions,
@@ -35,10 +39,27 @@
     /** The ult charges (homebrew), or null while their switch is off. */
     ult?: Ult | null;
     onult?: (ult: Ult) => void;
+    /** The character's effects (src/play/effects.ts) and how to keep a changed list. */
+    effects?: Effect[];
+    oneffects?: (effects: Effect[]) => void;
+    /** Advantage or disadvantage on attack rolls against the character (kept in the app, not the sheet). */
+    acEdge?: Edge;
+    onacedge?: (edge: Edge) => void;
     t: Texts;
   }
 
-  let { fields, disabled, change, ult = null, onult = () => {}, t }: Props = $props();
+  let {
+    fields,
+    disabled,
+    change,
+    ult = null,
+    onult = () => {},
+    effects = [],
+    oneffects = () => {},
+    acEdge = '',
+    onacedge = () => {},
+    t,
+  }: Props = $props();
 
   const hp = $derived(readHitPoints(fields));
   const numbers = $derived(readNumbers(fields));
@@ -115,6 +136,48 @@
     ]),
   );
   const exhaustionText = (n: number): string => (n > 0 ? String(n) : '');
+
+  // ---- Effects: one tap writes a feature's changes into the sheet, the next takes them out ----
+  let editingEffects = $state(false);
+  let effectsButton: HTMLButtonElement | undefined = $state();
+  async function closeEffects() {
+    editingEffects = false;
+    await tick();
+    effectsButton?.focus();
+  }
+  function toggleEffect(effect: Effect) {
+    if (effectOn(effect)) {
+      change(switchOff(fields, effect));
+      oneffects(effects.map((e) => (e.id === effect.id ? { ...e, applied: null } : e)));
+      return;
+    }
+    const { steps, applied } = switchOn(fields, effect);
+    if (steps.length) change(steps);
+    oneffects(effects.map((e) => (e.id === effect.id ? { ...e, applied } : e)));
+  }
+  /** "Rage: AC +2, weapon attacks use Str" for the effects that are on. */
+  function summary(effect: Effect): string {
+    // The AC bonus in the page's language ("+INT+1"), not MPMB's field text ("Int+1").
+    const ability = effect.acAbility ? `+${t[`short${effect.acAbility}`]}` : '';
+    const n = effect.acNumber;
+    const bonus = `${ability}${n > 0 ? `+${n}` : n < 0 ? n : ''}`;
+    const parts = [
+      bonus ? fill(t.effectAcPart, { bonus }) : '',
+      effect.weaponAbility ? fill(t.effectWeaponPart, { ability: t[`short${effect.weaponAbility}`] }) : '',
+    ].filter(Boolean);
+    return fill(t.effectSummary, { name: effect.name, changes: parts.join(', ') || t.effectNoChanges });
+  }
+  const effectsOn = $derived(effects.filter(effectOn));
+
+  // ---- The AC tile: how enemies roll against the character ----
+  let markingAc = $state(false);
+  let acTile: HTMLButtonElement | undefined = $state();
+  async function closeAcMark() {
+    markingAc = false;
+    await tick();
+    acTile?.focus();
+  }
+  const edgeWord = (e: 'adv' | 'dis'): string => (e === 'adv' ? t.advantage : t.disadvantage);
 </script>
 
 <section class="hp" aria-labelledby="hp-title">
@@ -213,6 +276,29 @@
             >{/if}</span
         ></button
       >
+    {:else if tile.kind === 'ac'}
+      <!-- Tapping AC marks how enemies roll against the character, like initiative's mark. -->
+      <button
+        type="button"
+        class="tile"
+        style:--stat={statColor(tile.kind)}
+        style:--stat-soft={statSoft(tile.kind)}
+        aria-haspopup="dialog"
+        aria-label={acEdge
+          ? fill(t.acEdgeLabel, { value: tile.value, edge: edgeWord(acEdge) })
+          : fill(t.acTileLabel, { value: tile.value })}
+        {disabled}
+        bind:this={acTile}
+        onclick={() => (markingAc = true)}
+        ><span class="k"
+          >{tile.label}{#if acEdge}<small class="against {acEdge}"
+              >{acEdge === 'adv' ? t.acEdgeShortAdv : t.acEdgeShortDis}</small
+            >{/if}</span
+        ><span class="v"
+          >{tile.value}{#if acEdge}<span class="edge against {acEdge}" aria-hidden="true">{ARROW[acEdge]}</span
+            >{/if}</span
+        ></button
+      >
     {:else if tile.kind === 'speed'}
       <button
         type="button"
@@ -237,6 +323,48 @@
 {#if ult}
   <UltCharges {ult} {disabled} onchange={onult} {t} />
 {/if}
+
+<section class="panel" aria-labelledby="effects-title">
+  <div class="head">
+    <h2 id="effects-title">{t.effectsTitle}</h2>
+    {#if effects.length}
+      <button
+        type="button"
+        class="change"
+        aria-label={t.effectsChangeLabel}
+        aria-haspopup="dialog"
+        {disabled}
+        bind:this={effectsButton}
+        onclick={() => (editingEffects = true)}>{t.effectsChange}</button
+      >
+    {/if}
+  </div>
+  <div class="chips">
+    {#each effects as effect (effect.id)}
+      <button
+        type="button"
+        class="chip switch"
+        class:on={effectOn(effect)}
+        aria-pressed={effectOn(effect)}
+        {disabled}
+        onclick={() => toggleEffect(effect)}><span class="dot" aria-hidden="true"></span>{effect.name}</button
+      >
+    {/each}
+    {#if !effects.length}
+      <button
+        type="button"
+        class="chip add"
+        aria-haspopup="dialog"
+        {disabled}
+        bind:this={effectsButton}
+        onclick={() => (editingEffects = true)}>+ {t.addEffect}</button
+      >
+    {/if}
+  </div>
+  {#each effectsOn as effect (effect.id)}
+    <p class="effect-on">{summary(effect)}</p>
+  {/each}
+</section>
 
 <section class="panel" aria-labelledby="conditions-title">
   <div class="head">
@@ -293,6 +421,26 @@
     onclose={() => void closeMark()}
     {t}
   />
+{/if}
+
+{#if markingAc}
+  <EdgePopUp
+    title={t.acEdgeTitle}
+    roll={`${t.acLabel} ${numbers.armorClass}`}
+    state={{ advantage: acEdge === 'adv', disadvantage: acEdge === 'dis' }}
+    boxes=""
+    onmark={onacedge}
+    note={t.acEdgeNote}
+    hint={t.acEdgeHint}
+    {disabled}
+    {change}
+    onclose={() => void closeAcMark()}
+    {t}
+  />
+{/if}
+
+{#if editingEffects}
+  <EffectsWindow {effects} {fields} onsave={oneffects} onclose={() => void closeEffects()} {t} />
 {/if}
 
 {#if editingSpeed}
@@ -626,6 +774,55 @@
 
   .edge.dis {
     color: var(--hp);
+  }
+
+  /* Against the character the colours swap: enemies rolling with disadvantage is good news. */
+  .against.adv {
+    color: var(--hp);
+  }
+
+  .against.dis {
+    color: var(--ok);
+  }
+
+  small.against {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .chip.switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  /* The switch's state in form as well as colour: an empty ring when off, a filled dot when on. */
+  .dot {
+    width: 0.75rem;
+    height: 0.75rem;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+  }
+
+  .chip.on .dot {
+    background: currentColor;
+  }
+
+  /* "Change" in the card's head: a quiet button, so the switches stay the main thing here. */
+  .change {
+    min-height: 44px;
+    margin: -0.5rem -0.25rem 0 0;
+    border-color: transparent;
+    background: transparent;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .effect-on {
+    margin: 0.5rem 0 0;
+    color: var(--ink-muted);
+    font-size: 0.875rem;
   }
 
   .k {
