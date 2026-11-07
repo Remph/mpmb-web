@@ -63,6 +63,13 @@ export interface Companion {
   creature: string;
   /** The page's heading: MPMB offers Companion, Familiar, Mount and Cohort, any text goes. */
   kind: string;
+  /** MPMB's companion template the page was made with ("familiar", "mount"); "" for a creature typed in. */
+  template: string;
+  /**
+   * The number in the Hit Dice box. A creature that grows with its spell's level keeps the spell slot level
+   * there (one Hit Die per level, see src/engine/lists/find-steed.js).
+   */
+  hitDice: number | null;
   /** "Celestial", "Fiend (Devil)" */
   creatureType: string;
   /** The size's name ("Tiny"); MPMB stores a number for it. */
@@ -93,6 +100,9 @@ export interface Companion {
 export const companionFields = (prefix: string) => ({
   name: `${prefix}Comp.Desc.Name`,
   creature: `${prefix}Comp.Race`,
+  hitDice: `${prefix}Comp.Use.HD.Level`,
+  /** The attack row's name as typed or picked; MPMB fills the row from it. */
+  attackName: (row: number) => `${prefix}Comp.Use.Attack.${row}.Weapon Selection`,
   hpCurrent: `${prefix}Comp.Use.HP.Current`,
   hpTemp: `${prefix}Comp.Use.HP.Temp`,
   deathSave: (kind: 'Success' | 'Fail', n: number) => `${prefix}Comp.Use.DeathSave.${kind}.${n}`,
@@ -117,6 +127,8 @@ function readCompanion(fields: FieldViews, prefix: string): Companion {
     name: valueOf(fields, f('Comp.Desc.Name')),
     creature: valueOf(fields, f('Comp.Race')),
     kind: valueOf(fields, f('Comp.Type')),
+    template: valueOf(fields, f('Companion.Remember')),
+    hitDice: numberOf(fields, f('Comp.Use.HD.Level')),
     creatureType: valueOf(fields, f('Comp.Desc.MonsterType')),
     size,
     alignment: valueOf(fields, f('Comp.Desc.Alignment')),
@@ -188,3 +200,38 @@ export const stillShown = (prefixes: string[], shown: string | null): string | n
 /** The page MPMB added: the first prefix that wasn't there before. */
 export const addedPage = (before: string[], after: string[]): string | null =>
   after.find((prefix) => !before.includes(prefix)) ?? null;
+
+/**
+ * A companion from a spell (Find Familiar, Find Steed) disappears at 0 hit points and comes back when the spell
+ * is cast again (Remph picked "the page stays", 2026-11-07). The page keeps it all, so 0 HP is the mark:
+ * nothing else is stored, and the PDF carries it too. `spells` maps templates to their spell (see
+ * CompanionTemplate.spell); a template without one, or a page typed in by hand, is never gone.
+ */
+export function goneSpell(c: Companion, spells: ReadonlyMap<string, string>): string | null {
+  const spell = spells.get(c.template) ?? null;
+  return spell !== null && c.hp.max !== null && (c.hp.current ?? c.hp.max) <= 0 ? spell : null;
+}
+
+/** The spell slot levels to offer: the creature's own, up to the character's highest slot, at least the lowest. */
+export function offeredLevels<T extends { level: number }>(levels: T[], highestSlot: number): T[] {
+  const lowest = levels[0]?.level ?? 0;
+  return levels.filter((l) => l.level <= Math.max(lowest, highestSlot));
+}
+
+/**
+ * The edits before MPMB's menu makes the page a creature. First the attack names go: MPMB remembers each attack
+ * row's last name (CurrentWeapons.compField) and skips a name it remembers, and emptying a page doesn't make it
+ * forget, so a creature whose attack was on the page before (cast again, or after "Reset this companion page")
+ * would come back without it. Casting again on a page that has a creature then empties the page (MPMB keeps the
+ * name, notes and equipment; the numbers, hit points and death saves start over), because MPMB ignores a pick of
+ * the creature the page already shows. A creature that grows with its spell's level reads the level from the
+ * Hit Dice box (see src/engine/lists/find-steed.js).
+ */
+export function summonEdits(prefix: string, level: number | null, again: boolean): { edit: string; text: string }[] {
+  const f = companionFields(prefix);
+  return [
+    ...ATTACK_ROWS.map((row) => ({ edit: f.attackName(row), text: '' })),
+    ...(again ? [{ edit: f.creature, text: '' }] : []),
+    ...(level === null ? [] : [{ edit: f.hitDice, text: String(level) }]),
+  ];
+}

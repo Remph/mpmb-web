@@ -17,12 +17,14 @@
     /** The shown companion's prefix, or null for the character. */
     shown: string | null;
     disabled: boolean;
+    /** The prefixes of companions that disappeared at 0 HP (see goneSpell): "gone" instead of their hit points. */
+    gone: string[];
     onshow: (prefix: string | null) => void;
     onadd: () => void;
     t: Texts;
   }
 
-  let { character, companions, shown, disabled, onshow, onadd, t }: Props = $props();
+  let { character, companions, shown, disabled, gone, onshow, onadd, t }: Props = $props();
 
   const STORAGE_KEY = 'mpmb-web.companionList';
   let listOpen = $state(readOpen());
@@ -46,7 +48,11 @@
 
   const current = $derived(companions.find((c) => c.prefix === shown) ?? null);
   const hpText = (c: Companion): string =>
-    c.hp.max === null ? '' : fill(t.companionHp, { current: c.hp.current ?? c.hp.max, max: c.hp.max });
+    gone.includes(c.prefix)
+      ? t.companionGone
+      : c.hp.max === null
+        ? ''
+        : fill(t.companionHp, { current: c.hp.current ?? c.hp.max, max: c.hp.max });
   const nameOf = (c: Companion): string => companionLabel(c) || t.companionEmptyPage;
 </script>
 
@@ -73,7 +79,13 @@
           {character}<small>{t.companionCharacter}</small>
         </button>
         {#each companions as c (c.prefix)}
-          <button type="button" class="pick" aria-pressed={shown === c.prefix} onclick={() => onshow(c.prefix)}>
+          <button
+            type="button"
+            class="pick"
+            class:gone={gone.includes(c.prefix)}
+            aria-pressed={shown === c.prefix}
+            onclick={() => onshow(c.prefix)}
+          >
             {nameOf(c)}<small>{hpText(c) || c.kind}</small>
           </button>
         {/each}
@@ -168,6 +180,11 @@
   .pick[aria-pressed='true'] small {
     color: inherit;
     opacity: 0.85;
+  }
+
+  .pick.gone:not([aria-pressed='true']) {
+    border-style: dashed;
+    color: var(--ink-muted);
   }
 
   .pick.add {

@@ -28,20 +28,25 @@
   import CompanionChecks from './play/CompanionChecks.svelte';
   import CompanionTab from './play/CompanionTab.svelte';
   import CompanionVitals from './play/CompanionVitals.svelte';
+  import AddCompanionWindow from './play/AddCompanionWindow.svelte';
   import {
     ADD_COMPANION_PAGE,
     ADD_FIRST_COMPANION_PAGE,
     addedPage,
     companionMenu,
+    goneSpell,
     isEmptyCompanion,
     PAGES_LAYOUT_BOOKMARK,
     readCompanions,
     stillShown,
+    summonEdits,
   } from '../play/companions.ts';
+  import type { Companion } from '../play/companions.ts';
+  import type { CompanionCreature, CompanionTemplate } from '../engine/companion-options.ts';
   import { homebrew } from '../homebrew/switches.svelte.ts';
   import { readUlt } from '../homebrew/ult.ts';
   import { readEffects } from '../play/effects.ts';
-  import { valueOf } from '../play/read.ts';
+  import { readSpellSlots, valueOf } from '../play/read.ts';
   import { flushSync } from 'svelte';
   import PrintSheet from './print/PrintSheet.svelte';
   import { printableParts } from '../play/print.ts';
@@ -119,23 +124,78 @@
   }
 
   /**
-   * "+ Companion": an empty page if the sheet has one (MPMB makes one with every new sheet), else MPMB's
-   * "Add extra companion page" on the last page's menu (or MPMB's pages layout menu, with no page left).
+   * A page for a new companion: an empty one if the sheet has one (MPMB makes one with every new sheet), else
+   * MPMB's "Add extra companion page" on the last page's menu (or MPMB's pages layout menu, with no page left).
    */
-  async function addCompanion() {
-    menuOpen = false;
+  async function addPage(): Promise<string | null> {
     const empty = companions.find(isEmptyCompanion);
-    if (empty) return showCompanion(empty.prefix);
+    if (empty) return empty.prefix;
     const before = companions.map((c) => c.prefix);
     const last = before[before.length - 1];
     await (last
       ? session.pick(companionMenu(last), ADD_COMPANION_PAGE)
       : session.pickBookmark(PAGES_LAYOUT_BOOKMARK, ADD_FIRST_COMPANION_PAGE));
-    const added = addedPage(
+    return addedPage(
       before,
       readCompanions(open.fields).map((c) => c.prefix),
     );
-    if (added) showCompanion(added);
+  }
+
+  // "+ Companion" and "Cast … again" open one window (Remph, 2026-11-07). What it offers comes from the sheet's
+  // lists, so it is read again each time it opens: an add-on script added since may bring new creatures. The
+  // templates also tell which companions come from a spell, and so are gone at 0 HP.
+  let companionOptions = $state<{ id: string; templates: CompanionTemplate[] } | null>(null);
+  let companionWindow = $state<{ page: Companion | null } | null>(null);
+  let loadingOptions = false;
+  const templates = $derived(companionOptions?.id === open.meta.id ? companionOptions.templates : null);
+  const spells = $derived(
+    new Map((templates ?? []).flatMap((tpl) => (tpl.spell === null ? [] : [[tpl.key, tpl.spell] as const]))),
+  );
+  const gone = $derived(companions.filter((c) => goneSpell(c, spells) !== null).map((c) => c.prefix));
+  const highestSlot = $derived(Math.max(0, ...readSpellSlots(open.fields).map((slots) => slots.level)));
+
+  async function loadCompanionOptions() {
+    const id = open.meta.id;
+    loadingOptions = true;
+    try {
+      const loaded = await session.companionOptions();
+      if (open.meta.id === id) companionOptions = { id, templates: loaded ?? [] };
+    } finally {
+      loadingOptions = false;
+    }
+  }
+
+  // A page made from a template needs them to show whether it is gone, before any window opens.
+  $effect(() => {
+    if (open.status === 'opening' || templates !== null || loadingOptions) return;
+    if (companions.some((c) => c.template !== '')) void loadCompanionOptions();
+  });
+
+  function openCompanionWindow(page: Companion | null) {
+    menuOpen = false;
+    companionWindow = { page };
+    void loadCompanionOptions();
+  }
+
+  async function addEmptyPage() {
+    companionWindow = null;
+    const prefix = await addPage();
+    if (prefix) showCompanion(prefix);
+  }
+
+  /**
+   * The window's pick through MPMB's own Companion Options menu, as the player would pick it there; casting
+   * again first empties the page (see summonEdits). MPMB then asks what it asks, like the creature type.
+   */
+  async function summon(creature: CompanionCreature, level: number | null) {
+    const page = companionWindow?.page ?? null;
+    companionWindow = null;
+    const prefix = page?.prefix ?? (await addPage());
+    if (!prefix) return;
+    showCompanion(prefix);
+    const edits = summonEdits(prefix, level, page !== null && !isEmptyCompanion(page));
+    if (edits.length) await session.change(edits);
+    await session.pick(companionMenu(prefix), creature.answer);
   }
 
   const fields = $derived(open.fields);
@@ -279,8 +339,9 @@
       companions={listed}
       shown={shownPrefix}
       {disabled}
+      {gone}
       onshow={showCompanion}
-      onadd={() => void addCompanion()}
+      onadd={() => openCompanionWindow(null)}
       {t}
     />
   {/if}
@@ -311,9 +372,16 @@
   <!-- Open in another tab from the start: no sheet here, only the line offering to take it over. -->
   {#if !elsewhereOnly}
     {#if companion}
-      <div class="play">
+      <div class="play" class:gone={gone.includes(companion.prefix)}>
         <div class="side left">
-          <CompanionVitals {companion} {disabled} {change} {t} />
+          <CompanionVitals
+            {companion}
+            {disabled}
+            {change}
+            gone={goneSpell(companion, spells)}
+            oncastagain={() => companion && openCompanionWindow(companion)}
+            {t}
+          />
         </div>
         <!-- An empty page has nothing to show yet but the way to fill it, on the left. -->
         {#if !isEmptyCompanion(companion)}
@@ -446,6 +514,18 @@
     {/if}
   {/if}
 
+  {#if companionWindow}
+    <AddCompanionWindow
+      {templates}
+      page={companionWindow.page}
+      {highestSlot}
+      onsummon={(creature, level) => void summon(creature, level)}
+      onempty={() => void addEmptyPage()}
+      onclose={() => (companionWindow = null)}
+      {t}
+    />
+  {/if}
+
   {#if dawnOpen}
     <DawnWindow features={dawnList} onapply={applyDawn} onclose={() => (dawnOpen = false)} {t} />
   {/if}
@@ -464,7 +544,7 @@
         menuOpen = false;
         fillPdfWindow = true;
       }}
-      oncompanion={() => void addCompanion()}
+      oncompanion={() => openCompanionWindow(null)}
       {t}
     />
   {/if}
@@ -531,6 +611,13 @@
     color: var(--on-accent);
     font-weight: 600;
     text-decoration: none;
+  }
+
+  /* A companion that disappeared: its numbers stay readable but step back behind the way to bring it back.
+     The tab row keeps its full colour: dimmed, the tabs would look switched off but still work. */
+  .play.gone #tab-panel,
+  .play.gone .right {
+    opacity: 0.5;
   }
 
   .play {
