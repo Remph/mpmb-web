@@ -7,7 +7,18 @@ import { withValues } from '../../test/fields.ts';
 import type { Engine } from '../engine/engine.ts';
 import type { Step } from '../session.svelte.ts';
 import { viewsOf } from '../worker/views.ts';
-import { acText, effectOn, newEffect, readEffects, switchOff, switchOn, weaponRows } from './effects.ts';
+import {
+  acText,
+  effectOn,
+  newEffect,
+  readEffects,
+  switchOff,
+  switchOn,
+  toggle,
+  weaponRows,
+  withoutName,
+  withoutTerm,
+} from './effects.ts';
 import type { Effect } from './effects.ts';
 
 const wizard = (): Engine => openSheet(referenceSheet('wizard10-evoker'));
@@ -109,6 +120,115 @@ describe('switching an effect on and off', () => {
     const fields = viewsOf(wizard().doc);
     expect(switchOn(fields, effect({}))).toEqual({ steps: [], applied: { attacks: [] } });
     expect(switchOff(fields, effect({}))).toEqual([]);
+  });
+});
+
+describe('withoutTerm and withoutName', () => {
+  it('take one whole term or name out, wherever it is', () => {
+    expect(withoutTerm('Int', 'Int')).toBe('');
+    expect(withoutTerm('Int+2', 'Int')).toBe('2');
+    expect(withoutTerm('2+Int', 'Int')).toBe('2');
+    expect(withoutTerm('1+Int+2', 'Int')).toBe('1+2');
+    expect(withoutTerm('1+Int-2', 'Int')).toBe('1-2');
+    expect(withoutTerm('Int-1', 'Int')).toBe('-1');
+    expect(withoutTerm('Int+Int', 'Int')).toBe('Int');
+    expect(withoutTerm('Wis+1+2', 'Wis+1')).toBe('2');
+    expect(withoutTerm('1+-1', '-1')).toBe('1');
+    // Not a whole term: left alone.
+    expect(withoutTerm('10', '1')).toBeNull();
+    expect(withoutTerm('Int+10', '1')).toBeNull();
+    expect(withoutTerm('Int-1', '1')).toBeNull();
+    expect(withoutTerm('', 'Int')).toBeNull();
+    expect(withoutName('Ring, Made-up Stance', 'Made-up Stance')).toBe('Ring');
+    expect(withoutName('Made-up Stance, Made-up Stance', 'Made-up Stance')).toBe('Made-up Stance');
+    expect(withoutName('Made-up Stances', 'Made-up Stance')).toBeNull();
+  });
+});
+
+describe('quick taps and sheets that went wrong', () => {
+  const ac = (engine: Engine): unknown => viewsOf(engine.doc)['AC']?.value;
+  /** A tap as the play view makes it: the sheet and the effects as they are after the taps before. */
+  function tap(engine: Engine, effects: Effect[], id = 'e1'): Effect[] {
+    const result = toggle(viewsOf(engine.doc), effects, id);
+    run(engine, result.steps);
+    return result.effects;
+  }
+
+  it('each tap works from the one before: the bonus goes in once, then out', () => {
+    const engine = wizard();
+    let effects = [effect({ acAbility: 'Int', weaponAbility: 'Int' })];
+    const seen = [1, 2, 3, 4, 5].map(() => {
+      effects = tap(engine, effects);
+      return ac(engine);
+    });
+    // Int +3 on AC 12; before the fix five quick taps could end at AC 21 or more.
+    expect(seen).toEqual(['15', '12', '15', '12', '15']);
+    expect(viewsOf(engine.doc)['AC Misc Mod 2']?.value).toBe('');
+  });
+
+  it('switching on where the sheet already has the bonus takes it over instead of adding it again', () => {
+    const engine = wizard();
+    const stance = effect({ acAbility: 'Int' });
+    run(engine, switchOn(viewsOf(engine.doc), stance).steps);
+    expect(ac(engine)).toBe('15');
+    // A tap that still saw the effect as off (the old bug): nothing more goes in.
+    const again = switchOn(viewsOf(engine.doc), stance);
+    expect(again.steps).toEqual([]);
+    expect(again.applied.ac).toMatchObject({ field: 1, before: '', beforeNote: '' });
+    run(engine, switchOff(viewsOf(engine.doc), { ...stance, applied: again.applied }));
+    expect(ac(engine)).toBe('12');
+    expect(viewsOf(engine.doc)['AC Misc Mod 1 Description']?.value).toBe('');
+  });
+
+  it('repairs a sheet where quick taps added the bonus more than once: on, then off', () => {
+    const engine = wizard();
+    // What the old version left: the bonus in both fields and on top again, the switch showing off.
+    run(engine, [
+      { edit: 'AC Misc Mod 1', text: 'Int+Int' },
+      { edit: 'AC Misc Mod 1 Description', text: 'Made-up Stance, Made-up Stance' },
+      { edit: 'AC Misc Mod 2', text: 'Int' },
+      { edit: 'AC Misc Mod 2 Description', text: 'Made-up Stance' },
+    ]);
+    expect(ac(engine)).toBe('21');
+    let effects = tap(engine, [effect({ acAbility: 'Int' })]);
+    expect(effects[0] && effectOn(effects[0])).toBe(true);
+    expect(ac(engine)).toBe('21');
+    effects = tap(engine, effects);
+    expect(ac(engine)).toBe('12');
+    const off = viewsOf(engine.doc);
+    expect([off['AC Misc Mod 1']?.value, off['AC Misc Mod 1 Description']?.value]).toEqual(['', '']);
+    expect([off['AC Misc Mod 2']?.value, off['AC Misc Mod 2 Description']?.value]).toEqual(['', '']);
+  });
+
+  it('takes only its own bonus out of a field that got more on top, in any order', () => {
+    const engine = wizard();
+    const effects = [
+      effect({ id: 'a', name: 'Stance A', acAbility: 'Int' }),
+      effect({ id: 'b', name: 'Stance B', acNumber: 1 }),
+      effect({ id: 'c', name: 'Stance C', acNumber: 2 }),
+    ];
+    let list = ['a', 'b', 'c'].reduce((now, id) => tap(engine, now, id), effects);
+    expect(ac(engine)).toBe('18');
+    expect(viewsOf(engine.doc)['AC Misc Mod 1']?.value).toBe('Int+2');
+    // The first one off first: its bonus and name go, the one on top of it stays.
+    list = tap(engine, list, 'a');
+    expect(ac(engine)).toBe('15');
+    expect(viewsOf(engine.doc)['AC Misc Mod 1']?.value).toBe('2');
+    expect(viewsOf(engine.doc)['AC Misc Mod 1 Description']?.value).toBe('Stance C');
+    list = tap(engine, tap(engine, list, 'c'), 'b');
+    expect(ac(engine)).toBe('12');
+    expect(list.some(effectOn)).toBe(false);
+  });
+
+  it("leaves another effect's bonus of the same name", () => {
+    const engine = wizard();
+    const twins = [effect({ id: 'a', acNumber: 1 }), effect({ id: 'b', acNumber: 1 })];
+    let list = tap(engine, tap(engine, twins, 'a'), 'b');
+    expect(ac(engine)).toBe('14');
+    list = tap(engine, list, 'a');
+    expect(ac(engine)).toBe('13');
+    tap(engine, list, 'b');
+    expect(ac(engine)).toBe('12');
   });
 });
 
