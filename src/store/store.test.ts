@@ -190,7 +190,7 @@ describe('CharacterStore', () => {
     const old = await CharacterStore.open(browser, 'mpmb-web', { replaced: () => replaced++ });
     await old.put(character('Anna', '2026-10-01T00:00:00Z'));
     // The next release's tab, one database version up: before the fix its opening never finished.
-    const newer = await CharacterStore.open(browser, 'mpmb-web', {}, 3);
+    const newer = await CharacterStore.open(browser, 'mpmb-web', {}, 4);
     expect(replaced).toBe(1);
     expect((await newer.list()).map((m) => m.name)).toEqual(['Anna']);
   });
@@ -209,6 +209,87 @@ describe('CharacterStore', () => {
     // Closing the other tab lets the opening go on.
     raw.close();
     expect(await (await opening).list()).toEqual([]);
+  });
+});
+
+describe('restore points', () => {
+  const fresh = (): Promise<CharacterStore> => CharacterStore.open(new IDBFactory());
+  /** Anna as she was saved at `day`, with `hp` current hit points of 20. */
+  const anna = (day: string, hp = '20'): StoredCharacter => {
+    const data = sheetOf({ 'PC Name': 'Anna', 'HP Max': '20', 'HP Current': hp });
+    return {
+      meta: describeCharacter(data, NO_ADD_ONS, { id: 'anna', created: '2026-10-01T00:00:00Z' }, new Date(day)),
+      data,
+    };
+  };
+  const at = (day: string): Date => new Date(day);
+
+  test('keeps the newest three, newest first, and takes none when nothing changed since the last', async () => {
+    const store = await fresh();
+    expect(await store.addPoint(anna('2026-11-01T00:00:00Z'), 'opened', at('2026-11-01T10:00:00Z'))).toBe(true);
+    // Opened again without a change in between: the same sheet, no new point.
+    expect(await store.addPoint(anna('2026-11-01T00:00:00Z'), 'opened', at('2026-11-01T11:00:00Z'))).toBe(false);
+    await store.addPoint(anna('2026-11-02T00:00:00Z', '15'), 'build', at('2026-11-02T10:00:00Z'));
+    await store.addPoint(anna('2026-11-03T00:00:00Z', '10'), 'opened', at('2026-11-03T10:00:00Z'));
+    await store.addPoint(anna('2026-11-04T00:00:00Z', '5'), 'reset', at('2026-11-04T10:00:00Z'));
+    const points = await store.points('anna');
+    expect(points.map((p) => [p.at, p.reason])).toEqual([
+      ['2026-11-04T10:00:00.000Z', 'reset'],
+      ['2026-11-03T10:00:00.000Z', 'opened'],
+      ['2026-11-02T10:00:00.000Z', 'build'],
+    ]);
+    expect(points[0]?.data.fields['HP Current']).toEqual({ value: '5' });
+  });
+
+  test('each character has its own points, and deleting a character takes its points', async () => {
+    const store = await fresh();
+    const bo = character('Bo', '2026-11-01T00:00:00Z');
+    await store.put(anna('2026-11-01T00:00:00Z'), bo);
+    await store.addPoint(anna('2026-11-01T00:00:00Z'), 'opened', at('2026-11-01T10:00:00Z'));
+    await store.addPoint(bo, 'opened', at('2026-11-01T10:00:00Z'));
+    await store.delete('anna');
+    expect(await store.points('anna')).toEqual([]);
+    expect((await store.points('bo')).map((p) => p.meta.name)).toEqual(['Bo']);
+  });
+
+  test('rolling back swaps: the sheet becomes the point, and the sheet as it was becomes a point', async () => {
+    const store = await fresh();
+    await store.addPoint(anna('2026-11-01T00:00:00Z', '20'), 'opened', at('2026-11-01T10:00:00Z'));
+    await store.addPoint(anna('2026-11-02T00:00:00Z', '15'), 'build', at('2026-11-02T10:00:00Z'));
+    const now = {
+      ...anna('2026-11-03T00:00:00Z', '3'),
+      meta: { ...anna('2026-11-03T00:00:00Z', '3').meta, lastBackup: '2026-11-02T12:00:00.000Z' },
+    };
+    await store.put(now);
+    const [newest] = await store.points('anna');
+    if (!newest) throw new Error('no point');
+    const meta = await store.rollBack(now, newest, at('2026-11-03T20:00:00Z'));
+    // The sheet of the point, as a change of today; the backup date stays the character's own.
+    expect(await store.get('anna')).toEqual({ meta, data: newest.data });
+    expect(meta).toMatchObject({
+      id: 'anna',
+      updated: '2026-11-03T20:00:00.000Z',
+      lastBackup: '2026-11-02T12:00:00.000Z',
+    });
+    expect((await store.points('anna')).map((p) => [p.reason, p.data.fields['HP Current']])).toEqual([
+      ['rollback', { value: '3' }],
+      ['opened', { value: '20' }],
+    ]);
+  });
+
+  test('a database of version 2 (before restore points) opens with its characters and gets the new store', async () => {
+    const browser = new IDBFactory();
+    const request = browser.open('mpmb-web', 2);
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore('meta', { keyPath: 'id' });
+      request.result.createObjectStore('data');
+      request.result.createObjectStore('previous');
+    };
+    const old = await new Promise<IDBDatabase>((resolve) => (request.onsuccess = () => resolve(request.result)));
+    old.close();
+    const store = await CharacterStore.open(browser);
+    expect(await store.addPoint(anna('2026-11-01T00:00:00Z'), 'opened')).toBe(true);
+    expect(await store.points('anna')).toHaveLength(1);
   });
 });
 
