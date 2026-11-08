@@ -10,6 +10,7 @@ import type { BuilderInfo, UnitSystem } from '../engine/builder.ts';
 import type { ScoreChange } from '../engine/scores.ts';
 import type { SpellPicks, SpellSheetPicks, SpellsInfo } from '../engine/spells.ts';
 import type { CompanionTemplate } from '../engine/companion-options.ts';
+import type { Beast } from '../play/wild-shapes.ts';
 import { canWait, createChannel, sendAnswer } from './channel.ts';
 import type { Channel } from './channel.ts';
 import type {
@@ -170,6 +171,10 @@ export class EngineClient {
 
   async companionOptions(): Promise<CompanionTemplate[]> {
     return (await this.send({ type: 'companionOptions' })).result as CompanionTemplate[];
+  }
+
+  async wildShapeOptions(): Promise<Beast[]> {
+    return (await this.send({ type: 'wildShapeOptions' })).result as Beast[];
   }
 
   async spells(): Promise<SpellsInfo> {

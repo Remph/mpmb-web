@@ -25,6 +25,7 @@ import { currentRealm } from '../engine/realm.ts';
 import { mpmbScripts } from '../engine/scripts.ts';
 import { withAppLists } from '../engine/app-lists.ts';
 import { COMPANION_OPTIONS_SCRIPT, readCompanionOptions } from '../engine/companion-options.ts';
+import { readWildShapeOptions, WILD_SHAPE_OPTIONS_SCRIPT } from '../engine/wild-shape-options.ts';
 import { CHARACTER_FORMAT, FORMAT_VERSION, applyCharacter, diffCharacter, unpackSheet } from '../engine/sheet-data.ts';
 import type { SheetPack } from '../engine/sheet-pack.ts';
 import { blankSheet } from '../engine/sheet.ts';
@@ -281,6 +282,7 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
   pickBookmark: ({ path, answer }) => pick(answer, () => opened().clickBookmark(path)),
   spells: () => readSpellsInfo(opened().evaluate(SPELLS_READ_SCRIPT)),
   companionOptions: () => readCompanionOptions(opened().evaluate(COMPANION_OPTIONS_SCRIPT)),
+  wildShapeOptions: () => readWildShapeOptions(opened().evaluate(WILD_SHAPE_OPTIONS_SCRIPT)),
   setSpells: ({ picks, sheet }) => applySpellPicks(opened(), picks, answered, sheet),
   setImage: ({ slot, image }) => opened().setImage(slot, image),
 };

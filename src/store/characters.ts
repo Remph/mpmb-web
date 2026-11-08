@@ -9,6 +9,7 @@ import type { CharacterData } from '../engine/sheet-data.ts';
 import type { UltCharges } from '../homebrew/ult.ts';
 import type { SetupChoice } from '../play/attack-setup.ts';
 import type { Effect } from '../play/effects.ts';
+import type { InForm } from '../play/wild-shapes.ts';
 import { sheetColor, type SheetColor } from '../look.ts';
 import { textOf } from './field-text.ts';
 import { pointNeeded, surplus } from './restore-points.ts';
@@ -48,6 +49,8 @@ export interface CharacterHomebrew {
   acEdge?: 'adv' | 'dis';
   /** Attack rows' proficiency and ability as the player set them by hand (src/play/attack-setup.ts). */
   attackChoices?: SetupChoice[];
+  /** The Wild Shape form the character is in (src/play/wild-shapes.ts); the sheet has no box for it. */
+  wildShape?: InForm;
 }
 
 /** A character moved to a new release of MPMB's sheet with MPMB's own import (M11). */
@@ -332,12 +335,13 @@ export function describeCharacter(
 
 /** A plain copy (the page's values can be reactive proxies, which IndexedDB can't store). */
 export function copyHomebrew(homebrew: CharacterHomebrew): CharacterHomebrew {
-  const { ult, effects, acEdge, attackChoices } = homebrew;
+  const { ult, effects, acEdge, attackChoices, wildShape } = homebrew;
   return {
     ...(ult ? { ult: { ...ult } } : {}),
     ...(effects ? { effects: effects.map(copyEffect) } : {}),
     ...(acEdge ? { acEdge } : {}),
     ...(attackChoices ? { attackChoices: attackChoices.map((c) => ({ ...c })) } : {}),
+    ...(wildShape ? { wildShape: { ...wildShape } } : {}),
   };
 }
 

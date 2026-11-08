@@ -26,6 +26,7 @@ import { realmTools } from './realm.ts';
 import type { Realm, RealmTools } from './realm.ts';
 import { installAcrobatReplace } from './acrobat-replace.ts';
 import { installToSource } from './to-source.ts';
+import { applyUpstreamFixes } from './upstream-fixes.ts';
 import type { RealmConstructors } from './to-source.ts';
 import type { ImageSlot, SheetImage, SheetImages, SheetSnapshot } from './types.ts';
 import { DISPLAY } from './types.ts';
@@ -164,6 +165,11 @@ export class Engine {
         }
         engine.timings.push([s.name, Math.round((engine.now() - t0) * MS_DECIMALS) / MS_DECIMALS]);
       });
+    try {
+      applyUpstreamFixes(realm);
+    } catch (err) {
+      engine.doc.logError('upstream fixes', err);
+    }
     return engine;
   }
 

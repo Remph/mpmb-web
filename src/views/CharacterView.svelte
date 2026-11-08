@@ -5,6 +5,7 @@
   Every tap goes through MPMB's own fields (session.change), so rules and saving stay MPMB's.
 -->
 <script lang="ts">
+  import { fill } from '../i18n.ts';
   import type { Texts } from '../i18n.ts';
   import { dawn, dawnFeatures, longRest, pactSlots, shortRest } from '../play/rules.ts';
   import type { RestEdits } from '../play/rules.ts';
@@ -29,6 +30,25 @@
   import CompanionTab from './play/CompanionTab.svelte';
   import CompanionVitals from './play/CompanionVitals.svelte';
   import AddCompanionWindow from './play/AddCompanionWindow.svelte';
+  import AddFormWindow from './play/AddFormWindow.svelte';
+  import FormPanel from './play/FormPanel.svelte';
+  import {
+    ADD_FIRST_WILD_SHAPE_PAGE,
+    addFormAnswer,
+    changeSteps,
+    currentForm,
+    formAsCompanion,
+    formKey,
+    formLimits,
+    formMenu,
+    readInForm,
+    readWildShapeRules,
+    readWildShapes,
+    removeFormStep,
+    wildShapePrefixes,
+    wildShapeUses,
+  } from '../play/wild-shapes.ts';
+  import type { Beast, WildShapeForm } from '../play/wild-shapes.ts';
   import {
     ADD_COMPANION_PAGE,
     ADD_FIRST_COMPANION_PAGE,
@@ -46,7 +66,7 @@
   import { homebrew } from '../homebrew/switches.svelte.ts';
   import { readUlt } from '../homebrew/ult.ts';
   import { readEffects } from '../play/effects.ts';
-  import { readSpellSlots, valueOf } from '../play/read.ts';
+  import { readHitPoints, readLimitedFeatures, readSpellSlots, valueOf } from '../play/read.ts';
   import { flushSync } from 'svelte';
   import PrintSheet from './print/PrintSheet.svelte';
   import { printableParts } from '../play/print.ts';
@@ -120,7 +140,94 @@
 
   function showCompanion(prefix: string | null) {
     showing = prefix === null ? null : { id: open.meta.id, prefix };
+    // The character, picked by hand: no longer the form by default (see shownFormKey).
+    if (prefix === null) formShowing = { id: open.meta.id, key: null };
     window.scrollTo({ top: 0 });
+  }
+
+  // Wild Shape forms (Remph picked A, 2026-11-08): MPMB's Wild Shape pages, in the same bar; a form's page shows
+  // the beast with the character's own hit points. The form the character is in is kept next to the character
+  // (the sheet has no box for it); which page is shown belongs to this view, like a companion's.
+  const forms = $derived(readWildShapes(open.fields));
+  const formRules = $derived(readWildShapeRules(open.fields));
+  const limitedFeatures = $derived(readLimitedFeatures(open.fields));
+  const uses = $derived(wildShapeUses(limitedFeatures));
+  /** The bar's Wild Shape row: with the feature (its uses), or with forms on the sheet. */
+  const hasWildShape = $derived(uses !== null || forms.length > 0);
+  const inForm = $derived(currentForm(forms, readInForm(open.meta.homebrew?.wildShape)));
+  /** key null: the character, chosen by hand. Without a choice, a character in a form shows the form. */
+  let formShowing = $state<{ id: string; key: string | null } | null>(null);
+  const shownFormKey = $derived.by(() => {
+    if (shownPrefix !== null) return null;
+    const key = formShowing?.id === open.meta.id ? formShowing.key : inForm && formKey(inForm);
+    return key && forms.some((f) => formKey(f) === key) ? key : null;
+  });
+  const shownForm = $derived(forms.find((f) => formKey(f) === shownFormKey) ?? null);
+  const formShape = $derived(shownForm && formAsCompanion(shownForm, t.formKind));
+
+  function showForm(key: string) {
+    showing = null;
+    formShowing = { id: open.meta.id, key };
+    window.scrollTo({ top: 0 });
+  }
+
+  /** Spends a use, gives the Temp HP, and remembers the form (2024 rules: you keep your own hit points). */
+  async function changeInto(form: WildShapeForm) {
+    const used = limitedFeatures.find((f) => f.row === uses?.row)?.used ?? 0;
+    const steps = changeSteps(uses, used, Number(formRules?.tempHp) || null, readHitPoints(open.fields).temp);
+    if (steps.length) await session.change(steps);
+    await session.setInForm({ key: formKey(form), name: form.name });
+    showForm(formKey(form));
+  }
+
+  async function leaveForm() {
+    await session.setInForm(null);
+    formShowing = { id: open.meta.id, key: null };
+  }
+
+  async function removeForm(form: WildShapeForm) {
+    const answer = await session.popUps.choose({
+      title: t.formRemoveTitle,
+      message: fill(t.formRemoveText, { name: form.name }),
+      buttons: [
+        { value: 'cancel', label: t.cancel },
+        { value: 'remove', label: fill(t.formRemove, { name: form.name }), primary: true },
+      ],
+      cancel: 'cancel',
+    });
+    if (answer !== 'remove') return;
+    if (inForm && formKey(inForm) === formKey(form)) await session.setInForm(null);
+    formShowing = { id: open.meta.id, key: null };
+    await session.change([removeFormStep(form)]);
+  }
+
+  // "+ Form": the beasts MPMB's menu offers, read again each time the window opens (an add-on may bring more).
+  let formWindow = $state(false);
+  let beasts = $state<{ id: string; list: Beast[] } | null>(null);
+  let addingForm = $state<string | null>(null);
+  const beastList = $derived(beasts?.id === open.meta.id ? beasts.list : null);
+
+  async function openFormWindow() {
+    menuOpen = false;
+    formWindow = true;
+    beasts = null;
+    const id = open.meta.id;
+    const loaded = await session.wildShapeOptions();
+    if (open.meta.id === id) beasts = { id, list: loaded ?? [] };
+  }
+
+  /** Through MPMB's own "Add Wild Shape" menu; the first page comes from its pages layout menu, like a companion's. */
+  async function addForm(beast: Beast) {
+    addingForm = beast.name;
+    try {
+      if (!wildShapePrefixes(open.fields).length) {
+        await session.pickBookmark(PAGES_LAYOUT_BOOKMARK, ADD_FIRST_WILD_SHAPE_PAGE);
+      }
+      const [prefix] = wildShapePrefixes(open.fields);
+      if (prefix) await session.pick(formMenu(prefix), addFormAnswer(beast));
+    } finally {
+      addingForm = null;
+    }
   }
 
   /**
@@ -290,6 +397,8 @@
     }
   }
   const canFold = $derived(!elsewhereOnly && !(companion && isEmptyCompanion(companion)));
+  const formTabs = $derived(companionTabs.filter(([key]) => key !== 'notes'));
+  const shownFormTab = $derived(shownCompanionTab === 'notes' ? 'combat' : shownCompanionTab);
   const barFolded = $derived(folded && canFold);
 
   // Magic items that come back at dawn get their own button: dawn and a long rest often fall together,
@@ -333,7 +442,7 @@
     </TopBar>
   {/if}
 
-  {#if listed.length && !elsewhereOnly}
+  {#if (listed.length || hasWildShape) && !elsewhereOnly}
     <CompanionBar
       character={open.meta.name || t.unnamed}
       companions={listed}
@@ -342,6 +451,13 @@
       {gone}
       onshow={showCompanion}
       onadd={() => openCompanionWindow(null)}
+      wildShape={hasWildShape}
+      {forms}
+      {uses}
+      shownForm={shownFormKey}
+      {inForm}
+      onshowform={showForm}
+      onaddform={() => void openFormWindow()}
       {t}
     />
   {/if}
@@ -421,6 +537,72 @@
               <CompanionChecks {companion} {t} />
             </div>
           {/if}
+        {/if}
+      </div>
+    {:else if shownForm && formShape}
+      <div class="play">
+        <div class="side left">
+          <FormPanel
+            form={shownForm}
+            inThis={inForm !== null && formKey(inForm) === formKey(shownForm)}
+            {uses}
+            rules={formRules}
+            {disabled}
+            onchange={() => shownForm && void changeInto(shownForm)}
+            onleave={() => void leaveForm()}
+            onuses={(used) =>
+              uses && change([{ edit: `Limited Feature Used ${uses.row}`, text: used ? String(used) : '' }])}
+            onremove={() => shownForm && void removeForm(shownForm)}
+            onoptions={() => shownForm && change([{ click: formMenu(shownForm.prefix), menuTitle: t.formOptions }])}
+            {t}
+          />
+          <Vitals
+            {fields}
+            {disabled}
+            {change}
+            {effects}
+            oneffects={(list) => void session.setEffects(list)}
+            {acEdge}
+            onacedge={(edge) => void session.setAcEdge(edge)}
+            form={formShape}
+            {t}
+          />
+        </div>
+        <div class="middle">
+          <div class="tabrow">
+            <div class="tabs" role="tablist">
+              {#each formTabs as [key, label] (key)}
+                <button
+                  type="button"
+                  role="tab"
+                  id={`tab-${key}`}
+                  aria-selected={shownFormTab === key}
+                  aria-controls="tab-panel"
+                  onclick={() => (companionTab = key)}>{label}</button
+                >
+              {/each}
+            </div>
+            {#if barFolded}
+              <UnfoldBar
+                name={open.meta.name || t.unnamed}
+                busy={open.status !== 'saved'}
+                onunfold={() => setFolded(false)}
+                {t}
+              />
+            {/if}
+          </div>
+          <div id="tab-panel" role="tabpanel" aria-labelledby={`tab-${shownFormTab}`}>
+            {#if shownFormTab === 'checks'}
+              <CompanionChecks companion={formShape} {t} />
+            {:else}
+              <CompanionTab companion={formShape} part="combat" {t} />
+            {/if}
+          </div>
+        </div>
+        {#if wide}
+          <div class="side right">
+            <CompanionChecks companion={formShape} {t} />
+          </div>
         {/if}
       </div>
     {:else}
@@ -522,6 +704,20 @@
       onsummon={(creature, level) => void summon(creature, level)}
       onempty={() => void addEmptyPage()}
       onclose={() => (companionWindow = null)}
+      {t}
+    />
+  {/if}
+
+  {#if formWindow}
+    <AddFormWindow
+      beasts={beastList}
+      known={forms.map((f) => f.name)}
+      limits={formLimits(formRules)}
+      limitsText={formRules?.limitations ?? ''}
+      adding={addingForm}
+      {disabled}
+      onadd={(beast) => void addForm(beast)}
+      onclose={() => (formWindow = false)}
       {t}
     />
   {/if}

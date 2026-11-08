@@ -39,6 +39,7 @@ import type { UltCharges } from './homebrew/ult.ts';
 import type { CharacterHomebrew, CharacterMeta, PreviousVersion, StoredCharacter } from './store/characters.ts';
 import type { PointReason, RestorePoint } from './store/restore-points.ts';
 import type { Effect } from './play/effects.ts';
+import type { Beast, InForm } from './play/wild-shapes.ts';
 import { EngineClient, EngineError } from './worker/client.ts';
 import type { Done, PopUps, WorkerLike } from './worker/client.ts';
 import { createLink } from './worker/link.ts';
@@ -684,6 +685,11 @@ export class Session {
     return this.setHomebrew(copyHomebrew({ effects }));
   }
 
+  /** The Wild Shape form the open character is in (src/play/wild-shapes.ts); null when in none. */
+  setInForm(form: InForm | null): Promise<void> {
+    return this.setHomebrew({ wildShape: form ? { ...form } : undefined });
+  }
+
   /** Advantage or disadvantage on attack rolls against the open character; '' for neither. */
   setAcEdge(edge: '' | 'adv' | 'dis'): Promise<void> {
     return this.setHomebrew({ acEdge: edge || undefined });
@@ -910,6 +916,19 @@ export class Session {
     if (!open || this.current !== open || readOnly(open.status)) return null;
     try {
       return await this.client.companionOptions();
+    } catch (err) {
+      this.note('error', this.explain(err));
+      return null;
+    }
+  }
+
+  /** The creatures MPMB's "Add Wild Shape" menu offers, for "Add a Wild Shape form"; null like builderInfo. */
+  async wildShapeOptions(): Promise<Beast[] | null> {
+    const open = this.current;
+    await this.running;
+    if (!open || this.current !== open || readOnly(open.status)) return null;
+    try {
+      return await this.client.wildShapeOptions();
     } catch (err) {
       this.note('error', this.explain(err));
       return null;
