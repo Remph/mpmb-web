@@ -953,6 +953,11 @@
     margin: 0 0 1mm;
   }
 
+  /* A notes page's empty line (RichText's gap): this sheet's own margins above outrank RichText's. */
+  .flow :global(.gap) {
+    margin-top: 1.25em;
+  }
+
   .flow :global(.name) {
     color: var(--p-accent);
   }

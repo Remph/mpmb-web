@@ -44,5 +44,15 @@ test('an empty line on a notes page shows as a gap', async ({ page }) => {
   // The empty lines stay in the page's field, for the PDF export.
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(page.getByLabel('Left column')).toHaveValue('Camp\nWatch order\n\n\nNext session');
+
+  // The printed notes page keeps the gap too: the print sheet's own margins must not swallow it (review of #69).
+  // A string, not a function: this file is type-checked with Node's types, which have no `window`.
+  await page.evaluate("window.dispatchEvent(new Event('beforeprint'))");
+  const printed = page.locator('.print-sheet .flow p');
+  await expect(printed).toHaveText(['Camp', 'Watch order', 'Next session']);
+  // Its two columns may balance the lines apart, so the test reads the margin instead of the positions.
+  await expect(printed.nth(1)).toHaveCSS('margin-top', '0px');
+  await expect(printed.nth(2)).not.toHaveCSS('margin-top', '0px');
+  await page.evaluate("window.dispatchEvent(new Event('afterprint'))");
   expect(errors).toEqual([]);
 });
