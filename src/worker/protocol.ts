@@ -51,7 +51,12 @@ export type Command =
   /** The sheet's add-on scripts with their code (ScriptFiles), for the "Add-on scripts" window. */
   | { type: 'scriptFiles' }
   /** Removes and adds script files through MPMB's own files dialog, answered in the player's place. */
-  | { type: 'setScripts'; changes: ScriptChanges }
+  | {
+      type: 'setScripts';
+      changes: ScriptChanges;
+      /** A file the app writes itself (own spells): MPMB's note and Source Selection are answered too. */
+      quiet?: boolean;
+    }
   /** Opens MPMB's own dialog for pasted code. */
   | { type: 'pasteScript' }
   /** What the Build screen offers and shows (BuilderInfo), read from MPMB's data. */

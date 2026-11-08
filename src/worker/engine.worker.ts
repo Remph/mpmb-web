@@ -4,14 +4,22 @@
 //
 // One worker holds one open sheet. MPMB's scripts keep their state in globals, so a second sheet gets
 // a fresh worker (EngineClient does that) instead of reusing this global scope.
-import { FILES_DIALOG_SCRIPT, PASTE_SCRIPT, addOnsOf, answerFilesDialog, scriptFilesOf } from '../engine/add-ons.ts';
+import {
+  FILES_DIALOG_SCRIPT,
+  PASTE_SCRIPT,
+  addOnsOf,
+  answerFilesDialog,
+  answerQuietFiles,
+  answerScriptsChanged,
+  scriptFilesOf,
+} from '../engine/add-ons.ts';
 import type { ScriptChanges } from '../engine/add-ons.ts';
 import { BUILDER_INFO_SCRIPT, answerUnits, readBuilderInfo } from '../engine/builder.ts';
 import { displaySettings, refreshFormats } from '../engine/display-settings.ts';
 import type { UnitSystem } from '../engine/builder.ts';
 import { Engine } from '../engine/engine.ts';
 import type { SheetScript } from '../engine/engine.ts';
-import type { AlertReply, DialogReply, DialogView, Host, MenuItem } from '../engine/host.ts';
+import type { AlertReply, AlertRequest, DialogReply, DialogView, Host, MenuItem } from '../engine/host.ts';
 import { ImportHost, importSheet } from '../engine/import-sheet.ts';
 import { currentRealm } from '../engine/realm.ts';
 import { mpmbScripts } from '../engine/scripts.ts';
@@ -115,6 +123,8 @@ const ask = (question: Ask): Answer => {
  * and presses OK, so that MPMB converts the sheet exactly as after the player's own OK.
  */
 let answerItself: ((view: DialogView) => DialogReply | null) | null = null;
+/** The same for an alert: MPMB's note after a script file the app wrote itself (setScripts, quiet). */
+let alertItself: ((request: AlertRequest) => AlertReply | null) | null = null;
 
 /**
  * The menu answer of a `pick` command, for the first menu its button shows; later menus (MPMB may ask
@@ -145,7 +155,8 @@ function popUpMenu(items: MenuItem[]): string | null {
 }
 
 const host: Host = {
-  alert: (request) => answerWelcome(request) ?? (ask({ kind: 'alert', request }) as AlertReply | null),
+  alert: (request) =>
+    answerWelcome(request) ?? alertItself?.(request) ?? (ask({ kind: 'alert', request }) as AlertReply | null),
   dialog: (view, first) => answerItself?.(view) ?? (ask({ kind: 'dialog', view, first }) as DialogReply | null),
   popUpMenu,
   // Without shared memory the page never showed the dialog, so there is nothing to close.
@@ -257,7 +268,7 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
   migrate: ({ port, buffer, images }) => migrate(port, buffer, images),
   addOns: () => addOnsOf(opened()),
   scriptFiles: () => scriptFilesOf(opened()),
-  setScripts: ({ changes }) => setScripts(opened(), changes),
+  setScripts: ({ changes, quiet }) => setScripts(opened(), changes, quiet),
   pasteScript: () => {
     const sheet = opened();
     sheet.evaluate(PASTE_SCRIPT);
@@ -353,14 +364,17 @@ function pick(answer: string, press: () => void): boolean {
 /**
  * The "Add-on scripts" window's changes through MPMB's own files dialog, which the app answers in the
  * player's place; MPMB then runs the scripts, says so, and opens its Source Selection for the player.
+ * `quiet` (a file the app writes itself, own spells) answers those two as well.
  */
-function setScripts(sheet: Engine, changes: ScriptChanges): void {
+function setScripts(sheet: Engine, changes: ScriptChanges, quiet = false): void {
   filesToHand = [...changes.add];
+  if (quiet) alertItself = answerScriptsChanged;
   try {
-    answered(answerFilesDialog(changes), () => sheet.evaluate(FILES_DIALOG_SCRIPT));
+    answered(quiet ? answerQuietFiles(changes) : answerFilesDialog(changes), () => sheet.evaluate(FILES_DIALOG_SCRIPT));
     sheet.runTimers();
   } finally {
     filesToHand = [];
+    alertItself = null;
   }
 }
 

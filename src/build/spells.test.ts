@@ -256,3 +256,33 @@ describe('textParts', () => {
     ]);
   });
 });
+
+describe('own spells as extra rows', () => {
+  const feature = { name: 'Cantrip', chosen: 'light', list: ['light', 'fire bolt'], extra: false };
+  const ownRow = (key: string) => ({ name: '', chosen: key, list: [], extra: true });
+  const withOwn = source({ bonus: [feature, ownRow('own thought jab'), ownRow('fire bolt')] });
+  const info = (s: SpellSource): SpellsInfo => ({
+    sources: [s],
+    included: [],
+    excluded: [],
+    options: null,
+    spells: SPELLS,
+  });
+
+  it('reads only the own keys among the extra rows', () => {
+    expect(draftOf(withOwn).own).toEqual(['own thought jab']);
+  });
+
+  it('an own spell added or taken out is a change, sent as `own`', () => {
+    const drafts = { wizard: { ...draftOf(withOwn), own: ['own thought jab', 'own glimmer'] } };
+    expect(changeCount(info(withOwn), drafts)).toBe(1);
+    expect(picksOf(info(withOwn), drafts)).toEqual([{ key: 'wizard', own: ['own thought jab', 'own glimmer'] }]);
+  });
+
+  it('a renamed own spell in a stale bonus row is no bonus change', () => {
+    const renamed = source({ bonus: [feature, ownRow('own thought spike'), ownRow('fire bolt')] });
+    const drafts = { wizard: { ...draftOf(withOwn), own: ['own thought spike'] } };
+    expect(changeCount(info(renamed), drafts)).toBe(0);
+    expect(picksOf(info(renamed), drafts)).toEqual([]);
+  });
+});

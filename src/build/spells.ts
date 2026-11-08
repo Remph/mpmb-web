@@ -1,6 +1,7 @@
 // The "Spells" Build step's own logic (M7): the player's picks per spell source while they aren't on the
 // sheet yet, what changed, and which spells the add list shows. What MPMB offers comes from its own spell
 // dialogs (engine/spells.ts).
+import { OWN_PREFIX } from '../engine/spells.ts';
 import type {
   SpellInfo,
   SpellPicks,
@@ -20,7 +21,20 @@ export interface SpellDraft {
   bonus: string[];
   /** The spells for "Prepared spells only" (show 3). */
   prepared: string[];
+  /** The player's own spells for this source (keys "own …"), as extra rows that count toward nothing. */
+  own: string[];
 }
+
+/**
+ * An own spell's row among the bonus rows, now or before: `own` counts and sends those, so a renamed own
+ * spell isn't a bonus change as well.
+ */
+const ownRow = (now: string | undefined, before: string | undefined): boolean =>
+  (now ?? '').startsWith(OWN_PREFIX) || (before ?? '').startsWith(OWN_PREFIX);
+
+/** The source's own spells: the extra bonus rows that hold one (own-spells.ts). */
+export const ownOf = (source: SpellSource): string[] =>
+  source.bonus.filter((b) => b.extra && b.chosen.startsWith(OWN_PREFIX)).map((b) => b.chosen);
 
 export const draftOf = (source: SpellSource): SpellDraft => ({
   cantrips: [...(source.cantrips?.chosen ?? [])],
@@ -28,6 +42,7 @@ export const draftOf = (source: SpellSource): SpellDraft => ({
   show: source.show,
   bonus: source.bonus.map((b) => b.chosen),
   prepared: [...(source.prepared?.chosen ?? [])],
+  own: ownOf(source),
 });
 
 /** MPMB's "What spells to show?" choice that puts only the prepared spells on the sheet. */
@@ -84,7 +99,7 @@ export function changeCount(info: SpellsInfo, drafts: Record<string, SpellDraft>
     const was = draftOf(source);
     const diff = (now: string[], before: string[]) =>
       now.filter((k) => !before.includes(k)).length + before.filter((k) => !now.includes(k)).length;
-    const bonus = draft.bonus.filter((k, i) => k !== was.bonus[i]).length;
+    const bonus = draft.bonus.filter((k, i) => k !== was.bonus[i] && !ownRow(k, was.bonus[i])).length;
     // Prepared picks count only while the step shows them ("Prepared spells only").
     const prepared = preparing(source, draft) ? diff(draft.prepared, was.prepared) : 0;
     return (
@@ -93,7 +108,8 @@ export function changeCount(info: SpellsInfo, drafts: Record<string, SpellDraft>
       diff(draft.spells, was.spells) +
       (draft.show !== was.show ? 1 : 0) +
       bonus +
-      prepared
+      prepared +
+      diff(draft.own, was.own)
     );
   }, 0);
 }
@@ -108,8 +124,9 @@ export function picksOf(info: SpellsInfo, drafts: Record<string, SpellDraft>): S
     if (source.cantrips && !sameSet(draft.cantrips, was.cantrips)) picks.cantrips = draft.cantrips;
     if (source.spells && !sameSet(draft.spells, was.spells)) picks.spells = draft.spells;
     if (draft.show !== was.show) picks.show = draft.show;
-    if (draft.bonus.some((k, i) => k !== was.bonus[i])) picks.bonus = draft.bonus;
+    if (draft.bonus.some((k, i) => k !== was.bonus[i] && !ownRow(k, was.bonus[i]))) picks.bonus = draft.bonus;
     if (preparing(source, draft) && !sameSet(draft.prepared, was.prepared)) picks.prepared = draft.prepared;
+    if (!sameSet(draft.own, was.own)) picks.own = draft.own;
     return Object.keys(picks).length > 1 ? [picks] : [];
   });
 }

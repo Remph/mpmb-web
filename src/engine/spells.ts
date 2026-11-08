@@ -17,6 +17,9 @@ import { viewsOf } from '../worker/views.ts';
 import type { Engine } from './engine.ts';
 import type { DialogReply, DialogView } from './host.ts';
 
+/** The start of an own spell's key (src/build/own-spells.ts): extra rows with it belong to the app. */
+export const OWN_PREFIX = 'own ';
+
 /** One spell as MPMB knows it (SpellsList), in the sheet's units. */
 export interface SpellInfo {
   key: string;
@@ -125,6 +128,12 @@ export interface SpellPicks {
   bonus?: string[];
   /** The spells for "Prepared spells only". */
   prepared?: string[];
+  /**
+   * The player's own spells for this source (keys "own …"), as extra bonus rows: MPMB keeps the rows a
+   * player adds in Acrobat's dialog in spCast.extraBo and counts them in offsetBo. Replaces the own spells
+   * there and keeps the other extra rows.
+   */
+  own?: string[];
 }
 
 /** The order dialog's choices: the sources on the spell sheet in order, those left out, and its options. */
@@ -306,6 +315,7 @@ function spellPicksScript(
       preparedCantrips: p.preparedCantrips,
       bonus: p.bonus,
       prepared: p.prepared,
+      own: p.own,
     };
   });
   // The bonus spells' choices live in the feature's own bonus entries (spCast.bonus[key], one object or a
@@ -345,6 +355,11 @@ function spellPicksScript(
       if (p.preparedCantrips !== undefined) cast.preparedCantrips = p.preparedCantrips;
       if (p.prepared) cast.selectPrep = p.prepared;
       if (p.bonus) setBonus(cast, p.bonus);
+      if (p.own) {
+        var kept = (cast.extraBo || []).filter(function (k) { return k && String(k).indexOf("${OWN_PREFIX}") !== 0; });
+        var extra = kept.concat(p.own);
+        if (extra.length) { cast.extraBo = extra; cast.offsetBo = extra.length; } else { delete cast.extraBo; cast.offsetBo = 0; }
+      }
     }
     if (sheet) {
       CurrentCasters.incl = sheet.included;

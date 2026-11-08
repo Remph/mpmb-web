@@ -317,6 +317,20 @@ test('a new wizard chooses spells on the Build screen, and the Spells tab shows 
   await adder.getByRole('button', { name: 'Add Magic Missile' }).click();
   await expect(page.getByText('2 changes are not on the spell sheet yet.')).toBeVisible();
 
+  // An own spell (a made-up cantrip): the app writes it as an add-on script without asking anything, and it
+  // joins the wizard as an extra that counts toward nothing.
+  await page.getByRole('button', { name: '+ Own spell' }).click();
+  const form = page.getByRole('dialog', { name: 'Own spell for Wizard' });
+  await form.getByRole('textbox', { name: 'Name' }).fill('Thought Jab');
+  await form.getByRole('button', { name: 'INT', exact: true }).click();
+  await form.getByRole('textbox', { name: 'Dice' }).fill('1d10');
+  await expect(form.getByRole('textbox', { name: 'Line on the spell sheet' })).toHaveValue(
+    'Int save or 1d10 Force dmg; +1d10 at CL 5, 11, and 17',
+  );
+  await form.getByRole('button', { name: 'Add to Wizard' }).click();
+  await expect(form).toHaveCount(0, { timeout: STARTUP });
+  await expect(page.getByText('3 changes are not on the spell sheet yet.')).toBeVisible();
+
   // MPMB's own dialogs take the picks and make the spell sheet pages.
   await page.getByRole('button', { name: 'Update spell sheet' }).click();
   await expect(page.getByText('are not on the spell sheet yet')).toHaveCount(0, { timeout: STARTUP });
@@ -327,6 +341,9 @@ test('a new wizard chooses spells on the Build screen, and the Spells tab shows 
   await page.getByRole('button', { name: 'All spells', exact: true }).click();
   await expect(page.locator('.spell').filter({ hasText: 'Fire Bolt' }).first()).toBeVisible();
   await expect(page.locator('.spell').filter({ hasText: 'Magic Missile' }).first()).toBeVisible();
+  // MPMB wrote the cantrip's dice for level 1 in place of the note on how it grows.
+  await expect(page.locator('.spell').filter({ hasText: 'Thought Jab' }).first()).toBeVisible();
+  await expect(page.getByText('Int save or 1d10 Force dmg', { exact: true })).toBeVisible();
 
   expect(errors).toEqual([]);
 });
