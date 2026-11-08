@@ -140,6 +140,46 @@ export function tapBackground(bonus: BackgroundBonus, ability: number, amount: 1
 export const backgroundDone = (bonus: BackgroundBonus): boolean =>
   bonus.allThree || (bonus.plus2 !== null && bonus.plus1 !== null);
 
+/*
+ * The house rule "background boosts anywhere" (a homebrew switch): the same +2 and +1, or three +1, but on any
+ * abilities. MPMB's own dialog takes any number in its Background column, so only the page needs to know.
+ * "+1 to all three" can't name its abilities here, so the player picks three +1s one by one: the page needs a
+ * mode, "split" (+2 and +1) or "three" (three +1s). These work on the column itself.
+ */
+export type FreeMode = 'split' | 'three';
+/** "+2 and +1" has one +1, so two or more +1s can only be "three +1". */
+const MIN_ONES_FOR_THREE = 2;
+
+/** How the column looks split: a +2 means split, two or more +1s three; null when it can be either. */
+export function freeModeOf(column: number[]): FreeMode | null {
+  if (column.includes(PLUS_TWO)) return 'split';
+  return column.filter((n) => n === 1).length >= MIN_ONES_FOR_THREE ? 'three' : null;
+}
+
+/** The column in the other mode: to "three", each ability that has a bonus keeps a +1; to "split", it starts empty. */
+export const freeColumnFor = (column: number[], mode: FreeMode): number[] =>
+  column.map((n) => (mode === 'three' && n > 0 ? 1 : 0));
+
+/** In "three": whether this ability's +1 can be picked (it has it, or fewer than three are picked). */
+export const freeCanPick = (column: number[], ability: number): boolean =>
+  column[ability] === 1 || column.filter((n) => n === 1).length < BACKGROUND_ABILITIES;
+
+/** In "three": a tap on an ability's +1 picks it, or gives it back. A fourth one isn't taken. */
+export function tapFreeOne(column: number[], ability: number): number[] {
+  if (!freeCanPick(column, ability)) return [...column];
+  // Only +1s stay: in this mode a +2 left over from the other one would make the column wrong.
+  const ones = column.map((n) => (n === 1 ? 1 : 0));
+  return withScore(ones, ability, 1 - (ones[ability] ?? 0));
+}
+
+/** Whether the house rule's bonus is all given out: +2 and +1 on two abilities, or +1 on three. */
+export function freeDone(column: number[]): boolean {
+  const twos = column.filter((n) => n === PLUS_TWO).length;
+  const ones = column.filter((n) => n === 1).length;
+  const others = column.filter((n) => n !== 0 && n !== 1 && n !== PLUS_TWO).length;
+  return others === 0 && ((twos === 1 && ones === 1) || (twos === 0 && ones === BACKGROUND_ABILITIES));
+}
+
 /** Columns that are not added like the others: their own column in the table, or magic. */
 const OWN_COLUMNS = ['base', 'background', 'items', 'ongoing', 'override', 'maximum'];
 /** Where the page's − and + in "Feats & level-ups" write: MPMB's "Feat Bonus" (an ASI is a feat in 2024). */
