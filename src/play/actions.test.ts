@@ -207,7 +207,7 @@ describe('rule text for a limited feature', () => {
     expect(featureRule(index, { name: 'Holy Glow', from: [] })).toBeNull();
   });
 
-  // MPMB names a magic item after its picked form ("Guild Signet (Azorius)"), its limited feature after the item.
+  // MPMB names a magic item after its picked form ("Test Ring (Blue)"), its limited feature after the item.
   describe('of a magic item that comes in forms', () => {
     const DESCRIPTION = 'A ring with a blue stone. I can expend 1 charge to cast *Test Spark*.';
     const ringed = ruleIndex(
@@ -232,7 +232,7 @@ describe('rule text for a limited feature', () => {
     });
 
     it('finds it for an action the form brings: MPMB\'s source names the form and adds "(magic item)"', () => {
-      const spark = actionItem('Test Spark (signet)', ['Test Ring [Red] (magic item)']);
+      const spark = actionItem('Test Spark (ring)', ['Test Ring [Red] (magic item)']);
       expect(ruleFor(ringed, spark)?.title).toBe('Test Ring (Red)');
     });
   });

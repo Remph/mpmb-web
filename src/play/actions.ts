@@ -228,10 +228,10 @@ export function ruleIndex(fields: FieldViews): Map<string, ActionRule> {
   for (const item of readInventory(fields).magicItems) {
     const rule = { title: item.name, source: '', lines: linesOf(item.description).map(trimmed).filter(Boolean) };
     add(rule);
-    // An item that comes in forms is named after the picked one: "Guild Signet (Azorius)". What MPMB adds for it
-    // keeps the item's own name, though: the limited feature "Guild Signet (regains 1d3)" says it came from
-    // "Guild Signet", or from "Guild Signet [Azorius]" when the form brings it. Both find the item's text, which
-    // names the form (playtest 2026-11-08: the signet's tile had no text).
+    // An item that comes in forms without names of their own is named after the picked one: "Ring (Blue)". What
+    // MPMB adds for it keeps the item's own name, though: the item's limited feature says it came from "Ring",
+    // an action the form brings from "Ring [Blue] (magic item)". Both find the item's text, which is the picked
+    // form's (playtest 2026-11-08: an add-on item's tile had no text).
     const form = actionItem(item.name);
     if (form.note) {
       add(rule, form.name);
