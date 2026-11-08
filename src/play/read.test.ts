@@ -18,6 +18,7 @@ import {
   readSkills,
   readSpellSlots,
   readTool,
+  spacedLines,
   readFeatures,
   readInventory,
   readSpellSlotUse,
@@ -331,5 +332,24 @@ describe('play view extras', () => {
       '(level 5)',
       '. As a Bonus Action',
     ]);
+  });
+});
+
+describe('spaced lines', () => {
+  it('marks a line that follows empty lines, however many, as set apart', () => {
+    expect(spacedLines('Camp\rWatch order\r\r\rNext session\n\nLoot')).toEqual([
+      { line: 'Camp', gap: false },
+      { line: 'Watch order', gap: false },
+      { line: 'Next session', gap: true },
+      { line: 'Loot', gap: true },
+    ]);
+  });
+
+  it('drops empty lines at the start and the end, and lines of only spaces count as empty', () => {
+    expect(spacedLines('\r  \rFirst\r \rSecond\r\r')).toEqual([
+      { line: 'First', gap: false },
+      { line: 'Second', gap: true },
+    ]);
+    expect(spacedLines('\r\r')).toEqual([]);
   });
 });

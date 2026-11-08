@@ -58,7 +58,7 @@
   {#if companion.notes.length}
     <section class="panel text" aria-labelledby="companion-notes-title">
       <h2 id="companion-notes-title">{t.tabNotes}</h2>
-      {#each companion.notes as note, i (i)}<RichText text={note} />{/each}
+      {#each companion.notes as note, i (i)}<RichText text={note} gaps />{/each}
     </section>
   {/if}
   {#if !companion.rules.length && !companion.notes.length}

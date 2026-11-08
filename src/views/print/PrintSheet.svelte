@@ -557,8 +557,8 @@
           {page.title && page.title !== DEFAULT_NOTES_TITLE ? page.title : t.notes} <small>{name}</small>
         </h2>
         <div class="flow">
-          <RichText text={page.left} />
-          <RichText text={page.right} />
+          <RichText text={page.left} gaps />
+          <RichText text={page.right} gaps />
         </div>
       </section>
     {/each}
@@ -951,6 +951,11 @@
 
   .flow :global(p) {
     margin: 0 0 1mm;
+  }
+
+  /* A notes page's empty line (RichText's gap): this sheet's own margins above outrank RichText's. */
+  .flow :global(.gap) {
+    margin-top: 1.25em;
   }
 
   .flow :global(.name) {
