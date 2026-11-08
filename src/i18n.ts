@@ -344,7 +344,6 @@ export const ui = {
     formLeave: 'Gestalt verlassen',
     formUses: '{left} von {total} Anwendungen übrig',
     formHpTitle: 'Deine Trefferpunkte',
-    formHpNote: 'In einer Gestalt behältst du deine eigenen Trefferpunkte.',
     formRemove: '{name} entfernen',
     formRemoveTitle: 'Gestalt entfernen?',
     formRemoveText:
@@ -358,8 +357,6 @@ export const ui = {
     formSearch: 'Tier suchen',
     formShowAll: 'Auch Tiere über deiner Grenze zeigen',
     formNoneFound: 'Kein Tier passt zur Suche.',
-    formOtherGroup: 'Andere',
-    formAdding: '{name} wird hinzugefügt …',
     companionGone: 'verschwunden',
     companionGoneText:
       'Verschwunden: Der Begleiter ist bei 0 TP verschwunden. Er kehrt zurück, wenn du {spell} erneut wirkst.',
@@ -1666,7 +1663,6 @@ export const ui = {
     formLeave: 'Leave form',
     formUses: '{left} of {total} uses left',
     formHpTitle: 'Your hit points',
-    formHpNote: 'You keep your own hit points in a form.',
     formRemove: 'Remove {name}',
     formRemoveTitle: 'Remove this form?',
     formRemoveText: '{name} goes from your Wild Shape pages. You can add the form again later.',
@@ -1679,8 +1675,6 @@ export const ui = {
     formSearch: 'Find a beast',
     formShowAll: 'Show beasts above your limit too',
     formNoneFound: 'No beast matches.',
-    formOtherGroup: 'Other',
-    formAdding: 'Adding {name} …',
     companionGone: 'gone',
     companionGoneText: 'Gone: it disappeared at 0 HP. It comes back when you cast {spell} again.',
     companionSize0: 'Gargantuan',

@@ -1,6 +1,7 @@
 // The Wild Shape helpers the play view uses: pure logic, no sheet (the engine side is test/wild-shape.test.ts).
 import { describe, expect, test } from 'vitest';
 import type { LimitedFeature } from '../src/play/read.ts';
+import { copyHomebrew } from '../src/store/characters.ts';
 import {
   changeSteps,
   challengeValue,
@@ -98,6 +99,15 @@ describe('the form the character is in', () => {
     expect(readInForm('Wolf')).toBeNull();
     expect(readInForm(null)).toBeNull();
     expect(readInForm({ key: 'k', name: 'x'.repeat(500) })?.name).toHaveLength(200);
+  });
+
+  test('the plain copy that goes into IndexedDB keeps it', () => {
+    const inForm = { key: 'P6.WSfront.1', name: 'Wolf' };
+    const copy = copyHomebrew({ acEdge: 'adv', wildShape: inForm });
+    expect(copy.wildShape).toEqual(inForm);
+    expect(copy.wildShape).not.toBe(inForm);
+    // Leaving the form takes it out again.
+    expect(copyHomebrew({ ...copy, wildShape: undefined })).toEqual({ acEdge: 'adv' });
   });
 
   test('a form replaced in its place no longer counts', () => {
