@@ -49,15 +49,18 @@
     /* The bar spans the screen; its contents line up with the page below, which stops at --page-max. */
     padding: 0.375rem max(1rem, env(safe-area-inset-right), calc((100% - var(--page-max)) / 2 + 1rem)) 0.375rem
       max(1rem, env(safe-area-inset-left), calc((100% - var(--page-max)) / 2 + 1rem));
-    border-bottom: 1px solid var(--line);
-    background: var(--surface);
+    /* With sheet colours, a stripe in the character's colour (app.css, [data-sheet]). */
+    border-bottom: var(--bar-edge, 1px solid var(--line));
+    /* A theme may paint the bar (Campfire's sky, with its own letter colours); Purple keeps the card colour. */
+    background: var(--bar, var(--surface));
+    color: var(--on-bar, var(--ink));
   }
 
   .back {
     display: inline-flex;
     align-items: center;
     min-height: 44px;
-    color: var(--accent);
+    color: var(--on-bar-link, var(--accent));
     font-weight: 500;
     text-decoration: none;
   }
@@ -77,14 +80,14 @@
   .who p {
     margin: 0;
     overflow: hidden;
-    color: var(--ink-muted);
+    color: var(--on-bar-muted, var(--ink-muted));
     font-size: 0.875rem;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .status {
-    color: var(--ink-muted);
+    color: var(--on-bar-muted, var(--ink-muted));
     font-size: 0.875rem;
   }
 

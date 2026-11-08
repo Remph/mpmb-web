@@ -15,6 +15,9 @@
   import MenuTree from '../MenuTree.svelte';
   import AddOnsWindow from './AddOnsWindow.svelte';
   import HomebrewWindow from '../HomebrewWindow.svelte';
+  import LookWindow from '../LookWindow.svelte';
+  import { look } from '../../look.svelte.ts';
+  import { hasOneMode } from '../../look.ts';
   import { homebrew } from '../../homebrew/switches.svelte.ts';
 
   interface Props {
@@ -69,6 +72,16 @@
   let scripts = $state(false);
   /** The homebrew window, shown in this window's place too. */
   let rules = $state(false);
+  /** The Look window, in this window's place as well. */
+  let looks = $state(false);
+  const lookLine = $derived(
+    fill(t.lookMenuLine, {
+      theme: { purple: t.lookPurple, campfire: t.lookCampfire, oled: t.lookOled }[look.current.theme],
+      mode: hasOneMode(look.current.theme)
+        ? t.lookDark
+        : { device: t.lookDevice, light: t.lookLight, dark: t.lookDark }[look.current.mode],
+    }),
+  );
   const rulesOn = $derived(Object.values(homebrew.switches).filter(Boolean).length);
   const buildHref = $derived(`#/character/${encodeURIComponent(open.meta.id)}/build`);
 
@@ -95,6 +108,8 @@
   <AddOnsWindow {session} {open} {onclose} {t} />
 {:else if rules}
   <HomebrewWindow {onclose} {t} />
+{:else if looks}
+  <LookWindow {onclose} {session} {t} />
 {:else}
   <Modal title={t.sheetMenu} onescape={onclose} closeLabel={t.close} wide>
     {#if !session.client.answersPopUps}
@@ -176,6 +191,9 @@
       </button>
       <button type="button" class="tile" onclick={() => (rules = true)}>
         <b>{t.homebrewTitle}</b><small>{rulesOn ? fill(t.homebrewOnCount, { count: rulesOn }) : t.homebrewLine}</small>
+      </button>
+      <button type="button" class="tile" onclick={() => (looks = true)}>
+        <b>{t.lookTitle}</b><small>{lookLine}</small>
       </button>
       <button type="button" class="tile" onclick={toggleLanguage}>
         <b lang={t.switchLanguage === 'English' ? 'en' : 'de'}>{t.switchLanguage}</b><small>{t.menuLanguageLine}</small>

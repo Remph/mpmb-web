@@ -11,6 +11,9 @@ importers:
       '@cantoo/pdf-lib':
         specifier: 2.11.1
         version: 2.11.1(html-entities@2.6.0)
+      '@fontsource-variable/recursive':
+        specifier: 5.3.0
+        version: 5.3.0
       '@fontsource/atkinson-hyperlegible-next':
         specifier: 5.3.0
         version: 5.3.0
@@ -58,6 +61,9 @@ packages:
     resolution: {integrity: sha512-lYuRJFfXgoP8WVE8HYSeoLfDcnSXmjMLmdZS7YvmYHngbcZfiqDOruHrZBqjYizkrNa4ad1yW4WCrPYyb26T3Q==}
     peerDependencies:
       html-entities: '>=2.3.2'
+
+  '@fontsource-variable/recursive@5.3.0':
+    resolution: {integrity: sha512-4B4/lWCVeZgdbpJdIIU1sOVO/ECjjM673ohuxvyQ6uCK41TPlGzKRNokKY84noUgGYnpwc//MW4k2KrOMY19jQ==}
 
   '@fontsource/atkinson-hyperlegible-next@5.3.0':
     resolution: {integrity: sha512-8p1tHVoPDo6oYwSO3sMw5snGwFwSf3TmeSF9Gcj792GXdsg6oqvhoItbj6Hj/XZIk0Xs+Cwu6pkLBAl3Q5HrwA==}
@@ -612,6 +618,8 @@ snapshots:
       html-entities: 2.6.0
       node-html-better-parser: 1.5.9
       tslib: 2.8.1
+
+  '@fontsource-variable/recursive@5.3.0': {}
 
   '@fontsource/atkinson-hyperlegible-next@5.3.0': {}
 

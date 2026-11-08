@@ -19,8 +19,9 @@
   Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
 
   # The page itself is checked on every visit, so a new version shows up at once (so are the service
-  # worker, which stores the app for offline use, and the web app manifest)...
-  <FilesMatch "(\.html|\.webmanifest|^sw\.js)$">
+  # worker, which stores the app for offline use, the web app manifest, and look.js, which sets the
+  # theme before the page paints and has no hash in its name)...
+  <FilesMatch "(\.html|\.webmanifest|^sw\.js|^look\.js)$">
     Header set Cache-Control "no-cache"
   </FilesMatch>
   # ...while the build's files carry a content hash in their name ("index-CH5oqtRN.js"): a new

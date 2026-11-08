@@ -7,6 +7,9 @@
   import CharacterView from './views/CharacterView.svelte';
   import BuildView from './views/build/BuildView.svelte';
   import HomebrewWindow from './views/HomebrewWindow.svelte';
+  import LookWindow from './views/LookWindow.svelte';
+  import { look } from './look.svelte.ts';
+  import { sheetColor } from './look.ts';
   import { BUILD, SOURCE_URL, sourceUrl } from './version.ts';
 
   const storageKey = 'mpmb-web.lang';
@@ -27,6 +30,20 @@
     BUILD.date &&
       new Date(`${BUILD.date}T12:00:00`).toLocaleDateString(lang, { day: 'numeric', month: 'short', year: 'numeric' }),
   );
+
+  /**
+   * With "Sheet colours" on, the open character's colour from its MPMB sheet replaces the accent (app.css,
+   * #app[data-sheet]); on #app so popups and windows take it too. The start page keeps the theme's own.
+   */
+  const accent = $derived(
+    look.current.sheetColors && session.current ? sheetColor(session.current.fields['Color.Theme']?.value) : null,
+  );
+  $effect(() => {
+    const app = document.getElementById('app');
+    if (!app) return;
+    if (accent) app.dataset['sheet'] = accent;
+    else delete app.dataset['sheet'];
+  });
 
   $effect(() => {
     document.documentElement.lang = lang;
@@ -51,6 +68,7 @@
   // A feature's choice: https://regex101.com/?regex=%5E%23%5C%2Fcharacter%5C%2F%28%5B%5E%2F%5D%2B%29%28%5C%2Fbuild%28%3F%3A%5C%2Fchoices%5C%2F%28%5B%5E%2F%5D%2A%29%7C%5C%2F%28gear%7Cspells%29%29%3F%29%3F%24&testString=%23%2Fcharacter%2Fabc%2Fbuild%2Fchoices%2FFighting%2520Style
   const CHARACTER_ROUTE = /^#\/character\/([^/]+)(\/build(?:\/choices\/([^/]*)|\/(gear|spells))?)?$/;
   let rules = $state(false);
+  let looks = $state(false);
   let missing = $state(false);
   let building = $state(false);
   /** The feature whose choice the Build screen opens at, or null for its first step. */
@@ -112,6 +130,7 @@
     <a class="brand" href="#/">{t.title}</a>
     <span class="end">
       <button type="button" onclick={() => (rules = true)}>{t.homebrewTitle}</button>
+      <button type="button" onclick={() => (looks = true)}>{t.lookTitle}</button>
       <button
         type="button"
         onclick={toggleLanguage}
@@ -124,6 +143,9 @@
   </header>
   {#if rules}
     <HomebrewWindow onclose={() => (rules = false)} {t} />
+  {/if}
+  {#if looks}
+    <LookWindow onclose={() => (looks = false)} {session} {t} />
   {/if}
 
   <main>
@@ -161,17 +183,25 @@
     gap: 1rem;
     padding: 0.5rem clamp(1rem, 4vw, 2rem);
     border-bottom: 1px solid var(--line);
+    /* A theme may paint the bar (Campfire's sky); Purple leaves it on the page. */
+    background: var(--bar, none);
+    color: var(--on-bar, inherit);
   }
 
   .end {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 0.5rem;
   }
   .brand {
     display: inline-flex;
     align-items: center;
     min-height: 44px;
+    font-family: var(--font-display, var(--font));
+    font-variation-settings: 'CASL' 0.6;
     font-weight: 600;
+    white-space: nowrap;
     color: inherit;
     text-decoration: none;
   }

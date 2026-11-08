@@ -9,6 +9,7 @@ import type { CharacterData } from '../engine/sheet-data.ts';
 import type { UltCharges } from '../homebrew/ult.ts';
 import type { SetupChoice } from '../play/attack-setup.ts';
 import type { Effect } from '../play/effects.ts';
+import { sheetColor, type SheetColor } from '../look.ts';
 
 export interface CharacterMeta {
   id: string;
@@ -17,6 +18,8 @@ export interface CharacterMeta {
   classes: string;
   species: string;
   addOns: AddOns;
+  /** The sheet's colour ("Color.Theme", Colorful sheet) when it isn't MPMB's default purple; see src/look.ts. */
+  color?: SheetColor;
   /** The portrait's small picture for the list (a data URL), when the character has a portrait. */
   portrait?: string;
   /** ISO dates. `updated` is the last change on any device (a backup carries it along). */
@@ -241,11 +244,13 @@ export function describeCharacter(
   now = new Date(),
 ): CharacterMeta {
   const portrait = data.images?.portrait?.thumb;
+  const color = sheetColor(data.fields['Color.Theme']?.value);
   const sheetUpdate = before?.sheetUpdate;
   const homebrew = before?.homebrew;
   const lastBackup = before?.lastBackup;
   return {
     ...(portrait ? { portrait } : {}),
+    ...(color ? { color } : {}),
     ...(sheetUpdate ? { sheetUpdate: { ...sheetUpdate } } : {}),
     // A copy, for the same reason as the add-ons below.
     ...(homebrew ? { homebrew: copyHomebrew(homebrew) } : {}),

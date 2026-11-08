@@ -1,7 +1,16 @@
 /*
- * Design tokens: the "Purple" look Remph picked for M4 (2026-10-29). Purple nods to MorePurpleMoreBetter;
- * red marks hit points, the one bold place of the play view. Atkinson Hyperlegible Next is made for
- * reading at a glance: every digit looks different from its neighbours, across a table too.
+ * Design tokens. The app's own look is "Purple", picked for M4 (2026-10-29): purple nods to
+ * MorePurpleMoreBetter; red marks hit points, the one bold place of the play view. Atkinson Hyperlegible
+ * Next is made for reading at a glance: every digit looks different from its neighbours, across a table too.
+ *
+ * Themes (the Look window, src/look.ts): <html> carries data-theme (purple, campfire, oled) and data-mode
+ * (light, dark), set by public/look.js before the first paint and kept up to date by the app. Every theme
+ * sets every colour token below in both modes, so nothing leaks from another theme (src/look.test.ts checks
+ * it, and src/play/stat-colors.test.ts checks the coloured text on its wash in each of them).
+ * A few tokens are left unset by Purple and read with a fallback where they are used: --backdrop (the page
+ * behind the cards), --bar, --on-bar, --on-bar-muted, --on-bar-link (the top bars), --font-display (names
+ * and card titles). A token that refers to another one is resolved where it is set, so the sheet colours
+ * below can only replace --accent on #app if nothing else is built from it here.
  */
 :root {
   /*
@@ -9,6 +18,10 @@
    * apart that a score's name and its number are hard to read together.
    */
   --page-max: 105rem;
+  --font: 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: light;
+
+  /* Purple, light. */
   --ink: #1d1a26;
   --ink-muted: #615b6e;
   --paper: #f3f2f7;
@@ -40,7 +53,8 @@
   /*
    * The numbers under hit points: each its own colour, so the eye finds them by colour after a session or two
    * (Remph picked look A of three, session feedback 2026-11-04). Red stays hit points' own; every number keeps at least
-   * 4.5:1 on its wash in both themes (src/play/stat-colors.test.ts checks it).
+   * 4.5:1 on its wash in every theme (src/play/stat-colors.test.ts checks it). The Combat tab's action kinds
+   * borrow three of them: action purple (prof), bonus action amber (init), reaction teal (pp).
    */
   --stat-ac: #2b5a8c;
   --stat-ac-soft: #e3ecf7;
@@ -54,52 +68,313 @@
   --stat-dc-soft: #f6e2f1;
   --stat-pp: #0d6767;
   --stat-pp-soft: #d9f0ef;
-  --font: 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  color-scheme: light dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ink: #ebe8f2;
-    --ink-muted: #a59fb3;
-    --paper: #15141a;
-    --surface: #1f1d26;
-    --line: #34313d;
-    --accent: #a99ff2;
-    --accent-soft: #2c2843;
-    --on-accent: #15141a;
-    --hover: #2a2733;
-    --danger: #ff8a80;
-    --ok: #7bd88f;
-    --hp: #ff8fa0;
-    --hp-soft: #3a1f26;
-    --on-hp: #15141a;
-    --temp: #8cc0f2;
-    --temp-soft: #1d2b3a;
-    --used: #4a4655;
-    --pp: #b9c8d8;
-    --pp-soft: #262c33;
-    --gp: #f2c75c;
-    --gp-soft: #352c14;
-    --ep: #d3dc7a;
-    --ep-soft: #2c2f17;
-    --sp: #d0d2d8;
-    --sp-soft: #2a2b2f;
-    --cp: #f0a07a;
-    --cp-soft: #3a2519;
-    --stat-ac: #9cc4f0;
-    --stat-ac-soft: #1c2a3a;
-    --stat-init: #f2c066;
-    --stat-init-soft: #33290f;
-    --stat-speed: #86d9a6;
-    --stat-speed-soft: #17301f;
-    --stat-prof: #a99ff2;
-    --stat-prof-soft: #2c2843;
-    --stat-dc: #eda3df;
-    --stat-dc-soft: #3a1f36;
-    --stat-pp: #7fd6d3;
-    --stat-pp-soft: #14302f;
-  }
+:root[data-mode='dark'] {
+  color-scheme: dark;
+
+  /* Purple, dark. */
+  --ink: #ebe8f2;
+  --ink-muted: #a59fb3;
+  --paper: #15141a;
+  --surface: #1f1d26;
+  --line: #34313d;
+  --accent: #a99ff2;
+  --accent-soft: #2c2843;
+  --on-accent: #15141a;
+  --hover: #2a2733;
+  --danger: #ff8a80;
+  --ok: #7bd88f;
+  --hp: #ff8fa0;
+  --hp-soft: #3a1f26;
+  --on-hp: #15141a;
+  --temp: #8cc0f2;
+  --temp-soft: #1d2b3a;
+  --used: #4a4655;
+  --pp: #b9c8d8;
+  --pp-soft: #262c33;
+  --gp: #f2c75c;
+  --gp-soft: #352c14;
+  --ep: #d3dc7a;
+  --ep-soft: #2c2f17;
+  --sp: #d0d2d8;
+  --sp-soft: #2a2b2f;
+  --cp: #f0a07a;
+  --cp-soft: #3a2519;
+  --stat-ac: #9cc4f0;
+  --stat-ac-soft: #1c2a3a;
+  --stat-init: #f2c066;
+  --stat-init-soft: #33290f;
+  --stat-speed: #86d9a6;
+  --stat-speed-soft: #17301f;
+  --stat-prof: #a99ff2;
+  --stat-prof-soft: #2c2843;
+  --stat-dc: #eda3df;
+  --stat-dc-soft: #3a1f36;
+  --stat-pp: #7fd6d3;
+  --stat-pp-soft: #14302f;
+}
+
+/*
+ * Campfire: remph.de's camp (the site that links here), dusk in light mode and night in dark mode. The top
+ * bar is the sky with cream letters, like the camp's name tags; names and card titles in Recursive Casual,
+ * remph.de's own lettering. Numbers stay in Atkinson, which is easier to read at a glance.
+ */
+:root[data-theme='campfire'] {
+  --font-display: 'Recursive Variable', var(--font);
+  --backdrop: linear-gradient(180deg, #eadcf7, rgb(247 240 245 / 0) 26rem) #f7f0f5;
+  --bar: linear-gradient(100deg, #48309a, #7448ad 55%, #a8609e);
+  --on-bar: #fff3cf;
+  --on-bar-muted: #ece0fa;
+  --on-bar-link: #fff3cf;
+
+  --ink: #2a1a40;
+  --ink-muted: #625579;
+  --paper: #f7f0f5;
+  --surface: #fffbf6;
+  --line: #e7dae6;
+  --accent: #5b3fa6;
+  --accent-soft: #eee5f9;
+  --on-accent: #ffffff;
+  --hover: #f6ecf1;
+  --danger: #b3261e;
+  --ok: #1e7b3a;
+  --hp: #b0213f;
+  --hp-soft: #fbe2e5;
+  --on-hp: #ffffff;
+  --temp: #22639e;
+  --temp-soft: #e2edf8;
+  --used: #d6c8dc;
+  --pp: #58677a;
+  --pp-soft: #e8edf2;
+  --gp: #8a5f00;
+  --gp-soft: #fbf0d0;
+  --ep: #5f6a14;
+  --ep-soft: #eef1d6;
+  --sp: #5d6066;
+  --sp-soft: #ececee;
+  --cp: #a2512a;
+  --cp-soft: #f8e4d8;
+  --stat-ac: #2b5a8c;
+  --stat-ac-soft: #e3ecf7;
+  --stat-init: #8a5300;
+  --stat-init-soft: #fbefd6;
+  --stat-speed: #1e6e43;
+  --stat-speed-soft: #dff2e6;
+  --stat-prof: #5b3fa6;
+  --stat-prof-soft: #eee5f9;
+  --stat-dc: #8b2c79;
+  --stat-dc-soft: #f6e2f1;
+  --stat-pp: #0d6767;
+  --stat-pp-soft: #d9f0ef;
+}
+
+/* Night: the fire is the accent; a few stars in the bar. */
+:root[data-theme='campfire'][data-mode='dark'] {
+  --backdrop:
+    radial-gradient(70rem 24rem at 50% 100%, rgb(255 138 61 / 0.09), transparent) fixed,
+    linear-gradient(180deg, #080517, rgb(14 9 32 / 0) 26rem) #0e0920;
+  --bar:
+    radial-gradient(1.5px 1.5px at 8% 30%, #fff6d0 50%, transparent 60%),
+    radial-gradient(1px 1px at 21% 72%, #fff6d0 50%, transparent 60%),
+    radial-gradient(1px 1px at 37% 22%, #fff6d0 50%, transparent 60%),
+    radial-gradient(1.5px 1.5px at 56% 64%, #fff6d0 50%, transparent 60%),
+    radial-gradient(1px 1px at 68% 18%, #fff6d0 50%, transparent 60%),
+    radial-gradient(1px 1px at 83% 58%, #fff6d0 50%, transparent 60%),
+    radial-gradient(1.5px 1.5px at 94% 26%, #fff6d0 50%, transparent 60%), linear-gradient(100deg, #0b0720, #1f1444);
+  --on-bar: #fff3cf;
+  --on-bar-muted: #c9bce6;
+  --on-bar-link: #ffc46b;
+
+  --ink: #f3ead6;
+  --ink-muted: #b5a8cf;
+  --paper: #0e0920;
+  --surface: #1a1233;
+  --line: #33285a;
+  --accent: #ffb454;
+  --accent-soft: #3a2a1f;
+  --on-accent: #1a1006;
+  --hover: #251a45;
+  --danger: #ff8a80;
+  --ok: #7bd88f;
+  --hp: #ff8197;
+  --hp-soft: #3d1830;
+  --on-hp: #1a1233;
+  --temp: #8cc0f2;
+  --temp-soft: #1b2442;
+  --used: #463a66;
+  --pp: #b9c8d8;
+  --pp-soft: #232a3a;
+  --gp: #f2c75c;
+  --gp-soft: #352c14;
+  --ep: #d3dc7a;
+  --ep-soft: #2c2f17;
+  --sp: #d0d2d8;
+  --sp-soft: #282838;
+  --cp: #f0a07a;
+  --cp-soft: #3a2519;
+  --stat-ac: #9cc4f0;
+  --stat-ac-soft: #1c2a42;
+  --stat-init: #f2c066;
+  --stat-init-soft: #33290f;
+  --stat-speed: #86d9a6;
+  --stat-speed-soft: #17301f;
+  --stat-prof: #b9a6f7;
+  --stat-prof-soft: #2c2350;
+  --stat-dc: #eda3df;
+  --stat-dc-soft: #3a1f40;
+  --stat-pp: #7fd6d3;
+  --stat-pp-soft: #14302f;
+}
+
+/*
+ * OLED black: always dark, the page and the cards true black, so an OLED screen leaves those pixels off (less
+ * glare at a dark table, less battery); thin lines keep the cards apart. Text is a touch off-white for the
+ * same glare.
+ */
+:root[data-theme='oled'] {
+  color-scheme: dark;
+  --ink: #eceaf2;
+  --ink-muted: #a29cae;
+  --paper: #000000;
+  --surface: #000000;
+  --line: #2f2c38;
+  --accent: #b1a8f5;
+  --accent-soft: #1e1a33;
+  --on-accent: #000000;
+  --hover: #17151d;
+  --danger: #ff8a80;
+  --ok: #7bd88f;
+  --hp: #ff8fa0;
+  --hp-soft: #2e1219;
+  --on-hp: #000000;
+  --temp: #8cc0f2;
+  --temp-soft: #12202e;
+  --used: #403c4a;
+  --pp: #b9c8d8;
+  --pp-soft: #1a2027;
+  --gp: #f2c75c;
+  --gp-soft: #29210a;
+  --ep: #d3dc7a;
+  --ep-soft: #21240d;
+  --sp: #d0d2d8;
+  --sp-soft: #1e1f23;
+  --cp: #f0a07a;
+  --cp-soft: #2d1a0f;
+  --stat-ac: #9cc4f0;
+  --stat-ac-soft: #12202e;
+  --stat-init: #f2c066;
+  --stat-init-soft: #271f07;
+  --stat-speed: #86d9a6;
+  --stat-speed-soft: #0e2416;
+  --stat-prof: #b1a8f5;
+  --stat-prof-soft: #1e1a33;
+  --stat-dc: #eda3df;
+  --stat-dc-soft: #2e1429;
+  --stat-pp: #7fd6d3;
+  --stat-pp-soft: #0b2524;
+}
+
+/*
+ * Sheet colours: the colours of MPMB's Colorful sheet ("Set Color Theme"; its ColorList), made readable as
+ * text on the app's light and dark cards. With "Sheet colours" on, an open character's sheet colour replaces
+ * the theme's accent (data-sheet on #app, set by App.svelte, and on the character list's cards); the stat colours stay. MPMB's purple is the
+ * sheet's default and keeps the theme's own accent, so it has none here.
+ */
+:root {
+  --sheet-aqua: #1b65a3;
+  --sheet-aqua-soft: #e3effa;
+  --sheet-blue: #006c8a;
+  --sheet-blue-soft: #e3f5fa;
+  --sheet-brown: #785c53;
+  --sheet-brown-soft: #f1edeb;
+  --sheet-gray: #5c5d5e;
+  --sheet-gray-soft: #eeeeee;
+  --sheet-green: #046633;
+  --sheet-green-soft: #e3faee;
+  --sheet-orange: #ac3a0b;
+  --sheet-orange-soft: #faeae3;
+  --sheet-pink: #b91557;
+  --sheet-pink-soft: #fae3ec;
+  --sheet-red: #bb1822;
+  --sheet-red-soft: #fae3e4;
+  --sheet-teal: #00726d;
+  --sheet-teal-soft: #e3faf9;
+  --sheet-yellow: #905600;
+  --sheet-yellow-soft: #faf1e3;
+}
+
+:root[data-mode='dark'] {
+  --sheet-aqua: #79b2e3;
+  --sheet-aqua-soft: #1c2f40;
+  --sheet-blue: #5dc1dd;
+  --sheet-blue-soft: #1c3840;
+  --sheet-brown: #bca59e;
+  --sheet-brown-soft: #362925;
+  --sheet-gray: #b0b1b1;
+  --sheet-gray-soft: #2e2e2e;
+  --sheet-green: #6fcf98;
+  --sheet-green-soft: #1c402d;
+  --sheet-orange: #e3997a;
+  --sheet-orange-soft: #40261c;
+  --sheet-pink: #e68ab0;
+  --sheet-pink-soft: #401c2a;
+  --sheet-red: #e78c92;
+  --sheet-red-soft: #401c1e;
+  --sheet-teal: #2dd2ca;
+  --sheet-teal-soft: #1c403f;
+  --sheet-yellow: #ddac62;
+  --sheet-yellow-soft: #40321c;
+}
+
+/*
+ * On #app (the open character) or one card of the character list, below <html>: an accent set on an element
+ * wins over the one it would inherit from any theme, whatever their selectors weigh. The top bar gets a stripe.
+ */
+[data-sheet] {
+  --accent: var(--sheet);
+  --accent-soft: var(--sheet-soft);
+  --bar-edge: 3px solid var(--sheet);
+}
+[data-sheet='aqua'] {
+  --sheet: var(--sheet-aqua);
+  --sheet-soft: var(--sheet-aqua-soft);
+}
+[data-sheet='blue'] {
+  --sheet: var(--sheet-blue);
+  --sheet-soft: var(--sheet-blue-soft);
+}
+[data-sheet='brown'] {
+  --sheet: var(--sheet-brown);
+  --sheet-soft: var(--sheet-brown-soft);
+}
+[data-sheet='gray'] {
+  --sheet: var(--sheet-gray);
+  --sheet-soft: var(--sheet-gray-soft);
+}
+[data-sheet='green'] {
+  --sheet: var(--sheet-green);
+  --sheet-soft: var(--sheet-green-soft);
+}
+[data-sheet='orange'] {
+  --sheet: var(--sheet-orange);
+  --sheet-soft: var(--sheet-orange-soft);
+}
+[data-sheet='pink'] {
+  --sheet: var(--sheet-pink);
+  --sheet-soft: var(--sheet-pink-soft);
+}
+[data-sheet='red'] {
+  --sheet: var(--sheet-red);
+  --sheet-soft: var(--sheet-red-soft);
+}
+[data-sheet='teal'] {
+  --sheet: var(--sheet-teal);
+  --sheet-soft: var(--sheet-teal-soft);
+}
+[data-sheet='yellow'] {
+  --sheet: var(--sheet-yellow);
+  --sheet-soft: var(--sheet-yellow-soft);
 }
 
 *,
@@ -127,13 +402,25 @@ body {
 
 body {
   min-height: 100dvh;
-  background: var(--paper);
+  background: var(--backdrop, var(--paper));
   color: var(--ink);
   font-family: var(--font);
   font-size: 1rem;
   line-height: 1.5;
   /* Numbers line up in columns (modifiers, hit points). */
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Names and card titles in the theme's display letters (Campfire's Recursive Casual); the print sheet keeps
+ * its own. Casual at 0.6, as remph.de sets it: friendly, still easy to read.
+ */
+@media screen {
+  h1,
+  h2 {
+    font-family: var(--font-display, var(--font));
+    font-variation-settings: 'CASL' 0.6;
+  }
 }
 
 /* Buttons everywhere: 44 px touch targets; one primary (filled) button per place. */
