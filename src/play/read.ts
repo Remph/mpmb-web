@@ -682,6 +682,25 @@ export function readDefenses(fields: FieldViews): {
 /** Lines of a multi-line field ("\r" in Acrobat, "\n" when typed in the browser). */
 export const linesOf = (text: string): string[] => text.split(/\r\n?|\n/);
 
+/**
+ * The lines with text, each marked when one or more empty lines stood above it. A player's notes use an
+ * empty line to set a block apart, so the notes keep it as a gap; MPMB's own feature text isn't laid out
+ * that way and drops them. Empty lines at the start and end mean nothing and are dropped.
+ */
+export function spacedLines(text: string): { line: string; gap: boolean }[] {
+  const spaced: { line: string; gap: boolean }[] = [];
+  let empty = false;
+  for (const line of linesOf(text)) {
+    if (line.trim() === '') {
+      empty = true;
+      continue;
+    }
+    spaced.push({ line, gap: empty && spaced.length > 0 });
+    empty = false;
+  }
+  return spaced;
+}
+
 /** The check boxes next to the hit points. */
 export function readToggles(fields: FieldViews): { inspiration: boolean; reactionUsed: boolean } {
   return { inspiration: isOn(fields, 'Inspiration'), reactionUsed: isOn(fields, 'Reaction Used This Round') };

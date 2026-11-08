@@ -557,8 +557,8 @@
           {page.title && page.title !== DEFAULT_NOTES_TITLE ? page.title : t.notes} <small>{name}</small>
         </h2>
         <div class="flow">
-          <RichText text={page.left} />
-          <RichText text={page.right} />
+          <RichText text={page.left} gaps />
+          <RichText text={page.right} gaps />
         </div>
       </section>
     {/each}

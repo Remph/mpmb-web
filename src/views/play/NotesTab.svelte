@@ -145,8 +145,8 @@
       <p class="hint">{t.notesPageLine}</p>
       {#if page.left.trim() || page.right.trim()}
         <div class="columns text">
-          {#if page.left.trim()}<div class="col"><RichText text={page.left} /></div>{/if}
-          {#if page.right.trim()}<div class="col"><RichText text={page.right} /></div>{/if}
+          {#if page.left.trim()}<div class="col"><RichText text={page.left} gaps /></div>{/if}
+          {#if page.right.trim()}<div class="col"><RichText text={page.right} gaps /></div>{/if}
         </div>
       {:else}
         <p class="hint">{t.notesEmptyPage}</p>

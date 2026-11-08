@@ -2,24 +2,26 @@
   MPMB's feature text with its marks (**bold**, #bold#, *italic*), one paragraph per line. Like the 2024
   sheet, a feature's name stands out in the accent colour, its source is quieter and its uses sit in an
   outlined pill; a line that is all bold (a class, a species) is a heading. MPMB's note to use the PDF's
-  "Choose Feature" button becomes a link to the Build screen's Choices step, where the app has it.
+  "Choose Feature" button becomes a link to the Build screen's Choices step, where the app has it. Empty
+  lines are dropped, except in notes (`gaps`), where a player's empty line becomes a gap.
 -->
 <script lang="ts">
   import { pointsToChooseFeature, splitAtChooseButton } from '../../build/choose-link.ts';
-  import { featureLine, linesOf } from '../../play/read.ts';
+  import { featureLine, spacedLines } from '../../play/read.ts';
 
   interface Props {
     text: string;
     /** Where a feature's choice is made (by the feature's name), and the link's text; null: no links. */
     choose?: { href: (feature: string) => string; label: string } | null;
+    /** Show an empty line (or several) as a gap: for notes the player wrote. */
+    gaps?: boolean;
   }
 
-  let { text, choose = null }: Props = $props();
-  const lines = $derived(
-    linesOf(text)
-      .filter((line) => line.trim() !== '')
-      .map(featureLine),
-  );
+  let { text, choose = null, gaps = false }: Props = $props();
+  const spaced = $derived(spacedLines(text));
+  const lines = $derived(spaced.map(({ line }) => featureLine(line)));
+  /** The lines that get a gap above them; none outside notes. */
+  const gapAbove = $derived(spaced.map(({ gap }) => gaps && gap));
   /**
    * The feature each line belongs to: its own name, or the last name above it, so a link in a description's
    * second line still leads to that feature's choice.
@@ -34,10 +36,10 @@
 
 {#each lines as line, i (i)}
   {#if 'heading' in line}
-    <h3>{line.heading}</h3>
+    <h3 class:gap={gapAbove[i]}>{line.heading}</h3>
   {:else}
     {@const feature = features[i] ?? ''}
-    <p>
+    <p class:gap={gapAbove[i]}>
       {#each line.runs as run, j (j)}
         {#if run.role === 'usage' && choose && pointsToChooseFeature(run.text)}<a
             class="usage choose"
@@ -71,6 +73,12 @@
 
   h3:first-child {
     margin-top: 0;
+  }
+
+  /* About one empty line of the text's own size, where the player left one (margins collapse with the
+     line above's, so this is the whole gap). */
+  .gap {
+    margin-top: 1.25em;
   }
 
   .name {
