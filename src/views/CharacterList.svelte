@@ -6,6 +6,7 @@
   import { MPMB_DOWNLOAD, MPMB_PATREON } from '../mpmb-links.ts';
   import { SAFE_PICTURE } from '../play/pictures.ts';
   import type { Session } from '../session.svelte.ts';
+  import { look } from '../look.svelte.ts';
   import { dueForBackup, isSafari } from '../store/backup-reminder.ts';
   import Notes from './Notes.svelte';
 
@@ -114,7 +115,8 @@
     {#each session.characters as character (character.id)}
       {@const addOns = character.addOns.files.length + Number(character.addOns.manual)}
       {@const portrait = character.portrait && SAFE_PICTURE.test(character.portrait) ? character.portrait : ''}
-      <li>
+      <!-- With sheet colours on, the card in the character's colour from its sheet (app.css, [data-sheet]). -->
+      <li data-sheet={look.current.sheetColors ? character.color : undefined}>
         <a class="card" class:pictured={portrait} href={`#/character/${character.id}`}>
           {#if portrait}<img class="thumb" src={portrait} alt="" />{/if}
           <span class="name">{character.name || t.unnamed}</span>
@@ -251,6 +253,11 @@
     border-radius: 0.75rem;
     background: var(--surface);
     overflow: hidden;
+  }
+
+  /* A sheet colour: a band on top, the name in it (the accent, set by [data-sheet]). */
+  .characters li[data-sheet] {
+    border-top: 4px solid var(--accent);
   }
 
   .card {

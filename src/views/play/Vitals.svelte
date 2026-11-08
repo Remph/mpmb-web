@@ -9,7 +9,7 @@
   import { tick } from 'svelte';
   import { ARROW, edgeOf } from '../../play/edge.ts';
   import type { Edge } from '../../play/edge.ts';
-  import { effectOn, switchOff, switchOn } from '../../play/effects.ts';
+  import { effectOn, toggle } from '../../play/effects.ts';
   import type { Effect } from '../../play/effects.ts';
   import EffectsWindow from './EffectsWindow.svelte';
   import {
@@ -145,15 +145,11 @@
     await tick();
     effectsButton?.focus();
   }
-  function toggleEffect(effect: Effect) {
-    if (effectOn(effect)) {
-      change(switchOff(fields, effect));
-      oneffects(effects.map((e) => (e.id === effect.id ? { ...e, applied: null } : e)));
-      return;
-    }
-    const { steps, applied } = switchOn(fields, effect);
+  /** By id, from the list as it is now (see toggle in effects.ts): quick taps each see the one before. */
+  function toggleEffect(id: string) {
+    const { steps, effects: next } = toggle(fields, effects, id);
     if (steps.length) change(steps);
-    oneffects(effects.map((e) => (e.id === effect.id ? { ...e, applied } : e)));
+    oneffects(next);
   }
   /** "Rage: AC +2, weapon attacks use Str" for the effects that are on. */
   function summary(effect: Effect): string {
@@ -347,7 +343,7 @@
         class:on={effectOn(effect)}
         aria-pressed={effectOn(effect)}
         {disabled}
-        onclick={() => toggleEffect(effect)}><span class="dot" aria-hidden="true"></span>{effect.name}</button
+        onclick={() => toggleEffect(effect.id)}><span class="dot" aria-hidden="true"></span>{effect.name}</button
       >
     {/each}
     {#if !effects.length}

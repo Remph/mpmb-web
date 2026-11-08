@@ -149,12 +149,70 @@ export function weaponRows(fields: FieldViews, ability: EffectAbility | ''): { r
   });
 }
 
-/** The changes that switch an effect on, and what they changed (to keep with the effect). */
-export function switchOn(fields: FieldViews, effect: Effect): { steps: Step[]; applied: Applied } {
+const escape = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * The field text with one term taken out: "Int+2" without "Int" is "2", "2+Int" without "Int" is "2";
+ * null when the text holds no such term. Terms are what MPMB adds up in an AC field, joined by "+" or "-",
+ * so "Int" is not found in "Int2" and "1" is not found in "10".
+ */
+export function withoutTerm(text: string, term: string): string | null {
+  if (!term) return null;
+  if (text === term) return '';
+  if (text.endsWith(`+${term}`)) return text.slice(0, -term.length - 1);
+  if (text.startsWith(`${term}+`)) return text.slice(term.length + 1);
+  // "Int-1" without "Int" keeps the minus: "-1".
+  if (text.startsWith(`${term}-`)) return text.slice(term.length);
+  const at = text.search(new RegExp(`\\+${escape(term)}[+-]`));
+  if (at < 0) return null;
+  // "1+Int+2" without "Int": "1+2"; "1+Int-2": "1-2".
+  return text.slice(0, at) + text.slice(at + term.length + 1);
+}
+
+/** The description with one name taken out of its list ("Ring, Stance" without "Stance"); null if it isn't there. */
+export function withoutName(note: string, name: string): string | null {
+  const names = note.split(', ');
+  const at = names.indexOf(name);
+  if (!name || at < 0) return null;
+  names.splice(at, 1);
+  return names.join(', ');
+}
+
+/**
+ * The AC field that already holds this effect's bonus under its name, if one does and no other effect
+ * that is on claims it. The app's record of an effect can fall behind the sheet (a restored backup, an
+ * older copy of the character): switching on then takes over what is there instead of adding it again.
+ */
+function heldField(fields: FieldViews, effect: Effect, bonus: string, others: readonly Effect[]): AcField | undefined {
+  return AC_FIELDS.find(
+    (n) =>
+      withoutTerm(valueOf(fields, acField(n)), bonus) !== null &&
+      withoutName(valueOf(fields, acNote(n)), effect.name) !== null &&
+      !others.some((o) => o.id !== effect.id && o.name === effect.name && o.applied?.ac?.field === n),
+  );
+}
+
+/**
+ * The changes that switch an effect on, and what they changed (to keep with the effect). `others` are the
+ * character's other effects: one of them that is on may hold a bonus under the same name.
+ */
+export function switchOn(
+  fields: FieldViews,
+  effect: Effect,
+  others: readonly Effect[] = [],
+): { steps: Step[]; applied: Applied } {
   const steps: Step[] = [];
   const applied: Applied = { attacks: [] };
   const bonus = acText(effect);
-  if (bonus) {
+  const held = bonus ? heldField(fields, effect, bonus, others) : undefined;
+  if (held) {
+    // Already in the sheet: nothing to write, and switching off takes out just this bonus.
+    const value = valueOf(fields, acField(held));
+    const note = valueOf(fields, acNote(held));
+    const before = withoutTerm(value, bonus) ?? '';
+    const beforeNote = withoutName(note, effect.name) ?? '';
+    applied.ac = { field: held, before, beforeNote, value, note };
+  } else if (bonus) {
     // A free AC field if there is one; otherwise the bonus goes on top of the first one's.
     const free = AC_FIELDS.find((n) => valueOf(fields, acField(n)) === '' && valueOf(fields, acNote(n)) === '');
     const field = free ?? AC_FIELDS[0];
@@ -179,17 +237,40 @@ export function switchOn(fields: FieldViews, effect: Effect): { steps: Step[]; a
 
 /**
  * The changes that switch an effect off: each field it changed goes back, as long as it still holds what
- * the effect wrote (a field the player changed since keeps the player's value).
+ * the effect wrote (a field the player changed since keeps the player's value). An AC field where more
+ * was added since (another effect on top, or MPMB's own bonus) loses only this effect's bonus and name.
+ * Copies of the bonus under the effect's name that an older version of the app added twice (quick taps)
+ * go too, so switching off once repairs such a sheet. `others`: as for switchOn.
  */
-export function switchOff(fields: FieldViews, effect: Effect): Step[] {
+export function switchOff(fields: FieldViews, effect: Effect, others: readonly Effect[] = []): Step[] {
   const applied = effect.applied;
   if (!applied) return [];
   const steps: Step[] = [];
   const { ac } = applied;
-  if (ac && valueOf(fields, acField(ac.field)) === ac.value) {
-    steps.push({ edit: acField(ac.field), text: ac.before });
-    if (valueOf(fields, acNote(ac.field)) === ac.note) steps.push({ edit: acNote(ac.field), text: ac.beforeNote });
-  }
+  const bonus = acText(effect);
+  AC_FIELDS.forEach((n) => {
+    const was = { value: valueOf(fields, acField(n)), note: valueOf(fields, acNote(n)) };
+    let { value, note } = was;
+    if (ac?.field === n) {
+      if (value === ac.value) {
+        value = ac.before;
+        note = note === ac.note ? ac.beforeNote : (withoutName(note, effect.name) ?? note);
+      } else {
+        const rest = withoutTerm(value, bonus);
+        if (rest !== null) [value, note] = [rest, withoutName(note, effect.name) ?? note];
+      }
+    }
+    // Another effect that is on, with the same name, may hold the rest of this field.
+    const claimed = others.some((o) => o.id !== effect.id && o.name === effect.name && o.applied?.ac?.field === n);
+    for (let i = 0; !claimed && i < MAX_EFFECTS; i++) {
+      const rest = withoutTerm(value, bonus);
+      const restNote = withoutName(note, effect.name);
+      if (rest === null || restNote === null) break;
+      [value, note] = [rest, restNote];
+    }
+    if (value !== was.value) steps.push({ edit: acField(n), text: value });
+    if (note !== was.note) steps.push({ edit: acNote(n), text: note });
+  });
   const to = effect.weaponAbility ? modValue(effect.weaponAbility) : '';
   applied.attacks.forEach(({ row, weapon, before }) => {
     const same = valueOf(fields, `Attack.${row}.Weapon Selection`) === weapon;
@@ -197,4 +278,25 @@ export function switchOff(fields: FieldViews, effect: Effect): Step[] {
       steps.push({ edit: `Attack.${row}.Mod`, text: before });
   });
   return steps;
+}
+
+/**
+ * One tap on an effect's switch: the sheet's changes and the effects after it. The effect is looked up
+ * by id in `effects`, the list as it is now, never taken from what the page showed when it was tapped:
+ * a second tap that comes before the page has caught up with the first would otherwise see the effect
+ * still off and add its bonus a second time (each such tap raised the AC again).
+ */
+export function toggle(
+  fields: FieldViews,
+  effects: readonly Effect[],
+  id: string,
+): { steps: Step[]; effects: Effect[] } {
+  const effect = effects.find((e) => e.id === id);
+  if (!effect) return { steps: [], effects: [...effects] };
+  if (effectOn(effect)) {
+    const steps = switchOff(fields, effect, effects);
+    return { steps, effects: effects.map((e) => (e.id === id ? { ...e, applied: null } : e)) };
+  }
+  const { steps, applied } = switchOn(fields, effect, effects);
+  return { steps, effects: effects.map((e) => (e.id === id ? { ...e, applied } : e)) };
 }

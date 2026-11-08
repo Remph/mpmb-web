@@ -34,6 +34,10 @@ function git(...args: string[]): string {
   }
 }
 
+// A web font file: "recursive-cyrillic-ext-casl-normal.woff2" and "x.woff" match; "logo.svg" doesn't.
+// Try it: https://regex101.com/?regex=%5C.woff2%3F%24&testString=recursive-cyrillic-ext-casl-normal.woff2
+const FONT_FILE = /\.woff2?$/;
+
 export default defineConfig({
   define: {
     __MPMB_WEB_COMMIT__: JSON.stringify(git('rev-parse', 'HEAD')),
@@ -47,6 +51,11 @@ export default defineConfig({
   server: { headers: ISOLATION_HEADERS },
   preview: { headers: { ...ISOLATION_HEADERS, 'Content-Security-Policy': sitePolicy() } },
   worker: { format: 'es' },
+  build: {
+    // Fonts always as their own files: Vite would inline a font subset under 4 KB (Recursive's Cyrillic-ext)
+    // as a data: URL, which the site's CSP (font-src 'self') blocks. Everything else keeps Vite's default.
+    assetsInlineLimit: (file) => (FONT_FILE.test(file) ? false : undefined),
+  },
   test: {
     include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
   },

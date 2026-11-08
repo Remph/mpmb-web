@@ -569,11 +569,11 @@
   /*
    * Actions: one row per kind, the kind's name above, its actions as even tiles tinted in the kind's colour
    * (Remph picked the tiles, 2026-11-04). Action purple, bonus action amber, reaction teal: the stat cards'
-   * colour family; every name and note keeps 4.5:1 on its tint in both themes.
+   * own colours (app.css), so every theme has them and every name and note keeps 4.5:1 on its tint.
    */
   .group {
-    --k: #4b3fa0;
-    --ks: #ece9fa;
+    --k: var(--stat-prof);
+    --ks: var(--stat-prof-soft);
     display: grid;
     grid-template-columns: 6.5rem minmax(0, 1fr);
     gap: 0.25rem 0.5rem;
@@ -583,30 +583,13 @@
   }
 
   .group.bonus {
-    --k: #8a5300;
-    --ks: #fbf0da;
+    --k: var(--stat-init);
+    --ks: var(--stat-init-soft);
   }
 
   .group.reaction {
-    --k: #0d6767;
-    --ks: #ddf2f0;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    .group {
-      --k: #b3aaf5;
-      --ks: #2c2843;
-    }
-
-    .group.bonus {
-      --k: #f2c066;
-      --ks: #33290f;
-    }
-
-    .group.reaction {
-      --k: #7fd6d3;
-      --ks: #14302f;
-    }
+    --k: var(--stat-pp);
+    --ks: var(--stat-pp-soft);
   }
 
   .head + .group {

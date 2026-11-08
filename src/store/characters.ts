@@ -9,6 +9,10 @@ import type { CharacterData } from '../engine/sheet-data.ts';
 import type { UltCharges } from '../homebrew/ult.ts';
 import type { SetupChoice } from '../play/attack-setup.ts';
 import type { Effect } from '../play/effects.ts';
+import { sheetColor, type SheetColor } from '../look.ts';
+import { textOf } from './field-text.ts';
+import { pointNeeded, surplus } from './restore-points.ts';
+import type { PointReason, RestorePoint } from './restore-points.ts';
 
 export interface CharacterMeta {
   id: string;
@@ -17,6 +21,8 @@ export interface CharacterMeta {
   classes: string;
   species: string;
   addOns: AddOns;
+  /** The sheet's colour ("Color.Theme", Colorful sheet) when it isn't MPMB's default purple; see src/look.ts. */
+  color?: SheetColor;
   /** The portrait's small picture for the list (a data URL), when the character has a portrait. */
   portrait?: string;
   /** ISO dates. `updated` is the last change on any device (a backup carries it along). */
@@ -73,12 +79,18 @@ export interface PreviousVersion extends StoredCharacter {
 }
 
 const DB_NAME = 'mpmb-web';
-/** 2: the `previous` store (M11). */
-const DB_VERSION = 2;
+/** 2: the `previous` store (M11). 3: the `points` store (restore points). */
+const DB_VERSION = 3;
 const META = 'meta';
 const DATA = 'data';
 /** The copy each character had before its last sheet update, by id (see PreviousVersion). */
 const PREVIOUS = 'previous';
+/**
+ * Each character's restore points (restore-points.ts), keyed [character id, ISO date], with an index by
+ * character: the index lists one character's points in the order they were taken.
+ */
+const POINTS = 'points';
+const BY_CHARACTER = 'character';
 
 /** A request as a promise. */
 const done = <T>(request: IDBRequest<T>): Promise<T> =>
@@ -110,6 +122,10 @@ export interface VersionEvents {
   replaced?: () => void;
 }
 
+/** One character's restore points, the oldest first (the index sorts by its primary key, [id, date]). */
+const pointsIn = (points: IDBObjectStore, id: string): Promise<RestorePoint[]> =>
+  done(points.index(BY_CHARACTER).getAll(id) as IDBRequest<RestorePoint[]>);
+
 export class CharacterStore {
   private constructor(private readonly db: IDBDatabase) {}
 
@@ -126,6 +142,7 @@ export class CharacterStore {
       if (!db.objectStoreNames.contains(META)) db.createObjectStore(META, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(DATA)) db.createObjectStore(DATA);
       if (!db.objectStoreNames.contains(PREVIOUS)) db.createObjectStore(PREVIOUS);
+      if (!db.objectStoreNames.contains(POINTS)) db.createObjectStore(POINTS).createIndex(BY_CHARACTER, 'meta.id');
     });
     // The opening goes on by itself once the other tab closes its database (or is closed).
     request.addEventListener('blocked', () => events.blocked?.());
@@ -164,11 +181,68 @@ export class CharacterStore {
   }
 
   async delete(id: string): Promise<void> {
-    const tx = this.db.transaction([META, DATA, PREVIOUS], 'readwrite');
+    const tx = this.db.transaction([META, DATA, PREVIOUS, POINTS], 'readwrite');
     tx.objectStore(META).delete(id);
     tx.objectStore(DATA).delete(id);
     tx.objectStore(PREVIOUS).delete(id);
+    const points = tx.objectStore(POINTS);
+    const keys = await done(points.index(BY_CHARACTER).getAllKeys(id));
+    keys.forEach((key) => points.delete(key));
     await committed(tx);
+  }
+
+  /** A character's restore points, the newest first. */
+  async points(id: string): Promise<RestorePoint[]> {
+    const tx = this.db.transaction(POINTS, 'readonly');
+    return (await pointsIn(tx.objectStore(POINTS), id)).reverse();
+  }
+
+  /**
+   * Keeps the character as it is as a restore point, unless it hasn't changed since the newest one; the
+   * oldest beyond KEEP_POINTS go. True when a point was taken.
+   */
+  async addPoint(character: StoredCharacter, reason: PointReason, now = new Date()): Promise<boolean> {
+    const tx = this.db.transaction(POINTS, 'readwrite');
+    const points = tx.objectStore(POINTS);
+    const before = await pointsIn(points, character.meta.id);
+    if (!pointNeeded(character.meta, before.at(-1))) {
+      await committed(tx);
+      return false;
+    }
+    const point: RestorePoint = { ...character, at: now.toISOString(), reason };
+    points.put(point, [character.meta.id, point.at]);
+    surplus([...before, point]).forEach((old) => points.delete([old.meta.id, old.at]));
+    await committed(tx);
+    return true;
+  }
+
+  /**
+   * Rolls a character back to one of its points, all or none: the character as it is now becomes a point
+   * ("before rolling back", so the rollback can be undone), and the point rolled back to goes, since the
+   * character is now that. Returns the character's new list entry.
+   */
+  async rollBack(current: StoredCharacter, point: RestorePoint, now = new Date()): Promise<CharacterMeta> {
+    const id = current.meta.id;
+    // A change like any other: the list moves it up, and the backup reminder counts it.
+    const meta: CharacterMeta = {
+      ...point.meta,
+      id,
+      created: current.meta.created,
+      updated: now.toISOString(),
+      ...(current.meta.lastBackup ? { lastBackup: current.meta.lastBackup } : {}),
+    };
+    const tx = this.db.transaction([META, DATA, POINTS], 'readwrite');
+    const points = tx.objectStore(POINTS);
+    const before = await pointsIn(points, id);
+    const kept = before.filter((p) => p.at !== point.at);
+    const saved: RestorePoint = { ...current, at: now.toISOString(), reason: 'rollback' };
+    points.delete([id, point.at]);
+    points.put(saved, [id, saved.at]);
+    surplus([...kept, saved]).forEach((old) => points.delete([id, old.at]));
+    tx.objectStore(META).put(meta);
+    tx.objectStore(DATA).put(point.data, id);
+    await committed(tx);
+    return meta;
   }
 
   /**
@@ -213,13 +287,6 @@ export class CharacterStore {
   }
 }
 
-/** A field's text in the saved character; the blank sheet's fields are empty where these are read. */
-const textOf = (data: CharacterData, field: string): string => {
-  const value: unknown = data.fields[field]?.value;
-  // String(): a calculated field (Character Level) may hold a number at run time, whatever the type says.
-  return (Array.isArray(value) ? value.join(', ') : String(value ?? '')).trim();
-};
-
 /** Any digit: a class text with a level in it ("Paladin 8"). */
 const HAS_LEVEL = /\d/;
 
@@ -241,11 +308,13 @@ export function describeCharacter(
   now = new Date(),
 ): CharacterMeta {
   const portrait = data.images?.portrait?.thumb;
+  const color = sheetColor(data.fields['Color.Theme']?.value);
   const sheetUpdate = before?.sheetUpdate;
   const homebrew = before?.homebrew;
   const lastBackup = before?.lastBackup;
   return {
     ...(portrait ? { portrait } : {}),
+    ...(color ? { color } : {}),
     ...(sheetUpdate ? { sheetUpdate: { ...sheetUpdate } } : {}),
     // A copy, for the same reason as the add-ons below.
     ...(homebrew ? { homebrew: copyHomebrew(homebrew) } : {}),
