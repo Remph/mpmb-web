@@ -17,6 +17,15 @@ import {
 /** WCAG AA for normal text. */
 const READABLE = 4.5;
 
+// The colour stops of a linear gradient: "linear-gradient(100deg, #48309a, #7448ad 55%)" matches with the stops
+// inside; the "radial-gradient(1px 1px at 8% 30%, #fff6d0 50%)" of a star doesn't.
+// Try it: https://regex101.com/?regex=linear-gradient%5C%28%28%5B%5E%29%5D*%29%5C%29&testString=radial-gradient%281px%201px%20at%208%25%2030%25%2C%20%23fff6d0%2050%25%29%2C%20linear-gradient%28100deg%2C%20%2348309a%2C%20%237448ad%2055%25%29
+const LINEAR_GRADIENT = /linear-gradient\(([^)]*)\)/g;
+
+// A plain colour inside those stops: "#48309a" matches; "100deg" and "55%" don't.
+// Try it: https://regex101.com/?regex=%23%5B0-9a-f%5D%7B6%7D&flags=gi&testString=100deg%2C%20%2348309a%2C%20%237448ad%2055%25
+const HEX_COLOR = /#[0-9a-f]{6}/gi;
+
 describe('parseLook', () => {
   it('gives the default look for nothing, junk or a bare value', () => {
     expect(parseLook(null)).toEqual(DEFAULT_LOOK);
@@ -143,6 +152,20 @@ describe('theme colours in app.css', () => {
       );
     });
 
+    // A painted top bar (Campfire's sky): its letters on every colour of the sky's gradient, the stars left out.
+    // The small muted text sits at the bar's right end on a phone, so the last stop counts as much as the first.
+    const sky = [...(tokens['--bar'] ?? '').matchAll(LINEAR_GRADIENT)].flatMap(
+      ([, stops]) => stops!.match(HEX_COLOR) ?? [],
+    );
+    if (sky.length) {
+      it(`keeps the top bar's letters readable on its sky (${theme}, ${mode})`, () => {
+        sky.forEach((stop) => {
+          ['on-bar', 'on-bar-muted', 'on-bar-link'].forEach((ink) =>
+            expect(contrast(c(ink), stop), `--${ink} on ${stop}`).toBeGreaterThanOrEqual(READABLE),
+          );
+        });
+      });
+    }
     // A sheet colour takes the accent's place: as text on the cards and its wash, and under the button text.
     SHEET_COLORS.forEach((sheet) =>
       it(`keeps ${sheet} readable as the accent (${theme}, ${mode})`, () => {

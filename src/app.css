@@ -123,7 +123,8 @@
 :root[data-theme='campfire'] {
   --font-display: 'Recursive Variable', var(--font);
   --backdrop: linear-gradient(180deg, #eadcf7, rgb(247 240 245 / 0) 26rem) #f7f0f5;
-  --bar: linear-gradient(100deg, #48309a, #7448ad 55%, #a8609e);
+  /* The sky ends in a deep mauve, not pink: the bar's small muted text (classes, "Saved") keeps 4.5:1 at its right end. */
+  --bar: linear-gradient(100deg, #48309a, #7448ad 55%, #8c4a8e);
   --on-bar: #fff3cf;
   --on-bar-muted: #ece0fa;
   --on-bar-link: #fff3cf;

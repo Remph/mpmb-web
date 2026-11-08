@@ -216,7 +216,7 @@
 
   .campfire .light {
     --p: #f7f0f5;
-    --bar-p: linear-gradient(100deg, #48309a, #a8609e);
+    --bar-p: linear-gradient(100deg, #48309a, #8c4a8e);
     --a: #5b3fa6;
   }
 
