@@ -335,7 +335,7 @@
   empty: the effect switches, the conditions, then Heroic Inspiration and the reaction. The summary of an
   effect that is on sits between them, so with nothing on all of it is one row of chips.
 -->
-<section class="panel now" aria-labelledby="now-title">
+<section class="panel" aria-labelledby="now-title">
   <div class="head">
     <h2 id="now-title">{t.rightNow}</h2>
     {#if effects.length}
