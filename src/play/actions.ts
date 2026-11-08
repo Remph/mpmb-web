@@ -226,7 +226,17 @@ export function ruleIndex(fields: FieldViews): Map<string, ActionRule> {
   };
   readFeatures(fields).forEach(addBlock);
   for (const item of readInventory(fields).magicItems) {
-    add({ title: item.name, source: '', lines: linesOf(item.description).map(trimmed).filter(Boolean) });
+    const rule = { title: item.name, source: '', lines: linesOf(item.description).map(trimmed).filter(Boolean) };
+    add(rule);
+    // An item that comes in forms is named after the picked one: "Guild Signet (Azorius)". What MPMB adds for it
+    // keeps the item's own name, though: the limited feature "Guild Signet (regains 1d3)" says it came from
+    // "Guild Signet", or from "Guild Signet [Azorius]" when the form brings it. Both find the item's text, which
+    // names the form (playtest 2026-11-08: the signet's tile had no text).
+    const form = actionItem(item.name);
+    if (form.note) {
+      add(rule, form.name);
+      add(rule, `${form.name} [${form.note}]`);
+    }
   }
   // The notes last: a feature written there again (a class feature's longer text) keeps the first one.
   [valueOf(fields, NOTES_FIELD), ...readNotesPages(fields).flatMap((page) => [page.left, page.right])]
