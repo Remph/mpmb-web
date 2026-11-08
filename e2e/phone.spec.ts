@@ -1,7 +1,8 @@
 // Nothing may be wider than a phone. One box that sticks out past the right edge makes the page scroll
 // sideways, and Chrome on Android then zooms the whole page out to fit it and keeps that zoom after the
 // box is gone: the top bar ends short of the right edge and its top is cut off until a reload (Remph's
-// report, 2026-11-04). The check walks a new character's Build steps and play tabs at 360 px.
+// report, 2026-11-04). Nor may a text box have text under 16 px (see SMALL_FIELDS). The check walks a new
+// character's Build steps, play tabs and a few windows at 360 px.
 import { expect, test, type Page } from '@playwright/test';
 
 const STARTUP = 120_000;
@@ -32,17 +33,29 @@ const STICKING_OUT = `(() => {
     .map((element) => element.tagName.toLowerCase() + '.' + [...element.classList].filter((c) => !c.startsWith('svelte-')).join('.'));
 })()`;
 
+/**
+ * Text boxes and selects whose text is under 16 px. Firefox on Android (and Safari) zooms the page into such a
+ * box when it gets the focus and stays zoomed after: a window opened from there had its top and left edge off
+ * the screen (Remph's report, 2026-11-08). Tick boxes, radio buttons and file pickers don't zoom.
+ */
+const SMALL_FIELDS = `[...document.querySelectorAll('input, textarea, select')]
+  .filter((field) => !field.matches('[type=checkbox], [type=radio], [type=file], [type=hidden], [type=range], [type=color]'))
+  .filter((field) => field.getClientRects().length > 0 && parseFloat(getComputedStyle(field).fontSize) < 16)
+  .map((field) => field.tagName.toLowerCase() + '.' + [...field.classList].filter((c) => !c.startsWith('svelte-')).join('.')
+    + ' ' + getComputedStyle(field).fontSize + ' ' + (field.labels?.[0]?.innerText ?? field.getAttribute('aria-label') ?? ''))`;
+
 /** One after another: each check clicks on the page the next one reads. */
 const oneByOne = <T>(items: T[], run: (item: T) => Promise<void>): Promise<void> =>
   items.reduce<Promise<void>>((done, item) => done.then(() => run(item)), Promise.resolve());
 
-async function expectNothingWider(page: Page, where: string) {
+async function checkPhoneView(page: Page, where: string) {
   // Opened <details> show what a player would open at the table.
   await page.evaluate("document.querySelectorAll('details').forEach((details) => (details.open = true))");
   expect.soft(await page.evaluate(STICKING_OUT), where).toEqual([]);
+  expect.soft(await page.evaluate(SMALL_FIELDS), `${where}: text under 16 px`).toEqual([]);
 }
 
-test('on a phone, no Build step and no play tab is wider than the screen', async ({ page }) => {
+test('on a phone, no Build step and no play tab is wider than the screen or zooms into a field', async ({ page }) => {
   await page.setViewportSize(PHONE);
   const changesAlert = page.getByRole('dialog', { name: 'Changes alert' });
   await page.addLocatorHandler(changesAlert, async () => {
@@ -50,7 +63,7 @@ test('on a phone, no Build step and no play tab is wider than the screen', async
   });
 
   await page.goto('./');
-  await expectNothingWider(page, 'start page');
+  await checkPhoneView(page, 'start page');
   await page.getByRole('button', { name: 'New character' }).click();
   await page
     .getByRole('dialog', { name: 'Source selection' })
@@ -72,14 +85,39 @@ test('on a phone, no Build step and no play tab is wider than the screen', async
     const name = (await step.innerText()).split('\n')[1] ?? '';
     await step.click();
     await expect(step).toHaveAttribute('aria-current', 'step');
-    await expectNothingWider(page, `Build step ${name}`);
+    await checkPhoneView(page, `Build step ${name}`);
   });
+
+  // MPMB's own dialogs have their own, smaller text (15 px): its Ability Scores dialog is full of text boxes.
+  await rail.getByRole('button', { name: /Ability scores/ }).click();
+  await page.getByRole('button', { name: 'Open MPMB’s ability scores dialog' }).click();
+  const scores = page.getByRole('dialog').last();
+  await expect(scores.getByRole('textbox').first()).toBeVisible();
+  expect.soft(await page.evaluate(SMALL_FIELDS), 'MPMB’s Ability Scores dialog: text under 16 px').toEqual([]);
+  await scores.getByRole('button', { name: 'Cancel' }).click();
+  await expect(scores.getByRole('textbox')).toHaveCount(0);
+
+  // A weapon, for the attack's proficiency and ability window below (a text box in a window: where the zoom hurt).
+  await rail.getByRole('button', { name: /Armour & weapons/ }).click();
+  await page
+    .getByRole('button', { name: /Add a weapon/ })
+    .first()
+    .click();
+  await checkPhoneView(page, 'weapon list');
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: /^Dagger/ })
+    .click();
 
   await page.getByRole('link', { name: 'Done: to the play view' }).click();
   await oneByOne(await page.getByRole('tab').all(), async (tab) => {
     const name = await tab.innerText();
     await tab.click();
     await expect(tab).toHaveAttribute('aria-selected', 'true');
-    await expectNothingWider(page, `play tab ${name}`);
+    await checkPhoneView(page, `play tab ${name}`);
   });
+
+  await page.getByRole('tab', { name: 'Combat' }).click();
+  await page.getByRole('button', { name: /^Proficiency and ability of Dagger/ }).click();
+  await checkPhoneView(page, 'attack setup window');
 });

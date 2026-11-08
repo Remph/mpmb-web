@@ -413,6 +413,9 @@
     background: var(--paper);
     color: var(--ink);
     font: inherit;
+    /* Not the dialog's 15 px: a phone zooms the page into a text box or list under 16 px and stays zoomed
+       (MPMB's Ability Scores dialog, 2026-11-08). Widths in MPMB's characters grow with it, a few px. */
+    font-size: 1rem;
   }
 
   textarea {

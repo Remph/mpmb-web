@@ -1180,8 +1180,11 @@
     font-weight: 700;
   }
 
+  /* The page's size, not the browser's smaller one for selects: a phone zooms into a box under 16 px. */
   .show select {
     min-height: 44px;
+    font: inherit;
+    font-size: 1rem;
     font-weight: 400;
   }
 

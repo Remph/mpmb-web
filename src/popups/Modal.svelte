@@ -66,7 +66,9 @@
 <style>
   dialog {
     width: min(30rem, calc(100vw - 2rem));
-    max-height: calc(100dvh - 2rem);
+    /* The small viewport (browser bars shown): a window opened while the bars were hidden still fits
+       when they come back. */
+    max-height: calc(100svh - 2rem);
     padding: 0;
     border: 1px solid var(--line);
     border-radius: 0.75rem;

@@ -305,6 +305,8 @@
     width: 100%;
     opacity: 0;
     cursor: pointer;
+    /* Invisible, but a phone still zooms into a box under 16 px when it gets the focus. */
+    font-size: 1rem;
   }
 
   .pick:hover,
