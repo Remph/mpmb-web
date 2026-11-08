@@ -92,7 +92,8 @@ describe('decodeScriptBytes', () => {
   });
 });
 
-describe('long values', () => {
+// Megabytes of text take seconds to save and parse, more while the whole suite runs at once (5.2 s seen).
+describe('long values', { timeout: 30_000 }, () => {
   /** A sheet with one text field whose value is `value`, as made by `put`. */
   async function sheetWith(put: (doc: PDFDocument) => Parameters<PDFDict['set']>[1]): Promise<Uint8Array> {
     const doc = await PDFDocument.create();
