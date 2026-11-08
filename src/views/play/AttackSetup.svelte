@@ -234,6 +234,9 @@
     background: var(--surface);
     color: var(--ink);
     font: inherit;
+    /* Not the label's smaller size: Firefox on Android and Safari zoom the page into a text box under 16 px
+       and stay zoomed, which pushed this window's top and left edge off the screen (2026-11-08). */
+    font-size: 1rem;
     font-weight: 700;
   }
 
