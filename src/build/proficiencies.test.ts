@@ -166,8 +166,9 @@ describe('languages and tools', () => {
   it("a background's tool choice may be changed too, also when it kept MPMB's name", () => {
     const engine = openSheet();
     engine.edit('Background', 'Soldier');
+    // MPMB names a group of tools with its article since c1044f6 ("A Gaming Set", "A Musical Instrument").
     expect(readLangTools(viewsOf(engine.doc), 'Tool')).toEqual([
-      { field: 'Tool 1', name: 'Gaming Set', sources: ['Soldier (background)'], choice: true },
+      { field: 'Tool 1', name: 'A Gaming Set', sources: ['Soldier (background)'], choice: true },
     ]);
   });
 

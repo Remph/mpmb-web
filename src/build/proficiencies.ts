@@ -197,7 +197,7 @@ export function readLangTools(fields: FieldViews, kind: LangToolKind): LangTool[
         name: valueOf(fields, field),
         sources: [...tooltip.matchAll(SOURCE_LINE)].map((m) => (m[1] ?? '').trim()),
         // MPMB names a choice "<source>_#_<what>_#_<n>-<i>" in the row's submitName (SetProf): a species'
-        // "from Silver Dragonborn" language, but also a background's "Gaming Set" the player picks one of.
+        // "from Silver Dragonborn" language, but also a background's "A Gaming Set" the player picks one of.
         choice: (fields[field]?.submitName ?? '').includes('_#_'),
       };
     })

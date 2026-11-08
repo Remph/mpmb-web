@@ -188,9 +188,13 @@ function heldField(fields: FieldViews, effect: Effect, bonus: string, others: re
     (n) =>
       withoutTerm(valueOf(fields, acField(n)), bonus) !== null &&
       withoutName(valueOf(fields, acNote(n)), effect.name) !== null &&
-      !others.some((o) => o.id !== effect.id && o.name === effect.name && o.applied?.ac?.field === n),
+      !claimedByOther(effect, others, n),
   );
 }
+
+/** Whether another effect that is on, with the same name, holds its bonus in this AC field. */
+const claimedByOther = (effect: Effect, others: readonly Effect[], field: AcField): boolean =>
+  others.some((o) => o.id !== effect.id && o.name === effect.name && o.applied?.ac?.field === field);
 
 /**
  * The changes that switch an effect on, and what they changed (to keep with the effect). `others` are the
@@ -260,8 +264,11 @@ export function switchOff(fields: FieldViews, effect: Effect, others: readonly E
         if (rest !== null) [value, note] = [rest, withoutName(note, effect.name) ?? note];
       }
     }
-    // Another effect that is on, with the same name, may hold the rest of this field.
-    const claimed = others.some((o) => o.id !== effect.id && o.name === effect.name && o.applied?.ac?.field === n);
+    // Repair for sheets from before #72 (2026-11-08), where quick taps added the bonus twice: take out every
+    // copy under this effect's name. Another effect that is on, with the same name, may hold the rest of this
+    // field, so then nothing more goes. It can go once no saved character can hold such copies any more:
+    // after M15's sync has a copy of every character, open each once and drop it (tech debt review 2, N7).
+    const claimed = claimedByOther(effect, others, n);
     for (let i = 0; !claimed && i < MAX_EFFECTS; i++) {
       const rest = withoutTerm(value, bonus);
       const restNote = withoutName(note, effect.name);

@@ -7,7 +7,7 @@ The document-level JavaScript of
 by Joost Wijnen (morepurplemorebetter), Flapkan Productions, GPL-3.0 (see `mpmb/LICENSE` and
 `mpmb/README.md`). The app runs these scripts unchanged on its stand-in for Acrobat's JavaScript API.
 
-- Upstream commit: `475f46bc344a2e00dbe3eb2dc234afcd5b16e817` (2026-10-29, v24.2.0-3-g475f46b).
+- Upstream commit: `c1044f61032228963fac637fe11f6476eebe583a` (2026-11-05, v24.2.0-4-gc1044f6).
 - Copied: `_functions/`, `_variables/`, `LICENSE`, `README.md`. Nothing in them is changed.
 - To update: see "Updating" below.
 

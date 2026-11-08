@@ -38,6 +38,14 @@ function git(...args: string[]): string {
 // Try it: https://regex101.com/?regex=%5C.woff2%3F%24&testString=recursive-cyrillic-ext-casl-normal.woff2
 const FONT_FILE = /\.woff2?$/;
 
+/**
+ * When the build warns that a script is big, in kB. The app's own script is about 575 kB (178 kB gzip,
+ * 2026-11-08), above Vite's default of 500. Splitting it wouldn't help: the service worker stores every file
+ * on the first visit anyway, and the app then opens from that copy. 700 still warns when something big slips
+ * in by mistake, such as the PDF library, which belongs in the engine worker.
+ */
+const SCRIPT_WARNING_KB = 700;
+
 export default defineConfig({
   define: {
     __MPMB_WEB_COMMIT__: JSON.stringify(git('rev-parse', 'HEAD')),
@@ -55,6 +63,7 @@ export default defineConfig({
     // Fonts always as their own files: Vite would inline a font subset under 4 KB (Recursive's Cyrillic-ext)
     // as a data: URL, which the site's CSP (font-src 'self') blocks. Everything else keeps Vite's default.
     assetsInlineLimit: (file) => (FONT_FILE.test(file) ? false : undefined),
+    chunkSizeWarningLimit: SCRIPT_WARNING_KB,
   },
   test: {
     include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
