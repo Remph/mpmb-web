@@ -419,6 +419,9 @@
 
   .name b {
     font-weight: 600;
+    /* Long German names ("Geschicklichkeit") in two columns on a phone: break with a hyphen, not past the box. */
+    hyphens: auto;
+    overflow-wrap: anywhere;
   }
 
   .name small {
