@@ -261,7 +261,13 @@ describe('own spells as extra rows', () => {
   const feature = { name: 'Cantrip', chosen: 'light', list: ['light', 'fire bolt'], extra: false };
   const ownRow = (key: string) => ({ name: '', chosen: key, list: [], extra: true });
   const withOwn = source({ bonus: [feature, ownRow('own thought jab'), ownRow('fire bolt')] });
-  const info = (s: SpellSource): SpellsInfo => ({ sources: [s], included: [], excluded: [], options: null, spells: SPELLS });
+  const info = (s: SpellSource): SpellsInfo => ({
+    sources: [s],
+    included: [],
+    excluded: [],
+    options: null,
+    spells: SPELLS,
+  });
 
   it('reads only the own keys among the extra rows', () => {
     expect(draftOf(withOwn).own).toEqual(['own thought jab']);

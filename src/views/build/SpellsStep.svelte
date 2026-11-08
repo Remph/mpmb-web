@@ -396,7 +396,11 @@
             >
               <b>{name}</b>
               <span class="tag own">{t.ownSpellTag}</span>
-              <small>{[spell.level ? levelName(spell.level) : t.ownSpellCantrip, line(spell)].filter(Boolean).join(' · ')}</small>
+              <small
+                >{[spell.level ? levelName(spell.level) : t.ownSpellCantrip, line(spell)]
+                  .filter(Boolean)
+                  .join(' · ')}</small
+              >
             </button>
           {:else}
             <span class="name"><b>{name}</b></span>
