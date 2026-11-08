@@ -4,8 +4,8 @@ import '@fontsource/atkinson-hyperlegible-next/400.css';
 import '@fontsource/atkinson-hyperlegible-next/500.css';
 import '@fontsource/atkinson-hyperlegible-next/700.css';
 import '@fontsource/atkinson-hyperlegible-next/800.css';
-// Campfire's display letters (names, card titles), remph.de's own; only that theme asks for them.
-import '@fontsource-variable/recursive/casl.css';
+// Campfire's display letters (names, card titles), remph.de's own; only that theme asks for them. Latin only.
+import './fonts/recursive-latin.css';
 import './app.css';
 import App from './App.svelte';
 import { look } from './look.svelte.ts';

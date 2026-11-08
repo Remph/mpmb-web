@@ -95,7 +95,7 @@
         >{t.lookSheet}<small>{t.lookSheetLine}</small>
         {#if colorName}
           <small class="now"
-            ><span class={`dot ${swatch ?? 'theme'}`} aria-hidden="true"></span>{fill(t.lookSheetNow, {
+            ><span class={`dot ${swatch ?? 'default'}`} aria-hidden="true"></span>{fill(t.lookSheetNow, {
               color: colorName,
             })}</small
           >

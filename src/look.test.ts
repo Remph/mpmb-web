@@ -26,6 +26,10 @@ const LINEAR_GRADIENT = /linear-gradient\(([^)]*)\)/g;
 // Try it: https://regex101.com/?regex=%23%5B0-9a-f%5D%7B6%7D&flags=gi&testString=100deg%2C%20%2348309a%2C%20%237448ad%2055%25
 const HEX_COLOR = /#[0-9a-f]{6}/gi;
 
+// A custom property in a Svelte style block: "--bar-p: #ffffff;" matches as --bar-p and #ffffff; "height: 1rem;" doesn't.
+// Try it: https://regex101.com/?regex=%28--%5B%5Cw-%5D%2B%29%3A%5Cs*%28%5B%5E%3B%5D%2B%29%3B&testString=--bar-p%3A%20%23ffffff%3B%20height%3A%201rem%3B
+const PREVIEW_TOKEN = /(--[\w-]+):\s*([^;]+);/g;
+
 describe('parseLook', () => {
   it('gives the default look for nothing, junk or a bare value', () => {
     expect(parseLook(null)).toEqual(DEFAULT_LOOK);
@@ -176,5 +180,36 @@ describe('theme colours in app.css', () => {
         expect(contrast(c('on-accent'), accent)).toBeGreaterThanOrEqual(READABLE);
       }),
     );
+  });
+});
+
+/**
+ * The Look window draws a small picture of each theme with fixed colours (it must show the other themes, not
+ * the one on screen), copied from app.css; this keeps the copies in step when a theme's colours change.
+ */
+describe("the Look window's theme previews", () => {
+  const svelte = readFileSync(new URL('./views/LookWindow.svelte', import.meta.url), 'utf8');
+  /** The custom properties of one preview half, e.g. ".campfire .dark { --p: ...; }". */
+  function preview(theme: string, mode: string): Record<string, string> {
+    const body = svelte.split(`.${theme} .${mode} {`)[1]?.split('}')[0] ?? '';
+    return Object.fromEntries([...body.matchAll(PREVIEW_TOKEN)].map(([, name, value]) => [name!, value!.trim()]));
+  }
+
+  SHOWN.forEach(({ theme, mode }) => {
+    it(`matches app.css (${theme}, ${mode})`, () => {
+      const tokens = themeTokens(theme, mode);
+      const half = preview(theme, mode);
+      expect(half['--p'], 'page').toBe(tokens['--paper']);
+      expect(half['--a'], 'accent').toBe(tokens['--accent']);
+      // The bar: the theme's sky (its colours, in order, may leave out a middle stop) or else the card colour.
+      const sky = [...(tokens['--bar'] ?? '').matchAll(LINEAR_GRADIENT)].flatMap(
+        ([, stops]) => stops!.match(HEX_COLOR) ?? [],
+      );
+      const drawn = half['--bar-p']?.match(HEX_COLOR) ?? [];
+      if (sky.length) {
+        expect(drawn[0], 'sky start').toBe(sky[0]);
+        expect(drawn.at(-1), 'sky end').toBe(sky.at(-1));
+      } else expect(half['--bar-p'], 'bar').toBe(tokens['--surface']);
+    });
   });
 });
