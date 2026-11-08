@@ -17,7 +17,7 @@ export interface FieldView {
   /** The tooltip. */
   userName?: string;
   /**
-   * Acrobat's submitName, only where MPMB marks a choice there ("Soldier (background)_#_Gaming Set_#_1-1",
+   * Acrobat's submitName, only where MPMB marks a choice there ("Soldier (background)_#_A Gaming Set_#_1-1",
    * SetProf for languages and tools) or where an action came from ("Conjure/Bond Pact Weapon#!#Warlock:
    * Pact of the Blade", AddAction). Other fields keep large toSource data in it, which the page doesn't
    * need.
