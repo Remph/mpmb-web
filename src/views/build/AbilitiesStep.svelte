@@ -3,6 +3,7 @@
   score (made by the standard array, point buy or typed in), the background's +2/+1, feats & level-ups,
   magic (read only: it comes from the magic items) and the total. Every change goes into MPMB's own
   columns through its Ability Scores dialog, which the app answers, so MPMB adds them up as always.
+  With the homebrew switch "background boosts anywhere" the background's bonus may go to any ability.
 -->
 <script lang="ts">
   import {
@@ -16,12 +17,17 @@
     canRaise,
     changesOf,
     clampTyped,
+    freeCanPick,
+    freeColumnFor,
+    freeDone,
+    freeModeOf,
     methodOf,
     modifierOf,
     pickArray,
     pointsUsed,
     stepBonus,
     tapBackground,
+    tapFreeOne,
     toArray,
     toPoints,
     totalsOf,
@@ -31,7 +37,8 @@
     TYPED_MAX,
     TYPED_MIN,
   } from '../../build/abilities.ts';
-  import type { Method } from '../../build/abilities.ts';
+  import type { FreeMode, Method } from '../../build/abilities.ts';
+  import { homebrew } from '../../homebrew/switches.svelte.ts';
   import type { BuilderInfo } from '../../engine/builder.ts';
   import type { ScoreChange, ScoreColumn } from '../../engine/scores.ts';
   import { counted, fill } from '../../i18n.ts';
@@ -102,9 +109,20 @@
   const used = $derived(pointsUsed(base));
 
   const background = $derived(info.origins.backgrounds.filter((b) => b.key === info.origins.background.key)[0]);
-  // A background without abilities MPMB can read (an older add-on) lets the bonus go anywhere.
-  const allowed = $derived(background?.abilities.length ? background.abilities : [0, 1, 2, 3, 4, 5]);
+  const ALL_ABILITIES = [0, 1, 2, 3, 4, 5];
+  // The house rule lets the bonus go to any ability; MPMB's own dialog takes any number in its column anyway.
+  const anywhere = $derived(homebrew.switches.bgAnywhere);
+  // A background without abilities MPMB can read (an older add-on) lets the bonus go anywhere too.
+  const allowed = $derived(!anywhere && background?.abilities.length ? background.abilities : ALL_ABILITIES);
   const bgBonus = $derived(backgroundCol ? backgroundBonusOf(backgroundCol, allowed) : null);
+  /**
+   * With the house rule, "+2 and +1" or "three +1": the column says which when it can (a +2, or two +1s),
+   * otherwise the one the player picked in this visit, else "+2 and +1".
+   */
+  let pickedMode = $state<FreeMode | null>(null);
+  const freeMode = $derived<FreeMode>((backgroundCol && freeModeOf(backgroundCol)) || pickedMode || 'split');
+  const three = $derived(anywhere && freeMode === 'three');
+  const bgDone = $derived(anywhere ? !!backgroundCol && freeDone(backgroundCol) : !!bgBonus && backgroundDone(bgBonus));
 
   const names = $derived([t.abilityStr, t.abilityDex, t.abilityCon, t.abilityInt, t.abilityWis, t.abilityCha]);
   const shorts = $derived([t.shortStr, t.shortDex, t.shortCon, t.shortInt, t.shortWis, t.shortCha]);
@@ -136,6 +154,19 @@
   function tapBg(ability: number, amount: 1 | 2) {
     if (!bgBonus) return;
     write(withColumn(columns, 'background', backgroundColumn(tapBackground(bgBonus, ability, amount), allowed)));
+  }
+
+  function setFreeMode(next: FreeMode) {
+    pickedMode = next;
+    if (!backgroundCol || next === freeMode) return;
+    write(withColumn(columns, 'background', freeColumnFor(backgroundCol, next)));
+  }
+
+  function tapOne(ability: number) {
+    // The mode may have come from the column (after a reload): giving +1s back until only one is left makes the
+    // column ambiguous, and without this the step would jump to "+2 and +1" under the player's finger.
+    pickedMode = 'three';
+    if (backgroundCol) write(withColumn(columns, 'background', tapFreeOne(backgroundCol, ability)));
   }
 
   function allThree() {
@@ -244,7 +275,17 @@
           {/if}
         </span>
         <span role="cell" class="bg">
-          {#if bgBonus && background && allowed.includes(i)}
+          {#if three && backgroundCol && background}
+            <!-- Three +1 on any abilities: one chip per row; a fourth waits until one is given back. -->
+            <button
+              type="button"
+              class="chip"
+              aria-pressed={backgroundCol[i] === 1}
+              aria-label={fill(t.buildBgBonus, { ability: name, n: 1 })}
+              disabled={disabled || !freeCanPick(backgroundCol, i)}
+              onclick={() => tapOne(i)}>+1</button
+            >
+          {:else if bgBonus && background && allowed.includes(i)}
             {#each [2, 1] as amount (amount)}
               <button
                 type="button"
@@ -289,13 +330,26 @@
     {#if background && bgBonus}
       <p>
         <b>{background.name}:</b> <span lang="en">{background.scoresText}</span>
-        {#if backgroundDone(bgBonus)}<span class="done">{t.buildBgDone}</span>{:else}<span class="open"
-            >{t.buildBgOpen}</span
-          >{/if}
-        {#if allowed.length === 3 && !bgBonus.allThree}
+        {#if bgDone}<span class="done">{t.buildBgDone}</span>{:else}<span class="open">{t.buildBgOpen}</span>{/if}
+        {#if !anywhere && allowed.length === 3 && !bgBonus.allThree}
           <button type="button" class="quiet all" {disabled} onclick={allThree}>{t.buildAllThree}</button>
         {/if}
       </p>
+      {#if anywhere}
+        <div class="anywhere">
+          <span class="tag">{t.buildBgAnywhere}</span>
+          <div class="seg" role="group" aria-label={t.buildBgModes}>
+            {#each [['split', t.buildBgSplit], ['three', t.buildBgThree]] as [key, label] (key)}
+              <button
+                type="button"
+                aria-pressed={freeMode === key}
+                {disabled}
+                onclick={() => setFreeMode(key as FreeMode)}>{label}</button
+              >
+            {/each}
+          </div>
+        </div>
+      {/if}
     {:else}
       <p>{t.buildNoBackgroundYet}</p>
     {/if}
@@ -532,6 +586,27 @@
   .all {
     margin-left: 0.25rem;
     color: var(--accent);
+  }
+
+  .anywhere {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    margin: 0.5rem 0 0.75rem;
+  }
+
+  .tag {
+    padding: 0.125rem 0.5rem;
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--accent);
+    font-size: 0.8125rem;
+    font-weight: 700;
+  }
+
+  .anywhere .seg {
+    background: var(--surface);
   }
 
   .more {
