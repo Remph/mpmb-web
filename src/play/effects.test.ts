@@ -220,6 +220,29 @@ describe('quick taps and sheets that went wrong', () => {
     expect(list.some(effectOn)).toBe(false);
   });
 
+  it("never takes the player's own bonus of the same size under another name", () => {
+    const engine = wizard();
+    // The player's own Int bonus in each field, one of them sharing the field with the effect's.
+    run(engine, [
+      { edit: 'AC Misc Mod 1', text: 'Int' },
+      { edit: 'AC Misc Mod 1 Description', text: 'Made-up Ring' },
+      { edit: 'AC Misc Mod 2', text: '1' },
+      { edit: 'AC Misc Mod 2 Description', text: 'Cloak' },
+    ]);
+    let effects = tap(engine, [effect({ acAbility: 'Int' })]);
+    expect(ac(engine)).toBe('19');
+    expect(viewsOf(engine.doc)['AC Misc Mod 1']?.value).toBe('Int+Int');
+    // The player adds to the field while the effect is on, so it no longer holds what the effect wrote.
+    run(engine, [{ edit: 'AC Misc Mod 2', text: 'Int+1' }]);
+    expect(ac(engine)).toBe('22');
+    effects = tap(engine, effects);
+    expect(effects.some(effectOn)).toBe(false);
+    const off = viewsOf(engine.doc);
+    expect([off['AC Misc Mod 1']?.value, off['AC Misc Mod 1 Description']?.value]).toEqual(['Int', 'Made-up Ring']);
+    expect([off['AC Misc Mod 2']?.value, off['AC Misc Mod 2 Description']?.value]).toEqual(['Int+1', 'Cloak']);
+    expect(ac(engine)).toBe('19');
+  });
+
   it("leaves another effect's bonus of the same name", () => {
     const engine = wizard();
     const twins = [effect({ id: 'a', acNumber: 1 }), effect({ id: 'b', acNumber: 1 })];
