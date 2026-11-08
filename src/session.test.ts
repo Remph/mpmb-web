@@ -32,7 +32,8 @@ const sheetOf = (name: string, classes = 'Wizard 3'): CharacterData => ({
 });
 
 /** What the stand-in worker answers a command with: a result, or a failure as the real worker reports it. */
-type Reply = { result: unknown } | { error: string; code?: 'unreadable-pdf' | 'wrong-sheet' };
+type Reply =
+  { result: unknown; changed?: Record<string, FieldView> } | { error: string; code?: 'unreadable-pdf' | 'wrong-sheet' };
 
 /**
  * The engine worker as the session sees it. Every command gets the reply `answer` gives for it; the PDF a
@@ -62,6 +63,11 @@ class StandInWorker implements WorkerLike {
         const fields: FromWorker = { type: 'fields', changed: { [command.field]: view }, removed: [] };
         this.onmessage?.({ data: fields } as MessageEvent<FromWorker>);
       }
+      // Fields the scripts changed (a reset), reported the same way.
+      if ('changed' in reply && reply.changed) {
+        const fields: FromWorker = { type: 'fields', changed: reply.changed, removed: [] };
+        this.onmessage?.({ data: fields } as MessageEvent<FromWorker>);
+      }
       const data: FromWorker =
         'result' in reply
           ? { type: 'done', id, result: reply.result, summary: { errors: 0, missing: {} } }
@@ -89,6 +95,8 @@ async function startSession(
     hold?: (command: Command) => Promise<void> | undefined;
     /** False: start the session like the page does, without waiting for its storage to open. */
     waitForStart?: boolean;
+    /** The player's answer to MPMB's "Reset the whole sheet" question (the bookmark empties the sheet on Yes). */
+    reset?: 'yes' | 'no';
   } = {},
 ): Promise<Session> {
   vi.stubGlobal('indexedDB', tab.browser ?? new IDBFactory());
@@ -113,6 +121,12 @@ async function startSession(
       return { result: { addOns: NO_ADD_ONS } };
     }
     if (command.type === 'save') return { result: structuredClone(opened) };
+    if (command.type === 'bookmark' && command.path.includes('Reset')) {
+      if (tab.reset !== 'yes') return { result: null };
+      opened = sheetOf('');
+      const empty: FieldView = { type: 'Tx', value: '', flags: 0, widgets: [], style: {} };
+      return { result: null, changed: { 'PC Name': empty, Notes: empty } };
+    }
     return { error: `no stand-in for ${command.type}` };
   };
   const session = new Session(
@@ -590,6 +604,30 @@ describe('restore points (2026-11-08)', () => {
     const [newest] = await session.points();
     expect(newest?.reason).toBe('build');
     expect(newest?.data.fields['Notes']).toEqual({ value: 'before building' });
+  });
+
+  test('"Start over" keeps the sheet before it, once the player said Yes', async () => {
+    const session = await startSession({ reset: 'yes' });
+    await openNew(session);
+    later();
+    void session.change([{ edit: 'Notes', text: 'before starting over' }]);
+    later();
+    await session.runMenu(['Reset']);
+    const points = await session.points();
+    expect(points.map((p) => p.reason)).toEqual(['reset', 'opened']);
+    expect(points[0]?.data.fields['Notes']).toEqual({ value: 'before starting over' });
+    expect(session.current?.fields['PC Name']?.value).toBe('');
+  });
+
+  test('"No" to "Start over" keeps no point (UI review 3, finding 03)', async () => {
+    const session = await startSession({ reset: 'no' });
+    await openNew(session);
+    later();
+    await session.change([{ edit: 'Notes', text: 'kept' }]);
+    later();
+    await session.runMenu(['Reset']);
+    expect((await session.points()).map((p) => p.reason)).toEqual(['opened']);
+    expect(session.current?.status).toBe('saved');
   });
 
   test('rolling back asks, opens the sheet of the point, and keeps the sheet before it as a point', async () => {

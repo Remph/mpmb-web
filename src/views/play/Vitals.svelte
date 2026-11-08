@@ -9,7 +9,7 @@
   import { tick } from 'svelte';
   import { ARROW, edgeOf } from '../../play/edge.ts';
   import type { Edge } from '../../play/edge.ts';
-  import { effectOn, toggle } from '../../play/effects.ts';
+  import { acFromEffects, effectOn, toggle } from '../../play/effects.ts';
   import type { Effect } from '../../play/effects.ts';
   import EffectsWindow from './EffectsWindow.svelte';
   import {
@@ -174,6 +174,14 @@
     acTile?.focus();
   }
   const edgeWord = (e: 'adv' | 'dis'): string => (e === 'adv' ? t.advantage : t.disadvantage);
+  /** What the effects that are on add to the AC (finding 05): a badge on the tile, named in its label and window. */
+  const acEffects = $derived(acFromEffects(fields, effects));
+  const acBadge = $derived(
+    acEffects.bonus > 0 ? `+${acEffects.bonus}` : acEffects.bonus < 0 ? `−${-acEffects.bonus}` : '',
+  );
+  /** "18 (+2 from Shield of Faith)": the AC as the label and the window read it out. */
+  const acSpoken = (value: string): string =>
+    acBadge ? `${value}${fill(t.acFromEffects, { bonus: acBadge, names: acEffects.names.join(', ') })}` : value;
 </script>
 
 <section class="hp" aria-labelledby="hp-title">
@@ -281,8 +289,8 @@
         style:--stat-soft={statSoft(tile.kind)}
         aria-haspopup="dialog"
         aria-label={acEdge
-          ? fill(t.acEdgeLabel, { value: tile.value, edge: edgeWord(acEdge) })
-          : fill(t.acTileLabel, { value: tile.value })}
+          ? fill(t.acEdgeLabel, { value: acSpoken(tile.value), edge: edgeWord(acEdge) })
+          : fill(t.acTileLabel, { value: acSpoken(tile.value) })}
         {disabled}
         bind:this={acTile}
         onclick={() => (markingAc = true)}
@@ -291,7 +299,9 @@
               >{acEdge === 'adv' ? t.acEdgeShortAdv : t.acEdgeShortDis}</small
             >{/if}</span
         ><span class="v"
-          >{tile.value}{#if acEdge}<span class="edge against {acEdge}" aria-hidden="true">{ARROW[acEdge]}</span
+          >{tile.value}{#if acBadge}<span class="badge" aria-hidden="true">{acBadge}</span>{/if}{#if acEdge}<span
+              class="edge against {acEdge}"
+              aria-hidden="true">{ARROW[acEdge]}</span
             >{/if}</span
         ></button
       >
@@ -320,9 +330,14 @@
   <UltCharges {ult} {disabled} onchange={onult} {t} />
 {/if}
 
-<section class="panel" aria-labelledby="effects-title">
+<!--
+  "Right now" (UI review 3, finding 04): what is on at the moment, in one card, since each part is usually
+  empty: the effect switches, the conditions, then Heroic Inspiration and the reaction. The summary of an
+  effect that is on sits between them, so with nothing on all of it is one row of chips.
+-->
+<section class="panel now" aria-labelledby="now-title">
   <div class="head">
-    <h2 id="effects-title">{t.effectsTitle}</h2>
+    <h2 id="now-title">{t.rightNow}</h2>
     {#if effects.length}
       <button
         type="button"
@@ -356,54 +371,54 @@
         onclick={() => (editingEffects = true)}>+ {t.addEffect}</button
       >
     {/if}
-  </div>
-  {#each effectsOn as effect (effect.id)}
-    <p class="effect-on">{summary(effect)}</p>
-  {/each}
-</section>
-
-<section class="panel" aria-labelledby="conditions-title">
-  <div class="head">
-    <h2 id="conditions-title">{t.conditions}</h2>
-    {#if conditions.exhaustion > 0}<span class="muted">{t.exhaustion} {conditions.exhaustion}</span>{/if}
-  </div>
-  <div class="chips">
     {#each conditions.active as c (c)}
       <button
         type="button"
-        class="chip on"
+        class="chip cond"
         aria-label={fill(t.removeCondition, { name: conditionName(c) })}
         {disabled}
         onclick={() => change([{ click: `Condition.${c}` }])}>{conditionName(c)} ✕</button
       >
     {/each}
-    <button type="button" class="chip add" {disabled} onclick={() => (picking = true)}>+ {t.addCondition}</button>
+    {#if conditions.exhaustion > 0}
+      <button type="button" class="chip cond" aria-haspopup="dialog" {disabled} onclick={() => (picking = true)}
+        >{t.exhaustion} {conditions.exhaustion}</button
+      >
+    {/if}
+    <button
+      type="button"
+      class="chip add"
+      aria-label={t.addCondition}
+      aria-haspopup="dialog"
+      {disabled}
+      onclick={() => (picking = true)}>+ {t.addConditionShort}</button
+    >
+    {#each effectsOn as effect (effect.id)}
+      <p class="effect-on">{summary(effect)}</p>
+    {/each}
+    <!--
+      The browser ticks the box and the click toggles the sheet's field, so both agree. (Cancelling the
+      click instead left the box unticked: the browser undid its tick after the sheet's answer had arrived.)
+    -->
+    <label class="chip tick" class:ticked={toggles.inspiration}>
+      <input
+        type="checkbox"
+        checked={toggles.inspiration}
+        {disabled}
+        onchange={() => change([{ click: 'Inspiration' }])}
+      />
+      {t.inspirationShort}
+    </label>
+    <label class="chip tick" class:ticked={toggles.reactionUsed}>
+      <input
+        type="checkbox"
+        checked={toggles.reactionUsed}
+        {disabled}
+        onchange={() => change([{ click: 'Reaction Used This Round' }])}
+      />
+      {t.reactionUsed}
+    </label>
   </div>
-</section>
-
-<!--
-  The browser ticks the box and the click toggles the sheet's field, so both agree. (Cancelling the
-  click instead left the box unticked: the browser undid its tick after the sheet's answer had arrived.)
--->
-<section class="panel toggles">
-  <label class="toggle">
-    <input
-      type="checkbox"
-      checked={toggles.inspiration}
-      {disabled}
-      onchange={() => change([{ click: 'Inspiration' }])}
-    />
-    {t.heroicInspiration}
-  </label>
-  <label class="toggle">
-    <input
-      type="checkbox"
-      checked={toggles.reactionUsed}
-      {disabled}
-      onchange={() => change([{ click: 'Reaction Used This Round' }])}
-    />
-    {t.reactionUsed}
-  </label>
 </section>
 
 {#if marking}
@@ -422,7 +437,7 @@
 {#if markingAc}
   <EdgePopUp
     title={t.acEdgeTitle}
-    roll={`${t.acLabel} ${numbers.armorClass}`}
+    roll={`${t.acLabel} ${acSpoken(numbers.armorClass)}`}
     state={{ advantage: acEdge === 'adv', disadvantage: acEdge === 'dis' }}
     boxes=""
     onmark={onacedge}
@@ -761,6 +776,21 @@
     color: var(--stat);
   }
 
+  /* The effects' share of the AC, in the effect switches' own colour so it reads as theirs. */
+  .badge {
+    display: inline-block;
+    margin-left: 0.25rem;
+    padding: 0 0.3125rem;
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 800;
+    line-height: 1.35;
+    vertical-align: 0.25rem;
+  }
+
   .edge {
     margin-left: 0.25rem;
     color: var(--ok);
@@ -815,10 +845,21 @@
     font-weight: 600;
   }
 
+  /* A line of its own between the chips: the toggles after it start a new row. */
   .effect-on {
-    margin: 0.5rem 0 0;
+    flex-basis: 100%;
+    margin: 0.125rem 0;
     color: var(--ink-muted);
     font-size: 0.875rem;
+  }
+
+  /* A condition in the hit points' red: it is bad news, unlike an effect that is on. */
+  .chip.cond,
+  .chip.cond:not(:disabled):hover {
+    border-color: var(--hp);
+    background: var(--hp-soft);
+    color: var(--hp);
+    font-weight: 700;
   }
 
   .k {
@@ -855,28 +896,39 @@
     color: var(--ink-muted);
   }
 
-  .toggles {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 0 0.75rem;
-    padding-block: 0.125rem;
-  }
-
-  .toggle {
+  /* Heroic Inspiration and the reaction: chips that tick, the box inside so the whole chip is the tap area. */
+  .tick {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
     min-height: 44px;
-    font-weight: 500;
+    padding: 0 0.875rem;
+    border: 1px solid var(--line);
+    background: var(--surface);
     cursor: pointer;
   }
 
-  .toggle input {
-    width: 1.25rem;
-    height: 1.25rem;
+  .tick input {
+    width: 1.125rem;
+    height: 1.125rem;
     margin: 0;
     accent-color: var(--accent);
+  }
+
+  .tick.ticked {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .tick:has(input:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .tick:has(input:disabled) {
+    cursor: default;
+    opacity: 0.6;
   }
 
   .exhaustion {

@@ -35,7 +35,7 @@ test('quick taps on an effect switch add its AC bonus once', async ({ page }) =>
 
   const armorClass = page.getByText('Armor class').locator('..');
   await expect(armorClass).toContainText('16');
-  const card = page.locator('section[aria-labelledby=effects-title]');
+  const card = page.locator('section[aria-labelledby=now-title]');
   await card.getByRole('button', { name: '+ Effect' }).click();
   const window = page.getByRole('dialog', { name: 'Effects' });
   await window.getByLabel('Name').fill('Made-up Stance');
@@ -50,7 +50,7 @@ test('quick taps on an effect switch add its AC bonus once', async ({ page }) =>
    */
   const taps = (n: number): Promise<void> =>
     page.evaluate(
-      `{ const b = document.querySelector('section[aria-labelledby=effects-title] .chip.switch');
+      `{ const b = document.querySelector('section[aria-labelledby=now-title] .chip.switch');
          for (let i = 0; i < ${n}; i++) b.click(); }`,
     );
   // An odd number ends on, an even number where it started.
@@ -60,6 +60,8 @@ test('quick taps on an effect switch add its AC bonus once', async ({ page }) =>
   await taps(ODD);
   await expect(stance).toHaveAttribute('aria-pressed', 'true');
   await expect(armorClass).toContainText('18');
+  // The tile says the effect adds to it (UI review 3, finding 05).
+  await expect(page.getByRole('button', { name: /^Armor class 18 \(\+2 from Made-up Stance\)/ })).toBeVisible();
   await expect(page.locator('.top .status:not(.busy)')).toBeVisible();
   await expect(armorClass).toContainText('18');
 
@@ -71,5 +73,6 @@ test('quick taps on an effect switch add its AC bonus once', async ({ page }) =>
   await taps(1);
   await expect(stance).toHaveAttribute('aria-pressed', 'false');
   await expect(armorClass).toContainText('16');
+  await expect(armorClass.locator('.badge')).toHaveCount(0);
   expect(errors).toEqual([]);
 });

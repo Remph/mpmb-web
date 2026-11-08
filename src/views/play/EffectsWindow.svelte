@@ -65,22 +65,14 @@
       {@const rows = weaponRows(fields, effect.weaponAbility)}
       <fieldset class="effect" disabled={on}>
         <legend class="sr">{effect.name || t.addEffect}</legend>
-        <div class="top">
-          <label class="name"
-            >{t.effectName}<input
-              type="text"
-              maxlength={MAX_NAME}
-              placeholder={t.effectNamePlaceholder}
-              bind:value={effect.name}
-            /></label
-          >
-          <button
-            type="button"
-            class="remove"
-            aria-label={fill(t.effectRemoveLabel, { name: effect.name || t.addEffect })}
-            onclick={() => list.splice(i, 1)}>{t.effectRemove}</button
-          >
-        </div>
+        <label class="name"
+          >{t.effectName}<input
+            type="text"
+            maxlength={MAX_NAME}
+            placeholder={t.effectNamePlaceholder}
+            bind:value={effect.name}
+          /></label
+        >
         {#if on}<p class="note">{t.effectIsOn}</p>{/if}
         <div class="part">
           <span class="label" id={`ac-${effect.id}`}>{t.effectAc}</span>
@@ -127,6 +119,13 @@
             </p>
           {/if}
         </div>
+        <!-- Last, after what it removes: on a phone a new effect's first button was Remove (UI review 3, 07). -->
+        <button
+          type="button"
+          class="remove"
+          aria-label={fill(t.effectRemoveLabel, { name: effect.name || t.addEffect })}
+          onclick={() => list.splice(i, 1)}>{t.effectRemove}</button
+        >
       </fieldset>
     {/each}
     {#if list.length < MAX_EFFECTS}
@@ -165,16 +164,8 @@
     white-space: nowrap;
   }
 
-  .top {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: end;
-    gap: 0.5rem;
-  }
-
   .name {
     display: grid;
-    flex: 1 1 12rem;
     gap: 0.25rem;
     min-width: 0;
     font-weight: 600;
@@ -193,8 +184,14 @@
     font-weight: 700;
   }
 
+  /* Quiet and at the block's end, on its own line on the right: not the main action of the window. */
   .remove {
+    justify-self: end;
     min-height: 44px;
+    border-color: transparent;
+    background: none;
+    color: var(--danger);
+    font-weight: 600;
   }
 
   .part {

@@ -38,15 +38,16 @@
   );
   const label = $derived(
     fill(t.attackSetupChip, {
-      ability: setup.ability ? t[`short${setup.ability}`] : t.attackSetupNoAbility,
+      ability: setup.ability ? t[`short${setup.ability}`] : t.attackSetupChipNoAbility,
       prof: setup.proficient ? t.attackSetupProf : t.attackSetupNotProf,
     }),
   );
   // Worth a look: a row with a number to roll or save against that leaves out an ability or proficiency
   // (a spell's DC on no ability, a weapon without training). Rows without a number (a cantrip that adds
-  // to a weapon attack) have neither on purpose.
+  // to a weapon attack) have neither on purpose, and so do rows with a number but neither of the two: a
+  // fixed DC, like a dragonborn's breath weapon, stays muted (UI review 3, finding 06).
   const odd = $derived(
-    shown(fields, `Attack.${row}.To Hit`).trim() !== '' && (setup.ability === '' || !setup.proficient),
+    shown(fields, `Attack.${row}.To Hit`).trim() !== '' && (setup.ability === '') !== !setup.proficient,
   );
 
   let open = $state(false);
