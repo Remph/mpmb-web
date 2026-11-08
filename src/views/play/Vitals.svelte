@@ -1,6 +1,8 @@
 <!--
   The left column: hit points (the one bold place), the numbers checked every round, conditions and
   the two check boxes players tick during a fight. It stays on screen while the middle scrolls.
+  In a Wild Shape form (`form`) the hit points stay the character's (2024 rules), and the numbers below them
+  are the form's: shown as they are, since the form's page is MPMB's to work out.
 -->
 <script lang="ts">
   import { fill } from '../../i18n.ts';
@@ -31,6 +33,8 @@
   import SpeedWindow from './SpeedWindow.svelte';
   import type { UltCharges as Ult } from '../../homebrew/ult.ts';
   import { shownTiles, statColor, statSoft } from '../../play/stat-colors.ts';
+  import type { StatKind } from '../../play/stat-colors.ts';
+  import type { Companion } from '../../play/companions.ts';
 
   interface Props {
     fields: FieldViews;
@@ -45,6 +49,8 @@
     /** Advantage or disadvantage on attack rolls against the character (kept in the app, not the sheet). */
     acEdge?: Edge;
     onacedge?: (edge: Edge) => void;
+    /** A Wild Shape form shown in the companion's shape (formAsCompanion): its numbers replace the tiles. */
+    form?: Companion | null;
     t: Texts;
   }
 
@@ -58,6 +64,7 @@
     oneffects = () => {},
     acEdge = '',
     onacedge = () => {},
+    form = null,
     t,
   }: Props = $props();
 
@@ -136,6 +143,25 @@
     ]),
   );
   const exhaustionText = (n: number): string => (n > 0 ? String(n) : '');
+  // A form's numbers, laid out like a companion's: four tiles, then speed and senses as lines of text.
+  const formTiles = $derived(
+    form
+      ? shownTiles([
+          { label: t.acLabel, value: form.armorClass, kind: 'ac' },
+          { label: t.initiative, value: form.initiative, kind: 'init' },
+          { label: t.proficiency, value: form.proficiency, kind: 'prof' },
+          { label: t.passivePerception, value: form.passivePerception, kind: 'pp' },
+        ])
+      : [],
+  );
+  const formLines = $derived(
+    form
+      ? [
+          { label: t.speed, value: form.speed, kind: 'speed' as StatKind },
+          { label: t.companionSenses, value: form.senses, kind: null },
+        ].filter((line) => line.value !== '')
+      : [],
+  );
 
   // ---- Effects: one tap writes a feature's changes into the sheet, the next takes them out ----
   let editingEffects = $state(false);
@@ -186,7 +212,7 @@
 
 <section class="hp" aria-labelledby="hp-title">
   <div class="head">
-    <h2 id="hp-title">{t.hpTitle}</h2>
+    <h2 id="hp-title">{form ? t.formHpTitle : t.hpTitle}</h2>
     {#if temp > 0}<span class="temp">{fill(t.tempHp, { count: temp })}</span>{/if}
   </div>
   <p class="numbers">
@@ -261,72 +287,92 @@
   {/if}
 </section>
 
-<div class="tiles">
-  {#each tiles as tile, i (i)}
-    {#if tile.initiative}
-      <!-- Tapping initiative marks it with advantage or disadvantage, like a skill. -->
-      <button
-        type="button"
-        class="tile"
-        style:--stat={statColor(tile.kind)}
-        style:--stat-soft={statSoft(tile.kind)}
-        aria-haspopup="dialog"
-        aria-label={`${tile.label} ${tile.value}${initiativeEdge ? `, ${initiativeEdge === 'adv' ? t.advantage : t.disadvantage}` : ''}`}
-        bind:this={initiativeTile}
-        onclick={() => (marking = true)}
-        ><span class="k">{tile.label}</span><span class="v"
-          >{tile.value}{#if initiativeEdge}<span class="edge {initiativeEdge}" aria-hidden="true"
-              >{ARROW[initiativeEdge]}</span
-            >{/if}</span
-        ></button
-      >
-    {:else if tile.kind === 'ac'}
-      <!-- Tapping AC marks how enemies roll against the character, like initiative's mark. -->
-      <button
-        type="button"
-        class="tile"
-        style:--stat={statColor(tile.kind)}
-        style:--stat-soft={statSoft(tile.kind)}
-        aria-haspopup="dialog"
-        aria-label={acEdge
-          ? fill(t.acEdgeLabel, { value: acSpoken(tile.value), edge: edgeWord(acEdge) })
-          : fill(t.acTileLabel, { value: acSpoken(tile.value) })}
-        {disabled}
-        bind:this={acTile}
-        onclick={() => (markingAc = true)}
-        ><span class="k"
-          >{tile.label}{#if acEdge}<small class="against {acEdge}"
-              >{acEdge === 'adv' ? t.acEdgeShortAdv : t.acEdgeShortDis}</small
-            >{/if}</span
-        ><span class="v"
-          >{tile.value}{#if acBadge}<span class="badge" aria-hidden="true">{acBadge}</span>{/if}{#if acEdge}<span
-              class="edge against {acEdge}"
-              aria-hidden="true">{ARROW[acEdge]}</span
-            >{/if}</span
-        ></button
-      >
-    {:else if tile.kind === 'speed'}
-      <button
-        type="button"
-        class="tile"
-        style:--stat={statColor(tile.kind)}
-        style:--stat-soft={statSoft(tile.kind)}
-        aria-haspopup="dialog"
-        aria-label={fill(t.speedEditLabel, { value: tile.value })}
-        {disabled}
-        bind:this={speedTile}
-        onclick={() => (editingSpeed = true)}
-        ><span class="k">{tile.label}</span><span class="v">{tile.value}</span></button
-      >
-    {:else}
+{#if form}
+  <div class="tiles form">
+    {#each formTiles as tile (tile.label)}
       <div class="tile" style:--stat={statColor(tile.kind)} style:--stat-soft={statSoft(tile.kind)}>
         <span class="k">{tile.label}</span><span class="v">{tile.value}</span>
       </div>
-    {/if}
+    {/each}
+  </div>
+  {#each formLines as line (line.label)}
+    <div
+      class="tile line"
+      class:plain={line.kind === null}
+      style:--stat={line.kind && statColor(line.kind)}
+      style:--stat-soft={line.kind && statSoft(line.kind)}
+    >
+      <span class="k">{line.label}</span><span class="text">{line.value}</span>
+    </div>
   {/each}
-</div>
+{:else}
+  <div class="tiles">
+    {#each tiles as tile, i (i)}
+      {#if tile.initiative}
+        <!-- Tapping initiative marks it with advantage or disadvantage, like a skill. -->
+        <button
+          type="button"
+          class="tile"
+          style:--stat={statColor(tile.kind)}
+          style:--stat-soft={statSoft(tile.kind)}
+          aria-haspopup="dialog"
+          aria-label={`${tile.label} ${tile.value}${initiativeEdge ? `, ${initiativeEdge === 'adv' ? t.advantage : t.disadvantage}` : ''}`}
+          bind:this={initiativeTile}
+          onclick={() => (marking = true)}
+          ><span class="k">{tile.label}</span><span class="v"
+            >{tile.value}{#if initiativeEdge}<span class="edge {initiativeEdge}" aria-hidden="true"
+                >{ARROW[initiativeEdge]}</span
+              >{/if}</span
+          ></button
+        >
+      {:else if tile.kind === 'ac'}
+        <!-- Tapping AC marks how enemies roll against the character, like initiative's mark. -->
+        <button
+          type="button"
+          class="tile"
+          style:--stat={statColor(tile.kind)}
+          style:--stat-soft={statSoft(tile.kind)}
+          aria-haspopup="dialog"
+          aria-label={acEdge
+            ? fill(t.acEdgeLabel, { value: acSpoken(tile.value), edge: edgeWord(acEdge) })
+            : fill(t.acTileLabel, { value: acSpoken(tile.value) })}
+          {disabled}
+          bind:this={acTile}
+          onclick={() => (markingAc = true)}
+          ><span class="k"
+            >{tile.label}{#if acEdge}<small class="against {acEdge}"
+                >{acEdge === 'adv' ? t.acEdgeShortAdv : t.acEdgeShortDis}</small
+              >{/if}</span
+          ><span class="v"
+            >{tile.value}{#if acBadge}<span class="badge" aria-hidden="true">{acBadge}</span>{/if}{#if acEdge}<span
+                class="edge against {acEdge}"
+                aria-hidden="true">{ARROW[acEdge]}</span
+              >{/if}</span
+          ></button
+        >
+      {:else if tile.kind === 'speed'}
+        <button
+          type="button"
+          class="tile"
+          style:--stat={statColor(tile.kind)}
+          style:--stat-soft={statSoft(tile.kind)}
+          aria-haspopup="dialog"
+          aria-label={fill(t.speedEditLabel, { value: tile.value })}
+          {disabled}
+          bind:this={speedTile}
+          onclick={() => (editingSpeed = true)}
+          ><span class="k">{tile.label}</span><span class="v">{tile.value}</span></button
+        >
+      {:else}
+        <div class="tile" style:--stat={statColor(tile.kind)} style:--stat-soft={statSoft(tile.kind)}>
+          <span class="k">{tile.label}</span><span class="v">{tile.value}</span>
+        </div>
+      {/if}
+    {/each}
+  </div>
+{/if}
 
-{#if ult}
+{#if ult && !form}
   <UltCharges {ult} {disabled} onchange={onult} {t} />
 {/if}
 
@@ -741,6 +787,30 @@
     display: grid;
     grid-template-columns: repeat(var(--tile-columns, 3), 1fr);
     gap: 0.375rem;
+  }
+
+  /* A form's four numbers two by two, then its speed and senses on lines of their own (as on a companion). */
+  .tiles.form {
+    --tile-columns: 2;
+  }
+
+  .tile.line {
+    margin-bottom: 0.625rem;
+  }
+
+  .tile.plain {
+    border-color: var(--line);
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  .plain .k {
+    color: var(--ink-muted);
+  }
+
+  .text {
+    font-weight: 700;
+    line-height: 1.3;
   }
 
   .tile {

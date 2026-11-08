@@ -77,6 +77,8 @@ export type Command =
   | { type: 'spells' }
   /** The companion templates and their creatures from the loaded lists (CompanionTemplate[]). */
   | { type: 'companionOptions' }
+  /** The creatures MPMB's "Add Wild Shape" menu offers (Beast[]). */
+  | { type: 'wildShapeOptions' }
   /**
    * The Spells step's picks into MPMB's spell dialogs, then MPMB's "(Re)generate a Spell Sheet" with the app
    * pressing OK in those dialogs.
