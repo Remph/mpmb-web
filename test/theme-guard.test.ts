@@ -28,10 +28,25 @@ function sources(dir = 'src'): [string, string][] {
   });
 }
 
-// A CSS or HTML comment, across lines; a comment may name a colour to explain a token. "/* #fff */" and
-// "<!-- #000 -->" match, "color: red;" doesn't.
-// Try it: https://regex101.com/?regex=%5C%2F%5C*%5B%5Cs%5CS%5D*%3F%5C*%5C%2F%7C%3C!--%5B%5Cs%5CS%5D*%3F--%3E&testString=%2F*%20%23fff%20*%2F%20color%3A%20red%3B%20%3C!--%20%23000%20--%3E
-const COMMENT = /\/\*[\s\S]*?\*\/|<!--[\s\S]*?-->/g;
+// A CSS comment, across lines; a comment may name a colour to explain a token. "/* #fff */" matches. Taken out of
+// CSS only (a stylesheet, a <style> block, a style attribute): in markup or script, "/*" is also part of
+// accept="image/*" or a glob, and would hide everything up to the next "*/", <style> block and all.
+// Try it: https://regex101.com/?regex=%5C%2F%5C*%5B%5Cs%5CS%5D*%3F%5C*%5C%2F&testString=%2F*%20%23fff%20*%2F%20color%3A%20red%3B
+const CSS_COMMENT = /\/\*[\s\S]*?\*\//g;
+
+// An HTML comment in a component's markup, across lines: "<!-- #000 -->".
+// Try it: https://regex101.com/?regex=%3C!--%5B%5Cs%5CS%5D*%3F--%3E&testString=%3Cp%3Ea%3C%2Fp%3E%20%3C!--%20%23000%20--%3E
+const HTML_COMMENT = /<!--[\s\S]*?-->/g;
+
+// A component's <style> block, with its tags: "<style>a { color: red }</style>".
+// Try it: https://regex101.com/?regex=%3Cstyle%5B%5E%3E%5D*%3E%5B%5Cs%5CS%5D*%3F%3C%5C%2Fstyle%3E&testString=%3Cp%3Ea%3C%2Fp%3E%3Cstyle%3Ea%20%7B%20color%3A%20red%20%7D%3C%2Fstyle%3E
+const STYLE_BLOCK = /<style[^>]*>[\s\S]*?<\/style>/g;
+
+/** A file without its comments: CSS comments in CSS, HTML comments in markup. Script comments stay. */
+function withoutComments(file: string, text: string): string {
+  if (file.endsWith('.css')) return text.replace(CSS_COMMENT, '');
+  return text.replace(HTML_COMMENT, '').replace(STYLE_BLOCK, (block) => block.replace(CSS_COMMENT, ''));
+}
 
 // The places a colour can be written: a <style> block's body, or a style, fill, stroke or color attribute.
 // Not the rest of the markup, where "#add" can be a link to an element. Matches "<style>a { color: #fff }</style>"
@@ -41,9 +56,11 @@ const STYLED = /<style[^>]*>([\s\S]*?)<\/style>|\b(?:style|fill|stroke|color)="(
 
 /** The text of a file where colours are written: all of a stylesheet, the styled parts of a component. */
 function styled(file: string, text: string): string {
-  const plain = text.replace(COMMENT, '');
-  if (file.endsWith('.css')) return plain;
-  return [...plain.matchAll(STYLED)].map(([, block, attribute]) => block ?? attribute ?? '').join('\n');
+  if (file.endsWith('.css')) return text.replace(CSS_COMMENT, '');
+  return [...text.replace(HTML_COMMENT, '').matchAll(STYLED)]
+    .map(([, block, attribute]) => block ?? attribute ?? '')
+    .join('\n')
+    .replace(CSS_COMMENT, '');
 }
 
 // A fixed colour: "#fff", "#1d1a26", "rgb(20 30 40)", "hsl(250 40% 40%)". Not black see-through shades such as
@@ -53,7 +70,7 @@ const FIXED_COLOUR = /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?)\((?!0[ ,]+0[ ,]+0[ ,]*[
 
 test('no component asks the device for light or dark: the theme on <html> says which', () => {
   const offenders = sources()
-    .filter(([, text]) => text.replace(COMMENT, '').includes('prefers-color-scheme'))
+    .filter(([file, text]) => withoutComments(file, text).includes('prefers-color-scheme'))
     .map(([file]) => file);
   expect(offenders).toEqual([]);
 });
@@ -68,6 +85,8 @@ test('no component brings its own colours: they come from the theme (var(--…))
 test('the check finds what it should', () => {
   const component = [
     '<a href="#add">Add</a>',
+    // "/*" outside CSS: once hid all up to the comment's "*/" below.
+    '<input type="file" accept="image/*" />',
     '<svg fill="#123456"></svg>',
     '<style>',
     '  /* #fff in a comment */',
