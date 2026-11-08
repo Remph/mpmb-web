@@ -412,7 +412,7 @@ test('a character saved on an older sheet is updated when it opens, and the vers
   await expect(page.getByText('Saved')).toBeVisible({ timeout: STARTUP });
   // Long enough for the paladin's old sheet to have opened in its own worker (about 3 s).
   await page.waitForTimeout(8_000);
-  await page.getByRole('checkbox', { name: 'Heroic Inspiration' }).click();
+  await page.getByRole('checkbox', { name: 'Inspiration', exact: true }).click();
   await expect(page.getByText('Saved')).toBeVisible();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Test Wizard');
   await expect(page.getByText('could not be moved')).toBeHidden();

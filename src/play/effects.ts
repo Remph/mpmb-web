@@ -307,3 +307,17 @@ export function toggle(
   const { steps, applied } = switchOn(fields, effect, effects);
   return { steps, effects: effects.map((e) => (e.id === id ? { ...e, applied } : e)) };
 }
+
+/**
+ * What the effects that are on add to the AC right now, and their names, for the AC tile (UI review 3,
+ * finding 05): their numbers plus the abilities' modifiers as the sheet shows them now, which is what MPMB
+ * adds. An effect without an AC part (weapon attacks only) adds nothing and isn't named.
+ */
+export function acFromEffects(fields: FieldViews, effects: readonly Effect[]): { bonus: number; names: string[] } {
+  const adding = effects.filter((e) => e.applied?.ac);
+  const bonus = adding.reduce(
+    (sum, e) => sum + e.acNumber + (e.acAbility ? (numberOf(fields, `${e.acAbility} Mod`) ?? 0) : 0),
+    0,
+  );
+  return { bonus, names: adding.map((e) => e.name) };
+}

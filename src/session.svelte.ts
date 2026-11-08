@@ -117,6 +117,12 @@ export function expected(fields: FieldViews, steps: Step[]): FieldViews {
 /** The name of MPMB's bookmark that empties the sheet. */
 const RESET = 'Reset';
 
+/** Whether any field differs; the client replaces a changed field's view, so a changed one is a new object. */
+function fieldsChanged(before: Readonly<Record<string, unknown>>, after: Readonly<Record<string, unknown>>): boolean {
+  const names = Object.keys(after);
+  return names.length !== Object.keys(before).length || names.some((name) => before[name] !== after[name]);
+}
+
 const closed = (): Promise<never> => Promise.reject(new Error('closed'));
 /**
  * The old sheet's pop-ups during an update, answered as closed (EngineClient answers a failed pop-up with
@@ -512,12 +518,17 @@ export class Session {
     // In line itself, so that a change made right after (the Build screen's first tap) waits for the point.
     const take = async (): Promise<void> => {
       await settled(before);
-      if (!open || this.current !== open || readOnly(open.status) || !this.tabLock.holds(open.meta.id)) return;
-      const stored = await this.store?.get(open.meta.id);
+      const stored = await this.savedCopy(open);
       if (stored) await this.keepPoint(stored, reason);
     };
     this.running = take();
     return this.running;
+  }
+
+  /** The open character as saved, while this tab may still change it; null when a point of it can't be kept. */
+  private async savedCopy(open: OpenCharacter | null): Promise<StoredCharacter | null> {
+    if (!open || this.current !== open || readOnly(open.status) || !this.tabLock.holds(open.meta.id)) return null;
+    return (await this.store?.get(open.meta.id)) ?? null;
   }
 
   /** The open character's restore points, the newest first. */
@@ -782,9 +793,19 @@ export class Session {
    * MPMB's that the bookmark opens.
    */
   async runMenu(path: string[], menuTitle?: string): Promise<void> {
-    // MPMB's "Reset" empties the whole sheet ("Start over" in the Sheet menu, or from MPMB's full menu).
-    if (path.some((name) => name.trim() === RESET)) await this.takePoint('reset');
-    return this.work(() => this.popUps.titled(menuTitle, () => this.client.bookmark(path)));
+    const run = (): Promise<unknown> => this.popUps.titled(menuTitle, () => this.client.bookmark(path));
+    // MPMB's "Reset" empties the whole sheet ("Start over" in the Sheet menu, or from MPMB's full menu). The
+    // sheet as saved before it becomes a restore point, but only once the player said Yes to MPMB's question:
+    // a "No" mustn't push out the oldest of the three points (UI review 3, finding 03). The answer itself
+    // stays inside the scripts, so "Yes" is told by the sheet having changed.
+    if (!path.some((name) => name.trim() === RESET)) return this.work(run);
+    await settled(this.running);
+    const saved = await this.savedCopy(this.current);
+    return this.work(async () => {
+      const before = { ...this.client.fields };
+      await run();
+      if (saved && fieldsChanged(before, this.client.fields)) await this.keepPoint(saved, 'reset');
+    });
   }
 
   /** Imperial or metric, through MPMB's own units bookmark (the app answers its dialog). */

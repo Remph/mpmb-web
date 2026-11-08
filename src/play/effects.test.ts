@@ -8,6 +8,7 @@ import type { Engine } from '../engine/engine.ts';
 import type { Step } from '../session.svelte.ts';
 import { viewsOf } from '../worker/views.ts';
 import {
+  acFromEffects,
   acText,
   effectOn,
   newEffect,
@@ -38,6 +39,26 @@ describe('acText', () => {
     expect(acText({ acAbility: '', acNumber: 2 })).toBe('2');
     expect(acText({ acAbility: 'Wis', acNumber: 1 })).toBe('Wis+1');
     expect(acText({ acAbility: 'Wis', acNumber: -1 })).toBe('Wis-1');
+  });
+});
+
+describe('acFromEffects (the AC tile)', () => {
+  it('adds up what the effects that are on add to the AC, as MPMB does', () => {
+    const engine = wizard();
+    const before = viewsOf(engine.doc);
+    const stance = effect({ acAbility: 'Int', acNumber: 1 });
+    const off = effect({ id: 'e2', name: 'Made-up Song', acNumber: 2 });
+    const weaponsOnly = effect({ id: 'e3', name: 'Made-up Grip', weaponAbility: 'Int' });
+    expect(acFromEffects(before, [stance, off])).toEqual({ bonus: 0, names: [] });
+
+    const { steps, applied } = switchOn(before, stance);
+    run(engine, steps);
+    const on = viewsOf(engine.doc);
+    const grip = switchOn(on, weaponsOnly);
+    const effects = [{ ...stance, applied }, off, { ...weaponsOnly, applied: grip.applied }];
+    // Int +3 and 1: the 4 the AC went up by; the switched-off song and the weapons-only grip add nothing.
+    expect(Number(on['AC']?.value) - Number(before['AC']?.value)).toBe(4);
+    expect(acFromEffects(on, effects)).toEqual({ bonus: 4, names: ['Made-up Stance'] });
   });
 });
 
