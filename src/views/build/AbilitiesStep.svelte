@@ -163,6 +163,9 @@
   }
 
   function tapOne(ability: number) {
+    // The mode may have come from the column (after a reload): giving +1s back until only one is left makes the
+    // column ambiguous, and without this the step would jump to "+2 and +1" under the player's finger.
+    pickedMode = 'three';
     if (backgroundCol) write(withColumn(columns, 'background', tapFreeOne(backgroundCol, ability)));
   }
 

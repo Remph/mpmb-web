@@ -73,5 +73,18 @@ test('with the house rule, the background bonus goes to abilities the background
     'aria-pressed',
     'true',
   );
+
+  // After the reload the mode comes from the column. Giving two +1s back leaves one +1, which on its own
+  // could be either mode: the step stays on "Three +1" instead of jumping to +2 and +1 under the player.
+  await page.getByRole('button', { name: 'Strength +1 from the background' }).click();
+  await page.getByRole('button', { name: 'Constitution +1 from the background' }).click();
+  await expect(
+    page.getByRole('group', { name: 'How the background bonus is split' }).getByRole('button', { name: 'Three +1' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Strength +2 from the background' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Dexterity +1 from the background' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   expect(errors).toEqual([]);
 });
