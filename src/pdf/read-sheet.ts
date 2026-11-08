@@ -14,6 +14,7 @@ import {
   PDFRef,
   PDFString,
   decodePDFRawStream,
+  pdfDocEncodingDecode,
 } from '@cantoo/pdf-lib';
 import type { Bookmark, FieldDef, PdfFieldType, SheetImages, SheetSnapshot, Trigger, Widget } from '../engine/types.ts';
 import { FF, IMAGE_SLOTS, TRIGGERS } from '../engine/types.ts';
@@ -28,6 +29,13 @@ const RECT_DECIMALS = 100;
 const UTF16_BE_BOM = '\u00fe\u00ff';
 const UTF16_LE_BOM = '\u00ff\u00fe';
 const BOM_LENGTH = UTF16_BE_BOM.length;
+/** UTF-8's byte order mark, which PDF 2.0 allows on text strings (7.9.2.2). */
+const UTF8_BOM = [0xef, 0xbb, 0xbf] as const;
+/**
+ * Bytes per call to pdf-lib's PDFDocEncoding decoder. It spreads every character into one function call,
+ * and JavaScript engines refuse calls with a few hundred thousand arguments or fewer.
+ */
+const DECODE_CHUNK = 8192;
 /** /Names arrays alternate key and value. */
 const NAME_TREE_STEP = 2;
 
@@ -45,6 +53,23 @@ export function decodeScriptBytes(bytes: Uint8Array): string {
   }
 }
 
+/**
+ * A PDF text string's bytes as text (PDF 2.0, 7.9.2.2): UTF-16 or UTF-8 after a byte order mark, else
+ * PDFDocEncoding. pdf-lib's own decodeText() does the same but overflows the call stack on long values,
+ * such as the megabytes of add-on scripts MPMB keeps in one field.
+ */
+export function decodePdfText(bytes: Uint8Array): string {
+  const head = String.fromCharCode(...bytes.subarray(0, BOM_LENGTH));
+  if (head === UTF16_BE_BOM) return new TextDecoder('utf-16be').decode(bytes.subarray(BOM_LENGTH));
+  if (head === UTF16_LE_BOM) return new TextDecoder('utf-16le').decode(bytes.subarray(BOM_LENGTH));
+  if (UTF8_BOM.every((b, i) => bytes[i] === b)) return new TextDecoder('utf-8').decode(bytes.subarray(UTF8_BOM.length));
+  const parts: string[] = [];
+  for (let at = 0; at < bytes.length; at += DECODE_CHUNK) {
+    parts.push(pdfDocEncodingDecode(bytes.subarray(at, at + DECODE_CHUNK)));
+  }
+  return parts.join('');
+}
+
 export async function readSheetPdf(bytes: Uint8Array | ArrayBuffer): Promise<SheetSnapshot> {
   const pdf = await PDFDocument.load(bytes, { updateMetadata: false, throwOnInvalidObject: false });
   const ctx = pdf.context;
@@ -59,7 +84,7 @@ export async function readSheetPdf(bytes: Uint8Array | ArrayBuffer): Promise<She
   };
   const text = (o: PDFObject | undefined): string | undefined => {
     const v = look(o);
-    if (v instanceof PDFString || v instanceof PDFHexString) return v.decodeText();
+    if (v instanceof PDFString || v instanceof PDFHexString) return decodePdfText(v.asBytes());
     if (v instanceof PDFName) return v.decodeText();
     if (v instanceof PDFRawStream) return decodeScriptBytes(decodePDFRawStream(v).decode());
     return undefined;
