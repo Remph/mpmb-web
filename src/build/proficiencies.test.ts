@@ -9,6 +9,7 @@ import {
   hasProficiencies,
   openSkillPicks,
   readLangTools,
+  readSaveProficiencies,
   moreProficiencies,
   readProficiencies,
   readSkillSources,
@@ -57,6 +58,36 @@ describe("skill texts in the player's language", () => {
     expect(skillText(more, ui.de).rest).toBe(more.text);
     const expertise = source('I gain Expertise in one skill.', 0, []);
     expect(skillText(expertise, ui.de)).toEqual({ text: expertise.text, rest: null });
+  });
+});
+
+describe('saving throws', () => {
+  const brief = (fields: ReturnType<typeof viewsOf>) =>
+    readSaveProficiencies(fields).map((s) => `${s.key} ${s.on ? 'on' : 'off'} ${s.sources.join(', ')}`.trim());
+
+  it("reads the six boxes with the class MPMB names in each box's tooltip", () => {
+    expect(brief(viewsOf(openSheet(referenceSheet('wizard10-evoker')).doc))).toEqual([
+      'Str off',
+      'Dex off',
+      'Con off',
+      'Int on Wizard',
+      'Wis on Wizard',
+      'Cha off',
+    ]);
+  });
+
+  it('a tap ticks a save by hand or takes one off, and a level-up keeps both', () => {
+    const engine = openSheet(referenceSheet('wizard10-evoker'));
+    // The box has no script: a tap only changes the box, and the save's own calculation adds the
+    // proficiency bonus (+4 at level 10).
+    engine.click('Str ST Prof');
+    engine.click('Wis ST Prof');
+    let fields = viewsOf(engine.doc);
+    expect(brief(fields)).toEqual(['Str on', 'Dex off', 'Con off', 'Int on Wizard', 'Wis off Wizard', 'Cha off']);
+    expect([fields['Str ST Mod']?.value, fields['Wis ST Mod']?.value]).toEqual(['3', '0']);
+    engine.edit('Class and Levels', 'Wizard 11');
+    fields = viewsOf(engine.doc);
+    expect(brief(fields)).toEqual(['Str on', 'Dex off', 'Con off', 'Int on Wizard', 'Wis off Wizard', 'Cha off']);
   });
 });
 

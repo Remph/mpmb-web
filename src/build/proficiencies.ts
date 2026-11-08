@@ -4,7 +4,7 @@
 // and the armour and weapon training in check boxes. The player's changes go into the same fields.
 import { counted, fill, ui } from '../i18n.ts';
 import type { Texts } from '../i18n.ts';
-import { SKILLS, isOn, valueOf } from '../play/read.ts';
+import { ABILITIES, SKILLS, isOn, valueOf } from '../play/read.ts';
 import type { SkillKey } from '../play/read.ts';
 import type { FieldViews } from '../worker/views.ts';
 
@@ -94,6 +94,35 @@ export function readSkillSources(fields: FieldViews): SkillSource[] {
         };
       })
   );
+}
+
+/** A saving throw's proficiency box and what MPMB says gives it. */
+export interface SaveProficiency {
+  key: (typeof ABILITIES)[number];
+  /** The box "Str ST Prof", which a tap toggles. */
+  field: string;
+  on: boolean;
+  /** "Wizard", "Resilient (feat)"; empty for a box ticked by hand. */
+  sources: string[];
+}
+
+/**
+ * The six saving throw boxes. MPMB ticks a box from the first class and feats (SetProf "save") and writes the
+ * sources into its tooltip: "Wisdom saving throws proficiency was gained from:\n • Wizard". The box has no
+ * script of its own, so a tap by hand changes only the box: MPMB keeps no source for it, and the tooltip of a
+ * box ticked off by hand still names the class (it stays off until that source is applied again).
+ */
+export function readSaveProficiencies(fields: FieldViews): SaveProficiency[] {
+  return ABILITIES.map((key) => {
+    const field = `${key} ST Prof`;
+    const sources = (fields[field]?.userName ?? '')
+      .split(/\r\n?|\n/)
+      .map((line) => ENTRY.exec(line)?.[1])
+      .filter((source) => source !== undefined)
+      .map((source) => plain(source).trim())
+      .filter(Boolean);
+    return { key, field, on: isOn(fields, field), sources };
+  });
 }
 
 /**

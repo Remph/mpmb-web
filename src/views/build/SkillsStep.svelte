@@ -1,8 +1,9 @@
 <!--
-  Build step 5 "Skills & languages" (M6.5, as in the mock-ups Remph saw): MPMB's note on what the class,
-  species and background give, the 18 skill boxes to tick, languages and tools, and the armour and weapon
-  training. Every tap goes into MPMB's own fields: a skill box runs MPMB's applySkillClick, a training box
-  its setCheckboxProfsManual, and a language or tool is typed into one of the sheet's eight rows.
+  Build step 5 "Skills & languages" (M6.5, as in the mock-ups Remph saw): the six saving throw boxes (Remph
+  picked them here, 2026-11-08), MPMB's note on what the class, species and background give, the 18 skill
+  boxes to tick, languages and tools, and the armour and weapon training. Every tap goes into MPMB's own
+  fields: a save box is a plain check box, a skill box runs MPMB's applySkillClick, a training box its
+  setCheckboxProfsManual, and a language or tool is typed into one of the sheet's eight rows.
 -->
 <script lang="ts">
   import {
@@ -13,11 +14,12 @@
     TRAINING,
     freeLangToolRow,
     readLangTools,
+    readSaveProficiencies,
     readSkillSources,
     skillChoices,
     skillText,
   } from '../../build/proficiencies.ts';
-  import type { LangTool, LangToolKind } from '../../build/proficiencies.ts';
+  import type { LangTool, LangToolKind, SaveProficiency } from '../../build/proficiencies.ts';
   import type { BuilderInfo } from '../../engine/builder.ts';
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
@@ -42,6 +44,7 @@
   /** The language or tool pop-up: which kind, and the row it replaces (null adds to a free row). */
   let picking = $state<{ kind: LangToolKind; row: string | null } | null>(null);
 
+  const saves = $derived(readSaveProficiencies(fields));
   const sources = $derived(readSkillSources(fields));
   const choices = $derived(skillChoices(fields, sources));
   const languages = $derived(readLangTools(fields, 'Language'));
@@ -56,6 +59,13 @@
     }
     const open = choices.filter((c) => c.chosen < c.choose && c.skills.includes(key))[0];
     return open ? fill(t.skillsCanPick, { source: open.source }) : '';
+  }
+
+  /** The line under a save: what gives it, "added by you", or the source of a save ticked off by hand. */
+  function saveLine(save: SaveProficiency): string {
+    const from = save.sources.join(', ');
+    if (save.on) return from || t.skillsOwnPick;
+    return from ? fill(t.savesDropped, { source: from }) : '';
   }
 
   const canPick = (key: SkillKey): boolean =>
@@ -86,6 +96,33 @@
     if (text !== valueOf(fields, field)) change([{ edit: field, text }]);
   }
 </script>
+
+<section class="card" aria-labelledby="saves-title">
+  <header class="head">
+    <div>
+      <h2 id="saves-title">{t.savesTitle}</h2>
+      <p class="line">{t.savesLine}</p>
+    </div>
+  </header>
+  <div class="skills">
+    {#each saves as save (save.key)}
+      {@const line = saveLine(save)}
+      <button
+        type="button"
+        class="skill"
+        class:on={save.on}
+        aria-pressed={save.on}
+        {disabled}
+        onclick={() => change([{ click: save.field }])}
+      >
+        <span class="dot" aria-hidden="true"></span>
+        <span class="name"
+          ><b>{t[`ability${save.key}`]}</b>{#if line}<small>{line}</small>{/if}</span
+        >
+      </button>
+    {/each}
+  </div>
+</section>
 
 <section class="card" aria-labelledby="skills-title">
   <header class="head">
