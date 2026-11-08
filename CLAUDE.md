@@ -27,6 +27,8 @@ In the repo root: `pnpm install`, `pnpm test` (Vitest), `pnpm check` (svelte-che
 - One thread pushes to a branch at a time: the review thread during the review, the building thread
   again afterwards. After a merge, new work goes on a new branch. If the owner merged a PR before its review
   finished, further fixes go on a new branch with a new PR.
+- Stacked PRs (a PR whose base is another PR's branch): each PR body says the merge order. Merge them with
+  merge commits only, never squash or rebase-merge: that rewrites the lower branch and breaks every PR above it.
 - A push to `main` (a merged pull request) deploys to <https://remph.de/mpmb/> in about a minute
   (`.github/workflows/deploy.yml`; setup and safety nets in `README.md`, "Deploy"). Other branches never deploy.
 - The private repo `mpmb-web-dev` has its own rules (Claude merges there itself); see its `CLAUDE.md`.
@@ -50,7 +52,9 @@ browser test stops the upload.
 - A small fix round is one build thread, one branch, one PR and one review thread; bigger milestones
   get a thread each.
 - UI changes come with screenshots (laptop about 1440 px and iPad 820/1180 px, light and dark) and the
-  Playwright script in the project folder, plus a phone-viewable overview page.
+  Playwright script in the project folder, plus a phone-viewable overview page. The group plays in Firefox, so
+  take them in Firefox. For dark shots set the Look window's mode (localStorage `mpmb-web.look`): Playwright's
+  colour-scheme emulation fails under the app's COOP/COEP headers and quietly gives light shots.
 
 ## Code rules
 
@@ -61,6 +65,10 @@ browser test stops the upload.
   Acrobat's behaviour (reference characters).
 - Laptops and touch first: touch targets of at least 44 px, nothing hover-only, no stray scroll bars
   from 1024 to 2560 px wide, one clear main action per place. The iPad (768 to 1180 px) must work.
+- Text boxes and selects have at least 16 px text (`1rem`), MPMB's dialogs too: phones zoom in on smaller
+  ones and stay zoomed (`e2e/phone.spec.ts` checks the windows it opens).
+- Colours come only from the theme tokens in `src/app.css` (every theme, light and dark); components never
+  ask for `prefers-color-scheme`. `test/theme-guard.test.ts` fails otherwise.
 - Every visible text in German and English (`src/i18n.ts`; a missing key is a type error).
 - Comment non-obvious code; explain the "why", not the "what".
 - The owner builds on Windows: never add two files whose names differ only in case.
