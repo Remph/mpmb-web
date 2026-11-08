@@ -89,6 +89,18 @@ describe('saving throws', () => {
     fields = viewsOf(engine.doc);
     expect(brief(fields)).toEqual(['Str on', 'Dex off', 'Con off', 'Int on Wizard', 'Wis off Wizard', 'Cha off']);
   });
+
+  it("adds Honor or Sanity's box only while the sheet shows that score, and a tap ticks it", () => {
+    const engine = openSheet(referenceSheet('wizard10-evoker'));
+    expect(brief(viewsOf(engine.doc))).toHaveLength(6);
+    engine.evaluate('ShowHonorSanity("Honor")');
+    expect(brief(viewsOf(engine.doc)).at(-1)).toBe('HoS off');
+    engine.click('HoS ST Prof');
+    const fields = viewsOf(engine.doc);
+    expect(brief(fields).at(-1)).toBe('HoS on');
+    // Its modifier is -1 on this sheet; the proficiency bonus (+4) makes the save +3.
+    expect(fields['HoS ST Mod']?.value).toBe('3');
+  });
 });
 
 describe('skill sources', () => {
