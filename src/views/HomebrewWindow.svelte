@@ -21,6 +21,7 @@
       ultCharges: { title: t.homebrewUltTitle, line: t.homebrewUltLine },
       noAmmo: { title: t.homebrewNoAmmoTitle, line: t.homebrewNoAmmoLine },
       shortRestHalfHp: { title: t.homebrewHalfHpTitle, line: t.homebrewHalfHpLine },
+      bgAnywhere: { title: t.homebrewBgAnywhereTitle, line: t.homebrewBgAnywhereLine },
     })[key];
 </script>
 

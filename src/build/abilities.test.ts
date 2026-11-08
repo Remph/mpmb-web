@@ -7,6 +7,10 @@ import {
   canLower,
   canRaise,
   changesOf,
+  freeCanPick,
+  freeColumnFor,
+  freeDone,
+  freeModeOf,
   methodOf,
   modifierOf,
   pickArray,
@@ -14,6 +18,7 @@ import {
   pointsUsed,
   stepBonus,
   tapBackground,
+  tapFreeOne,
   toArray,
   toPoints,
   totalsOf,
@@ -77,6 +82,47 @@ describe('background +2/+1', () => {
     const all = { plus2: null, plus1: null, allThree: true };
     expect(backgroundColumn(all, acolyte)).toEqual([0, 0, 0, 1, 1, 1]);
     expect(backgroundColumn(tapBackground(all, 3, 2), acolyte)).toEqual([0, 0, 0, 2, 0, 0]);
+  });
+});
+
+describe('house rule: background boosts anywhere', () => {
+  const all = [0, 1, 2, 3, 4, 5];
+  test('+2 and +1 go to abilities the background does not name', () => {
+    // Acolyte names Int, Wis and Cha; the house rule puts +2 on Strength and +1 on Constitution.
+    const start = backgroundBonusOf([0, 0, 0, 0, 0, 0], all);
+    const step1 = tapBackground(start, 0, 2);
+    expect(backgroundColumn(tapBackground(step1, 2, 1), all)).toEqual([2, 0, 1, 0, 0, 0]);
+    expect(freeDone([2, 0, 1, 0, 0, 0])).toBe(true);
+    expect(freeDone([2, 0, 0, 0, 0, 0])).toBe(false);
+  });
+
+  test('the mode the column shows', () => {
+    expect(freeModeOf([2, 0, 1, 0, 0, 0])).toBe('split');
+    expect(freeModeOf([1, 0, 1, 0, 0, 1])).toBe('three');
+    expect(freeModeOf([1, 1, 0, 0, 0, 0])).toBe('three');
+    expect(freeModeOf([0, 0, 1, 0, 0, 0])).toBeNull();
+    expect(freeModeOf([0, 0, 0, 0, 0, 0])).toBeNull();
+  });
+
+  test('three +1s on any abilities, never a fourth, and a second tap gives one back', () => {
+    const column = [0, 2, 5].reduce((col, ability) => tapFreeOne(col, ability), [0, 0, 0, 0, 0, 0]);
+    expect(column).toEqual([1, 0, 1, 0, 0, 1]);
+    expect(freeDone(column)).toBe(true);
+    expect(freeCanPick(column, 1)).toBe(false);
+    expect(tapFreeOne(column, 1)).toEqual([1, 0, 1, 0, 0, 1]);
+    expect(tapFreeOne(column, 2)).toEqual([1, 0, 0, 0, 0, 1]);
+    expect(freeDone([1, 0, 0, 0, 0, 1])).toBe(false);
+  });
+
+  test('changing the mode keeps the picked abilities as +1s, or starts the split empty', () => {
+    expect(freeColumnFor([2, 0, 1, 0, 0, 0], 'three')).toEqual([1, 0, 1, 0, 0, 0]);
+    expect(freeColumnFor([1, 0, 1, 0, 0, 1], 'split')).toEqual([0, 0, 0, 0, 0, 0]);
+  });
+
+  test('a column typed in MPMB’s dialog that the rules don’t allow is not done', () => {
+    expect(freeDone([3, 0, 0, 0, 0, 0])).toBe(false);
+    expect(freeDone([2, 2, 0, 0, 0, 0])).toBe(false);
+    expect(freeDone([1, 1, 1, 1, 0, 0])).toBe(false);
   });
 });
 
