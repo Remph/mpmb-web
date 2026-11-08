@@ -14,13 +14,20 @@ can:
 - import characters from filled MPMB PDFs (Colorful A4 v24.2.0, with the add-on scripts in them), or
   start a new one;
 - build them: class and level, species, background, feats, ability scores, skills, languages and tools,
-  armour and weapons, spells, and add-on scripts of your own;
+  armour and weapons, spells (also your own, typed in when MPMB doesn't know them), and add-on scripts
+  of your own;
 - play them at the table: hit points, conditions, attacks, ammunition, spell slots and prepared spells,
-  limited features, rests, checks, experience, inventory, features, notes and the portrait;
+  limited features, rests, checks, experience, inventory, features, notes and the portrait; effects you
+  switch on and off (an AC bonus, weapon attacks with another ability); companions such as a familiar or
+  a steed on their own pages;
 - print them on A4, or fill a blank MPMB PDF you supply;
-- keep them in the browser and move them between devices with backup files. Characters saved on an
-  older version of MPMB's sheet are updated when they open, with MPMB's own import; the version
-  before is kept.
+- keep them in the browser and move them between devices with backup files. Each character keeps three
+  restore points from earlier (taken when it opens and before big changes) to roll back to. Characters
+  saved on an older version of MPMB's sheet are updated when they open, with MPMB's own import; the
+  version before is kept;
+- use it without network once it has been opened, and add it to the iPad's home screen;
+- pick a look: the app's purple, Campfire or OLED black, light or dark, with each character in its
+  sheet's colour.
 
 Laptops and the iPad come first. The engine (MPMB's scripts on a stand-in for Acrobat) matches Acrobat
 on the reference characters.
@@ -53,7 +60,9 @@ The smoke test needs Firefox for Playwright once: `pnpm exec playwright install 
 - `src/worker/`: the engine in a Web Worker, with pop-ups that wait for the user. That needs a
   cross-origin isolated page: `pnpm dev` and `pnpm preview` send the headers, the live site gets them
   from `public/.htaccess`.
-- `src/store/`: characters in the browser (IndexedDB) and backup files.
+- `src/store/`: characters in the browser (IndexedDB), their restore points, and backup files.
+- `src/build/` and `src/play/`: what the Build screen and the play view read from the sheet and write
+  back, as plain functions with their tests; the `.svelte` files in `src/views/` show them.
 - `src/offline/`: the service worker that keeps the built app usable without network: it stores the
   build's files after the first visit, loads the page from the network first (so a new version shows at
   once) and from its copy when there is none. `tools/offline-plugin.ts` builds it into `dist/sw.js` with
@@ -63,6 +72,9 @@ The smoke test needs Firefox for Playwright once: `pnpm exec playwright install 
   rules" (per browser). They stay in the app and never go into a PDF. So far: ult charges.
 - `src/popups/`: the page's side of MPMB's pop-ups (alerts, menus, dialogs) and the app's own questions.
 - `src/views/`, `src/App.svelte`, `src/session.svelte.ts`: the pages and what they do.
+- `src/look.ts`, `src/app.css`: the themes. Every colour is a token in `app.css`, set by `data-theme` and
+  `data-mode` on `<html>` (`public/look.js` sets them before the first paint); components use the tokens,
+  never their own colours.
 - `test/`: the reference characters (made in Acrobat, SRD only) and the tests that compare the engine
   with them. `test/browser/engine-check.html` runs one of them through the worker in a browser: open it
   under `pnpm dev`.
