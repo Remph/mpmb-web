@@ -4,7 +4,7 @@
 import { PDFDocument, PDFHexString, PDFName, PDFString } from '@cantoo/pdf-lib';
 import type { PDFDict, PDFRef } from '@cantoo/pdf-lib';
 import { describe, expect, test } from 'vitest';
-import { decodeScriptBytes, readSheetPdf } from './read-sheet.ts';
+import { decodePdfText, decodeScriptBytes, readSheetPdf } from './read-sheet.ts';
 
 const js = (doc: PDFDocument, code: string): PDFDict =>
   doc.context.obj({ S: 'JavaScript', JS: PDFHexString.fromText(code) });
@@ -89,5 +89,50 @@ describe('decodeScriptBytes', () => {
     expect(decodeScriptBytes(new Uint8Array([0xfe, 0xff, 0, 0x41, 0x20, 0x22]))).toBe('A•');
     expect(decodeScriptBytes(new TextEncoder().encode('café'))).toBe('café');
     expect(decodeScriptBytes(new Uint8Array([0x63, 0xe9]))).toBe('cé');
+  });
+});
+
+describe('long values', () => {
+  /** A sheet with one text field whose value is `value`, as made by `put`. */
+  async function sheetWith(put: (doc: PDFDocument) => Parameters<PDFDict['set']>[1]): Promise<Uint8Array> {
+    const doc = await PDFDocument.create();
+    const page = doc.addPage([200, 200]);
+    const field = doc.getForm().createTextField('Long');
+    field.addToPage(page, { x: 10, y: 10, width: 50, height: 20, borderWidth: 0 });
+    field.acroField.dict.set(PDFName.of('V'), put(doc));
+    return doc.save({ updateFieldAppearances: false });
+  }
+  // MPMB keeps the add-on scripts a player imported in one field, megabytes long. JavaScript can't spread
+  // that many characters into one call, which is how pdf-lib's own decoding builds the string.
+  const long = (unit: string): string => unit.repeat(Math.ceil(3_000_000 / unit.length));
+
+  test('a UTF-16 hex string, as the app wrote every value before', async () => {
+    const value = long('Fire Bolt • Zauber 🐉 ');
+    const sheet = await readSheetPdf(await sheetWith(() => PDFHexString.fromText(value)));
+    expect(sheet.fields.Long?.value).toBe(value);
+  });
+
+  test('a literal string in PDFDocEncoding', async () => {
+    const value = long('Ray of Frost; ');
+    const sheet = await readSheetPdf(await sheetWith(() => PDFString.of(value)));
+    expect(sheet.fields.Long?.value).toBe(value);
+  });
+
+  test('a compressed stream of plain bytes, as Acrobat saves a long value', async () => {
+    const value = long("{'2024':{'spells':[]}}");
+    const bytes = new TextEncoder().encode(value);
+    const sheet = await readSheetPdf(await sheetWith((doc) => doc.context.register(doc.context.flateStream(bytes))));
+    expect(sheet.fields.Long?.value).toBe(value);
+  });
+});
+
+describe('decodePdfText', () => {
+  test('PDFDocEncoding, UTF-16 both ways round with surrogate pairs, and UTF-8 with its mark', () => {
+    // 0x80 is a bullet in PDFDocEncoding, not a control character as in Latin-1.
+    expect(decodePdfText(new Uint8Array([0x41, 0x80, 0xe9]))).toBe('A•é');
+    expect(decodePdfText(new Uint8Array([0xfe, 0xff, 0, 0x41, 0xd8, 0x3d, 0xdc, 0x09]))).toBe('A🐉');
+    expect(decodePdfText(new Uint8Array([0xff, 0xfe, 0x41, 0]))).toBe('A');
+    expect(decodePdfText(new Uint8Array([0xef, 0xbb, 0xbf, 0x63, 0xc3, 0xa9]))).toBe('cé');
+    expect(decodePdfText(new Uint8Array())).toBe('');
   });
 });

@@ -76,6 +76,17 @@ const PAGE_INHERITED = ['Resources', 'MediaBox', 'CropBox', 'Rotate'] as const;
 const RECT_DECIMALS = 100;
 /** Deeper field trees than this are broken (a /Parent loop). */
 const MAX_FIELD_DEPTH = 32;
+/**
+ * The longest string Acrobat promises to handle, in bytes (PDF Reference 1.7, appendix C, "Implementation
+ * limits"). Longer texts go as streams. Acrobat itself saves the megabytes of add-on scripts MPMB keeps in
+ * User_Imported_Files that way, and a value or script may be a text stream (PDF 1.7, 12.7.4.3 and 12.6.4.16).
+ */
+const MAX_STRING_BYTES = 32_767;
+/** UTF-16 takes two bytes per code unit, after a two-byte byte order mark. */
+const UTF16_UNIT_BYTES = 2;
+const UTF16_BOM = [0xfe, 0xff] as const;
+const BYTE = 0xff;
+const BITS_PER_BYTE = 8;
 
 /** The PDF the player brought isn't the sheet the character was made on. */
 export class WrongSheetError extends Error {}
@@ -160,6 +171,30 @@ function textOf(ctx: PDFContext, o: PDFObject | undefined): string | undefined {
   const v = o instanceof PDFRef ? ctx.lookup(o) : o;
   if (v instanceof PDFString || v instanceof PDFHexString || v instanceof PDFName) return v.decodeText();
   return undefined;
+}
+
+/**
+ * A text for a value, rich value or script: a UTF-16 string as before, or a compressed text stream when that
+ * string would be too long for Acrobat. A stream holds plain ASCII bytes when it can, as Acrobat writes it
+ * (ASCII reads the same in PDFDocEncoding), and UTF-16 with a byte order mark otherwise.
+ */
+function textObject(ctx: PDFContext, text: string): PDFHexString | PDFRef {
+  if (UTF16_UNIT_BYTES * (text.length + 1) <= MAX_STRING_BYTES) return PDFHexString.fromText(text);
+  // Try it: https://regex101.com/?regex=%5E%5B%5Cx00-%5Cx7f%5D*%24&testString=fire%20bolt
+  const bytes = /^[\x00-\x7f]*$/.test(text) ? new TextEncoder().encode(text) : utf16Bytes(text);
+  return ctx.register(ctx.flateStream(bytes));
+}
+
+/** `text` as UTF-16 big-endian with a byte order mark, the way PDF text strings and streams carry Unicode. */
+function utf16Bytes(text: string): Uint8Array {
+  const bytes = new Uint8Array(UTF16_UNIT_BYTES * (text.length + 1));
+  bytes.set(UTF16_BOM);
+  for (let i = 0; i < text.length; i++) {
+    const unit = text.charCodeAt(i);
+    bytes[UTF16_UNIT_BYTES * (i + 1)] = unit >> BITS_PER_BYTE;
+    bytes[UTF16_UNIT_BYTES * (i + 1) + 1] = unit & BYTE;
+  }
+  return bytes;
 }
 
 const sameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
@@ -613,7 +648,8 @@ class SheetWriter {
     (Object.keys(strings) as (keyof typeof strings)[]).forEach((key) => {
       if (!changed(key)) return;
       const v = def[key];
-      if (v) d.set(name(strings[key]), PDFHexString.fromText(v));
+      // A rich value may be a stream; a tooltip and MPMB's /TM data must be strings (PDF 1.7, 12.7.3.1).
+      if (v) d.set(name(strings[key]), key === 'richValue' ? textObject(this.ctx, v) : PDFHexString.fromText(v));
       else d.delete(name(strings[key]));
     });
     if (changed('maxLen')) {
@@ -662,7 +698,8 @@ class SheetWriter {
     }
     if (def.type === 'Btn') d.set(name('V'), name(Array.isArray(v) ? (v[0] ?? 'Off') : v));
     else if (Array.isArray(v)) d.set(name('V'), this.ctx.obj(v.map((s) => PDFHexString.fromText(s))));
-    else d.set(name('V'), PDFHexString.fromText(v));
+    // Only a text field's value may be a stream; a drop-down's must be a string (PDF 1.7, 12.7.4.4).
+    else d.set(name('V'), def.type === 'Tx' ? textObject(this.ctx, v) : PDFHexString.fromText(v));
   }
 
   /**
@@ -684,7 +721,7 @@ class SheetWriter {
 
   /** Field triggers on the field, mouse and focus triggers and the click (/A) on each widget. */
   private setActions(entry: Field, def: FieldDef): void {
-    const js = (code: string): PDFDict => this.ctx.obj({ S: 'JavaScript', JS: PDFHexString.fromText(code) }) as PDFDict;
+    const js = (code: string): PDFDict => this.ctx.obj({ S: 'JavaScript', JS: textObject(this.ctx, code) }) as PDFDict;
     const fieldAa = this.ctx.obj({}) as PDFDict;
     FIELD_TRIGGERS.forEach((t) => {
       const code = def.actions[t];

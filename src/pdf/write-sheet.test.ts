@@ -4,7 +4,16 @@
 // sheet runs too when MPMB_BLANK_PDF names a blank Colorful A4 v24.2.0 PDF: the app doesn't ship MPMB's
 // PDF, so neither does the repo. Then both reference characters must come back field for field.
 import fs from 'node:fs';
-import { PDFArray, PDFDict, PDFDocument, PDFName, PDFNumber, PDFString } from '@cantoo/pdf-lib';
+import {
+  PDFArray,
+  PDFDict,
+  PDFDocument,
+  PDFHexString,
+  PDFName,
+  PDFNumber,
+  PDFRawStream,
+  PDFString,
+} from '@cantoo/pdf-lib';
 import { describe, expect, test } from 'vitest';
 import { REFERENCE_CHARACTERS, referenceSheet } from '../../test/characters.ts';
 import type { SheetSnapshot } from '../engine/types.ts';
@@ -154,6 +163,59 @@ describe('writing a character into a sheet PDF', () => {
     expect(back.images?.portrait?.src).toBe(src);
   });
 
+  test('long values and scripts go as compressed streams, as Acrobat saves them, and read back', async () => {
+    const blank = await makeSheet();
+    const given = await readSheetPdf(blank);
+    // MPMB keeps the add-on scripts a player imported in one field, megabytes long. Plain ASCII goes as plain
+    // bytes, anything else as UTF-16; a short value stays a string.
+    const ascii = "{'2024':{'spells':['fire bolt']}}".repeat(100_000);
+    const wide = 'Zauber • 🐉 '.repeat(5_000);
+    const script = `// ${'x'.repeat(40_000)}\nevent.value = 1;`;
+    const target = withSpellPage(given);
+    target.fields.Name = { ...given.fields.Name!, value: ascii, actions: { K: script } };
+    target.fields['P1.Spells.Spell'] = { ...target.fields['P1.Spells.Spell']!, value: wide };
+
+    const written = await writeSheetPdf(blank, target);
+    const back = await readSheetPdf(written);
+    expect(shape(back)).toEqual(shape(target));
+
+    const form = (await PDFDocument.load(written)).getForm();
+    const valueOf = (field: string): unknown => {
+      const dict = form.getTextField(field).acroField.dict;
+      return dict.lookup(PDFName.of('V'));
+    };
+    const name = valueOf('Name');
+    expect(name).toBeInstanceOf(PDFRawStream);
+    expect((name as PDFRawStream).dict.get(PDFName.of('Filter'))).toBe(PDFName.of('FlateDecode'));
+    expect(valueOf('P1.Spells.Spell')).toBeInstanceOf(PDFRawStream);
+    expect(valueOf('Spell')).toBeUndefined();
+  });
+
+  test('a short value stays a text string', async () => {
+    const blank = await makeSheet();
+    const given = await readSheetPdf(blank);
+    const target = { ...given, fields: { ...given.fields, Name: { ...given.fields.Name!, value: 'Ilsa' } } };
+    const form = (await PDFDocument.load(await writeSheetPdf(blank, target))).getForm();
+    expect(form.getTextField('Name').acroField.dict.lookup(PDFName.of('V'))).toBeInstanceOf(PDFHexString);
+  });
+
+  test('an export with a long value is a base for the next export, and so is one from before the fix', async () => {
+    const blank = await makeSheet();
+    const given = await readSheetPdf(blank);
+    // Over a million characters: far more than the call stack took before the fix, and still quick.
+    const long = 'Ray of Frost; '.repeat(80_000);
+    const withLong = { ...given, fields: { ...given.fields, Name: { ...given.fields.Name!, value: long } } };
+    const first = await writeSheetPdf(blank, withLong);
+    // Before the fix the writer put every value in a UTF-16 hex string, and reading it back overflowed.
+    const old = await PDFDocument.load(blank);
+    old.getForm().getTextField('Name').acroField.dict.set(PDFName.of('V'), PDFHexString.fromText(long));
+    const oldExport = await old.save();
+
+    const next = { ...withLong, fields: { ...withLong.fields, Inspired: { ...given.fields.Inspired!, value: 'Yes' } } };
+    expect(shape(await readSheetPdf(await writeSheetPdf(first, next)))).toEqual(shape(next));
+    expect(shape(await readSheetPdf(await writeSheetPdf(oldExport, next)))).toEqual(shape(next));
+  }, 30_000);
+
   test('a PDF of another sheet is refused', async () => {
     const blank = await makeSheet();
     const target = await readSheetPdf(blank);
@@ -185,6 +247,20 @@ describe.runIf(BLANK_PDF)('the real sheet (MPMB_BLANK_PDF)', () => {
     },
     120_000,
   );
+
+  test('megabytes of imported add-on scripts come back, and the export is a base for the next one', async () => {
+    const blank = new Uint8Array(fs.readFileSync(BLANK_PDF ?? ''));
+    const target = referenceSheet('paladin8-warlock2');
+    const field = 'User_Imported_Files.Stringified';
+    // What MPMB keeps there: its add-on scripts, about 3 MB for a group with a few of them.
+    const scripts = `({'My add-on.js':${JSON.stringify('var x = "Fire Bolt • ✦";\n'.repeat(120_000))}})`;
+    target.fields[field] = { ...target.fields[field]!, value: scripts };
+    const written = await writeSheetPdf(blank, target);
+    const back = await readSheetPdf(written);
+    expect(back.fields[field]?.value).toBe(scripts);
+    expect(shape(back)).toEqual(shape(target));
+    expect(shape(await readSheetPdf(await writeSheetPdf(written, target, back)))).toEqual(shape(target));
+  }, 240_000);
 
   test("the portrait (JPEG) and the symbol (PNG) go on the sheet's own buttons", async () => {
     const blank = new Uint8Array(fs.readFileSync(BLANK_PDF ?? ''));
