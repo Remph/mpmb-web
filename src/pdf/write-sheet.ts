@@ -176,12 +176,14 @@ function textOf(ctx: PDFContext, o: PDFObject | undefined): string | undefined {
 /**
  * A text for a value, rich value or script: a UTF-16 string as before, or a compressed text stream when that
  * string would be too long for Acrobat. A stream holds plain ASCII bytes when it can, as Acrobat writes it
- * (ASCII reads the same in PDFDocEncoding), and UTF-16 with a byte order mark otherwise.
+ * (printable ASCII reads the same in PDFDocEncoding), and UTF-16 with a byte order mark otherwise.
  */
 function textObject(ctx: PDFContext, text: string): PDFHexString | PDFRef {
   if (UTF16_UNIT_BYTES * (text.length + 1) <= MAX_STRING_BYTES) return PDFHexString.fromText(text);
-  // Try it: https://regex101.com/?regex=%5E%5B%5Cx00-%5Cx7f%5D*%24&testString=fire%20bolt
-  const bytes = /^[\x00-\x7f]*$/.test(text) ? new TextEncoder().encode(text) : utf16Bytes(text);
+  // Only the ASCII that PDFDocEncoding reads the same: it turns 0x18 to 0x1f into accents (breve, caron, ...),
+  // and the other control characters and 0x7f mean nothing there.
+  // Try it: https://regex101.com/?regex=%5E%5B%5Ct%5Cn%5Cr%5Cx20-%5Cx7e%5D%2A%24&testString=fire%20bolt
+  const bytes = /^[\t\n\r\x20-\x7e]*$/.test(text) ? new TextEncoder().encode(text) : utf16Bytes(text);
   return ctx.register(ctx.flateStream(bytes));
 }
 

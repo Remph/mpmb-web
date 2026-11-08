@@ -13,6 +13,7 @@ import {
   PDFNumber,
   PDFRawStream,
   PDFString,
+  decodePDFRawStream,
 } from '@cantoo/pdf-lib';
 import { describe, expect, test } from 'vitest';
 import { REFERENCE_CHARACTERS, referenceSheet } from '../../test/characters.ts';
@@ -189,6 +190,31 @@ describe('writing a character into a sheet PDF', () => {
     expect((name as PDFRawStream).dict.get(PDFName.of('Filter'))).toBe(PDFName.of('FlateDecode'));
     expect(valueOf('P1.Spells.Spell')).toBeInstanceOf(PDFRawStream);
     expect(valueOf('Spell')).toBeUndefined();
+  });
+
+  test('a long stream is plain bytes only when PDFDocEncoding reads them the same', async () => {
+    const blank = await makeSheet();
+    const given = await readSheetPdf(blank);
+    // PDFDocEncoding reads 0x1f as an accent (ogonek), not as the control character: such text goes as UTF-16.
+    const plain = 'Fire Bolt;\t\r\n'.repeat(2_000);
+    const control = `${plain}\u001f`;
+    const fields = { ...given.fields, Name: { ...given.fields.Name!, value: plain } };
+    const target = { ...given, fields: { ...fields, Spell: { ...given.fields.Spell!, value: control } } };
+    const written = await writeSheetPdf(blank, target);
+    expect(shape(await readSheetPdf(written))).toEqual(shape(target));
+
+    const form = (await PDFDocument.load(written)).getForm();
+    const head = (field: string): number[] => {
+      const v = form.getTextField(field).acroField.dict.lookup(PDFName.of('V'));
+      expect(v).toBeInstanceOf(PDFRawStream);
+      return [
+        ...decodePDFRawStream(v as PDFRawStream)
+          .decode()
+          .subarray(0, 2),
+      ];
+    };
+    expect(head('Name')).toEqual([0x46, 0x69]);
+    expect(head('Spell')).toEqual([0xfe, 0xff]);
   });
 
   test('a short value stays a text string', async () => {
