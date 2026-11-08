@@ -226,7 +226,17 @@ export function ruleIndex(fields: FieldViews): Map<string, ActionRule> {
   };
   readFeatures(fields).forEach(addBlock);
   for (const item of readInventory(fields).magicItems) {
-    add({ title: item.name, source: '', lines: linesOf(item.description).map(trimmed).filter(Boolean) });
+    const rule = { title: item.name, source: '', lines: linesOf(item.description).map(trimmed).filter(Boolean) };
+    add(rule);
+    // An item that comes in forms without names of their own is named after the picked one: "Ring (Blue)". What
+    // MPMB adds for it keeps the item's own name, though: the item's limited feature says it came from "Ring",
+    // an action the form brings from "Ring [Blue] (magic item)". Both find the item's text, which is the picked
+    // form's (playtest 2026-11-08: an add-on item's tile had no text).
+    const form = actionItem(item.name);
+    if (form.note) {
+      add(rule, form.name);
+      add(rule, `${form.name} [${form.note}]`);
+    }
   }
   // The notes last: a feature written there again (a class feature's longer text) keeps the first one.
   [valueOf(fields, NOTES_FIELD), ...readNotesPages(fields).flatMap((page) => [page.left, page.right])]

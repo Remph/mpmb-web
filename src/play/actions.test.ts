@@ -206,6 +206,36 @@ describe('rule text for a limited feature', () => {
     expect(featureRule(index, { name: 'Holy Glow', from: ['Paladin: Lay on Hands'] })?.title).toBe('Lay on Hands');
     expect(featureRule(index, { name: 'Holy Glow', from: [] })).toBeNull();
   });
+
+  // MPMB names a magic item after its picked form ("Test Ring (Blue)"), its limited feature after the item.
+  describe('of a magic item that comes in forms', () => {
+    const DESCRIPTION = 'A ring with a blue stone. I can expend 1 charge to cast *Test Spark*.';
+    const ringed = ruleIndex(
+      withValues(paladin, {
+        'Extra.Magic Item 1': 'Test Ring (Blue)',
+        'Extra.Magic Item Description 1': DESCRIPTION,
+        'Extra.Magic Item 2': 'Test Ring (Red)',
+        'Extra.Magic Item Description 2': 'A ring with a red stone.',
+      }),
+    );
+
+    it("finds the picked form's text by the item's own name", () => {
+      expect(featureRule(ringed, { name: 'Test Ring (regains 1d3)', from: ['Test Ring'] })).toEqual({
+        title: 'Test Ring (Blue)',
+        source: '',
+        lines: [DESCRIPTION],
+      });
+    });
+
+    it('finds the right form when MPMB names it in square brackets', () => {
+      expect(featureRule(ringed, { name: 'Red Glow', from: ['Test Ring [Red]'] })?.title).toBe('Test Ring (Red)');
+    });
+
+    it('finds it for an action the form brings: MPMB\'s source names the form and adds "(magic item)"', () => {
+      const spark = actionItem('Test Spark (ring)', ['Test Ring [Red] (magic item)']);
+      expect(ruleFor(ringed, spark)?.title).toBe('Test Ring (Red)');
+    });
+  });
 });
 
 describe('rule text for a named part of a feature', () => {
