@@ -286,9 +286,21 @@ describe('restore points', () => {
       request.result.createObjectStore('previous');
     };
     const old = await new Promise<IDBDatabase>((resolve) => (request.onsuccess = () => resolve(request.result)));
+    // What version 2 already holds, written the way it wrote it: the upgrade must leave all of it as it was.
+    const saved = anna('2026-11-01T00:00:00Z');
+    const before: PreviousVersion = { ...anna('2026-10-20T00:00:00Z', '7'), summary: '', changes: [] };
+    const tx = old.transaction(['meta', 'data', 'previous'], 'readwrite');
+    tx.objectStore('meta').put(saved.meta);
+    tx.objectStore('data').put(saved.data, 'anna');
+    tx.objectStore('previous').put(before, 'anna');
+    await new Promise((resolve) => (tx.oncomplete = resolve));
     old.close();
+
     const store = await CharacterStore.open(browser);
-    expect(await store.addPoint(anna('2026-11-01T00:00:00Z'), 'opened')).toBe(true);
+    expect(await store.get('anna')).toEqual(saved);
+    expect(await store.previous('anna')).toEqual(before);
+    expect(await store.points('anna')).toEqual([]);
+    expect(await store.addPoint(saved, 'opened')).toBe(true);
     expect(await store.points('anna')).toHaveLength(1);
   });
 });

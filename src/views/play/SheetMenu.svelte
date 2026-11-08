@@ -77,7 +77,11 @@
   /** The open character's restore points, newest first; null while they are read. */
   let points = $state<RestorePoint[] | null>(null);
   $effect(() => {
-    void session.points().then((found) => (points = found));
+    // A read that fails (the database closed for a newer tab) shows "no points" instead of a tile that stays off.
+    void session.points().then(
+      (found) => (points = found),
+      () => (points = []),
+    );
   });
   const pointsLine = $derived(
     points?.[0]
