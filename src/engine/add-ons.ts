@@ -6,7 +6,8 @@
 // A file that fails to run is dropped from the sheet by MPMB itself, with an alert, so after opening
 // the global holds the files that work.
 import type { Engine } from './engine.ts';
-import type { DialogReply, DialogView } from './host.ts';
+import { ALERT_ANSWER } from './host.ts';
+import type { AlertReply, AlertRequest, DialogReply, DialogView } from './host.ts';
 
 export interface AddOns {
   /** Imported files by the name MPMB gave them (the import date and the script's iFileName). */
@@ -97,3 +98,27 @@ export function answerFilesDialog(changes: ScriptChanges): (view: DialogView) =>
     return { type: 'close', result: 'ok', state: view.state };
   };
 }
+
+/** MPMB's Source Selection, which it opens after the files dialog. */
+const SOURCES_DIALOG = 'SOURCE SELECTION DIALOG';
+
+/**
+ * A file the app writes itself (own spells): MPMB's files dialog answered as above, and the Source
+ * Selection after it closed with OK as it is, so the player isn't asked about a file they never picked.
+ * Any other dialog still goes to the player.
+ */
+export function answerQuietFiles(changes: ScriptChanges): (view: DialogView) => DialogReply | null {
+  const files = answerFilesDialog(changes);
+  return (view) =>
+    files(view) ??
+    (view.description.name === SOURCES_DIALOG ? { type: 'close', result: 'ok', state: view.state } : null);
+}
+
+/**
+ * MPMB's note after the files dialog ("All of the script file(s) have been successfully changed …"),
+ * answered OK for a file the app writes itself. Its warnings and errors still go to the player.
+ */
+export const answerScriptsChanged = (request: AlertRequest): AlertReply | null =>
+  request.message.startsWith('All of the script file(s) have been successfully changed')
+    ? { answer: ALERT_ANSWER.ok }
+    : null;

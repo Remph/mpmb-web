@@ -192,8 +192,8 @@ export class EngineClient {
     return (await this.send({ type: 'scriptFiles' })).result as ScriptFiles;
   }
 
-  setScripts(changes: ScriptChanges): Promise<Done> {
-    return this.send({ type: 'setScripts', changes });
+  setScripts(changes: ScriptChanges, quiet = false): Promise<Done> {
+    return this.send({ type: 'setScripts', changes, quiet });
   }
 
   pasteScript(): Promise<Done> {

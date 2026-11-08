@@ -29,6 +29,7 @@
   import SkillsStep from './SkillsStep.svelte';
   import SpeciesStep from './SpeciesStep.svelte';
   import SpellsStep from './SpellsStep.svelte';
+  import { ownSpellsChanges, ownSpellsFile, parseOwnSpells } from '../../build/own-spells.ts';
   import LevelUp from './LevelUp.svelte';
   import ListsLine from './ListsLine.svelte';
   import { BUILD_STEPS } from './steps.ts';
@@ -215,6 +216,9 @@
       <SpellsStep
         load={() => session.spellsInfo()}
         apply={(picks, sheet) => session.setSpells(picks, sheet)}
+        loadOwn={async () => parseOwnSpells(ownSpellsFile((await session.scriptFiles())?.files ?? [])?.text ?? '')}
+        writeOwn={async (spells) =>
+          session.setScripts(ownSpellsChanges(ownSpellsFile((await session.scriptFiles())?.files ?? []), spells), true)}
         {fields}
         characterId={open.meta.id}
         updated={open.meta.updated}

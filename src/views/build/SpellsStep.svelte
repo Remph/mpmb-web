@@ -9,6 +9,8 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { MediaQuery } from 'svelte/reactivity';
+  import { isOwnSpellKey, ownInfo, ownSpellKey } from '../../build/own-spells.ts';
+  import type { OwnSpell } from '../../build/own-spells.ts';
   import { unsentFor, unsentSpells } from '../../build/spell-drafts.svelte.ts';
   import {
     SHEET_OPTIONS,
@@ -17,6 +19,7 @@
     changeCount,
     draftOf,
     fillState,
+    ownOf,
     hasAddList,
     moved,
     pickable,
@@ -39,6 +42,7 @@
   import { readSpells } from '../../play/spells.ts';
   import Modal from '../../popups/Modal.svelte';
   import type { FieldViews } from '../../worker/views.ts';
+  import OwnSpellWindow from './OwnSpellWindow.svelte';
   import SpellAddList from './SpellAddList.svelte';
 
   interface Props {
@@ -46,6 +50,10 @@
     load: () => Promise<SpellsInfo | null>;
     /** Hands the picks to MPMB's dialogs and makes the spell sheet again. */
     apply: (picks: SpellPicks[], sheet: SpellSheetPicks | null) => Promise<void>;
+    /** The character's own spells (own-spells.ts), from its add-on script. */
+    loadOwn: () => Promise<OwnSpell[]>;
+    /** Writes the own spells script anew with these spells. */
+    writeOwn: (spells: OwnSpell[]) => Promise<void>;
     fields: FieldViews;
     /** The character and when it was last saved: unsent picks stay while the sheet is the same. */
     characterId: string;
@@ -54,7 +62,7 @@
     t: Texts;
   }
 
-  let { load, apply, fields, characterId, updated, disabled, t }: Props = $props();
+  let { load, apply, loadOwn, writeOwn, fields, characterId, updated, disabled, t }: Props = $props();
 
   let info = $state<SpellsInfo | null>(null);
   let drafts = $state<Record<string, SpellDraft>>({});
@@ -68,6 +76,9 @@
   let bonusPicking = $state<number | null>(null);
   /** A spellbook with "Prepared spells only" has two lists to add from; the player switches. */
   let addMode = $state<'pick' | 'prepare'>('pick');
+  /** The character's own spells, and the one the form has open (spell null: a new one). */
+  let ownSpells = $state<OwnSpell[]>([]);
+  let editing = $state<{ spell: OwnSpell | null } | null>(null);
 
   /** The "Spell sheet" button's key among the sources' keys (MPMB's keys never start with "#"). */
   const SHEET = '#sheet';
@@ -75,12 +86,21 @@
   /** Wide enough for the add list next to the chosen spells (the laptops, the iPad across). */
   const wide = new MediaQuery('min-width: 1100px');
 
-  async function reload() {
-    const fresh = await load();
+  /**
+   * `keep`: the picks to carry over a save the step made itself (an own spell written), which would
+   * otherwise drop them like any other save.
+   */
+  async function reload(keep: { drafts: Record<string, SpellDraft>; sheet: SheetDraft | null } | null = null) {
+    const [fresh, own] = await Promise.all([load(), loadOwn()]);
     if (!fresh) return;
-    info = fresh;
+    ownSpells = own;
+    // A spell just made isn't in what MPMB's dialogs offer or hold yet; the step still shows its line.
+    info = {
+      ...fresh,
+      spells: { ...Object.fromEntries(own.map((o) => [ownSpellKey(o.name), ownInfo(o)])), ...fresh.spells },
+    };
     // Picks made before the player left the step, if nothing was saved since.
-    const kept = untrack(() => unsentFor(characterId, updated));
+    const kept = keep ?? untrack(() => unsentFor(characterId, updated));
     drafts = Object.fromEntries(fresh.sources.map((s) => [s.key, kept?.drafts[s.key] ?? draftOf(s)]));
     sheetDraft = kept?.sheet ?? sheetDraftOf(fresh);
   }
@@ -157,8 +177,9 @@
     else if (s.spells && s.type === 'book') parts.push(fill(t.spellsPartBook, { n: d.spells.length }));
     else if (s.spells) parts.push(fill(t.spellsPartSpells, { n: d.spells.length, max: s.spells.count }));
     if (preparing(s, d)) parts.push(fill(t.spellsPartPrepared, { n: d.prepared.length }));
-    const bonus = d.bonus.filter(Boolean).length;
+    const bonus = d.bonus.filter((key) => key && !isOwnSpellKey(key)).length;
     if (bonus) parts.push(counted(t.spellsPartBonusOne, t.spellsPartBonus, bonus));
+    if (d.own.length) parts.push(counted(t.spellsPartOwnOne, t.spellsPartOwn, d.own.length));
     return parts.join(' · ');
   }
 
@@ -181,6 +202,74 @@
     if (!source || !draft || disabled || busy) return;
     drafts[source.key] = { ...draft, bonus: draft.bonus.map((k, i) => (i === index ? key : k)) };
   }
+
+  /** The sources that have the spell on the sheet now, with their own spells there. */
+  const holding = (key: string): SpellPicks[] =>
+    (info?.sources ?? []).filter((s) => ownOf(s).includes(key)).map((s) => ({ key: s.key, own: ownOf(s) }));
+
+  /** The step's picks as they are, to carry over the save an own spell makes. */
+  const kept = (next: Record<string, SpellDraft>) => ({ drafts: next, sheet: $state.snapshot(sheetDraft) });
+
+  /** Swaps a key in every source's own spells (a renamed spell); null takes it out. */
+  const swapped = (from: string, to: string | null): Record<string, SpellDraft> =>
+    Object.fromEntries(
+      Object.entries($state.snapshot(drafts)).map(([k, d]) => [
+        k,
+        { ...d, own: d.own.flatMap((key) => (key !== from ? [key] : to ? [to] : [])) },
+      ]),
+    );
+
+  /**
+   * The form's Save. A new spell joins this source's picks, like a spell added from the list. A changed one is
+   * written and, where the sheet has it, put on the sheet again at once: there is no pick to send for it.
+   */
+  async function saveOwn(spell: OwnSpell) {
+    if (!source || !editing || busy) return;
+    const old = editing.spell;
+    const key = ownSpellKey(spell.name);
+    const list = old ? ownSpells.map((s) => (s.name === old.name ? spell : s)) : [...ownSpells, spell];
+    busy = true;
+    try {
+      const oldKey = old ? ownSpellKey(old.name) : key;
+      const next = swapped(oldKey, key);
+      if (!old) {
+        const d = next[source.key] ?? draftOf(source);
+        next[source.key] = { ...d, own: d.own.includes(key) ? d.own : [...d.own, key] };
+      }
+      const onSheet = holding(oldKey).map((p) => ({ ...p, own: (p.own ?? []).map((k) => (k === oldKey ? key : k)) }));
+      await writeOwn($state.snapshot(list));
+      if (onSheet.length) await apply(onSheet, null);
+      await reload(kept(next));
+      editing = null;
+    } finally {
+      busy = false;
+    }
+  }
+
+  /** The form's Delete: off the sheet first (MPMB still knows it then), then out of the script. */
+  async function deleteOwn() {
+    if (!editing?.spell || busy) return;
+    const gone = editing.spell;
+    const key = ownSpellKey(gone.name);
+    busy = true;
+    try {
+      const onSheet = holding(key).map((p) => ({ ...p, own: (p.own ?? []).filter((k) => k !== key) }));
+      if (onSheet.length) await apply(onSheet, null);
+      await writeOwn($state.snapshot(ownSpells.filter((s) => s.name !== gone.name)));
+      await reload(kept(swapped(key, null)));
+      editing = null;
+    } finally {
+      busy = false;
+    }
+  }
+
+  /** Adds an own spell to this source's picks, or takes it out. */
+  function toggleOwn(key: string) {
+    if (!source || !draft || disabled || busy) return;
+    drafts[source.key] = { ...draft, own: toggled(draft.own, key) };
+  }
+
+  const ownSpellOf = (key: string): OwnSpell | null => ownSpells.find((s) => ownSpellKey(s.name) === key) ?? null;
 
   /** "On the spell sheet": MPMB's own choices. */
   const showOptions = $derived(source ? source.showOptions : []);
@@ -285,6 +374,72 @@
       >
     {/if}
   </li>
+{/snippet}
+
+{#snippet ownPart(s: SpellSource, d: SpellDraft)}
+  {@const others = ownSpells.filter((o) => !d.own.includes(ownSpellKey(o.name)))}
+  <h3>{t.ownSpells}</h3>
+  <p class="muted">{fill(t.ownSpellsLine, { name: s.name })}</p>
+  {#if d.own.length}
+    <ul>
+      {#each byLevel(d.own, info?.spells ?? {}).flatMap((g) => g.keys) as key (key)}
+        {@const spell = info?.spells[key]}
+        {@const own = ownSpellOf(key)}
+        {@const name = spell?.name ?? own?.name ?? key}
+        <li>
+          {#if spell}
+            <button
+              type="button"
+              class="name"
+              aria-label={fill(t.spellsInfoLabel, { name })}
+              onclick={() => (reading = spell)}
+            >
+              <b>{name}</b>
+              <span class="tag own">{t.ownSpellTag}</span>
+              <small>{[spell.level ? levelName(spell.level) : t.ownSpellCantrip, line(spell)].filter(Boolean).join(' · ')}</small>
+            </button>
+          {:else}
+            <span class="name"><b>{name}</b></span>
+          {/if}
+          {#if own}
+            <button
+              type="button"
+              class="quiet icon"
+              aria-label={fill(t.ownSpellEditLabel, { name })}
+              title={fill(t.ownSpellEditLabel, { name })}
+              disabled={disabled || busy}
+              onclick={() => (editing = { spell: own })}>✎</button
+            >
+          {/if}
+          <button
+            type="button"
+            class="quiet icon"
+            aria-label={fill(t.spellsRemoveLabel, { name })}
+            title={fill(t.spellsRemoveLabel, { name })}
+            disabled={disabled || busy}
+            onclick={() => toggleOwn(key)}>✕</button
+          >
+        </li>
+      {/each}
+    </ul>
+  {/if}
+  {#if others.length}
+    <p class="reuse">
+      <span class="muted">{t.ownSpellsReuse}</span>
+      {#each others as other (other.name)}
+        <button
+          type="button"
+          class="chip-add"
+          aria-label={fill(t.ownSpellReuseLabel, { name: other.name })}
+          disabled={disabled || busy}
+          onclick={() => toggleOwn(ownSpellKey(other.name))}>+ {other.name}</button
+        >
+      {/each}
+    </p>
+  {/if}
+  <button type="button" class="more own-add" disabled={disabled || busy} onclick={() => (editing = { spell: null })}
+    >{t.ownSpellAdd}</button
+  >
 {/snippet}
 
 {#snippet addHead(s: SpellSource, heading = true)}
@@ -451,6 +606,9 @@
             {#if state === 'over'}<p class="muted">{t.spellsOver}</p>{/if}
           {/if}
 
+          <!-- Own spells right after the cantrips (Remph's pick A, 2026-11-08): most are cantrip-like gifts. -->
+          {@render ownPart(source, draft)}
+
           {#if source.type === 'list'}
             <p class="note">{fill(t.spellsWholeList, { name: source.name })}</p>
           {:else if source.spells}
@@ -528,12 +686,14 @@
             </ul>
           {/if}
 
-          {#if source.bonus.some((b, i) => draft.bonus[i] || bonusPickable(source, i))}
+          {#if source.bonus.some((b, i) => (draft.bonus[i] && !isOwnSpellKey(draft.bonus[i] ?? '')) || bonusPickable(source, i))}
             <h3>{pickable(source) || source.type === 'list' ? t.spellsFromFeatures : t.spells}</h3>
             <ul>
               {#each source.bonus as bonus, i (i)}
                 {@const key = draft.bonus[i] ?? ''}
-                {#if key}
+                {#if key && isOwnSpellKey(key)}
+                  <!-- An own spell's extra row: shown under "Own spells" above. -->
+                {:else if key}
                   {@render bonusRow(source, i, key, bonus.name)}
                 {:else if bonusPickable(source, i)}
                   <li>
@@ -682,6 +842,19 @@
       <button type="button" class="primary" onclick={() => (bonusPicking = null)}>{t.spellsAddDone}</button>
     {/snippet}
   </Modal>
+{/if}
+
+{#if editing && source}
+  <OwnSpellWindow
+    initial={editing.spell}
+    sourceName={source.name}
+    others={ownSpells.filter((o) => o.name !== editing?.spell?.name)}
+    {busy}
+    onsave={saveOwn}
+    ondelete={editing.spell ? deleteOwn : null}
+    oncancel={() => (editing = null)}
+    {t}
+  />
 {/if}
 
 {#if reading}
@@ -935,6 +1108,33 @@
     color: var(--ink-muted);
     font-size: 0.75rem;
     font-weight: 700;
+  }
+
+  .tag.own {
+    background: var(--stat-speed-soft);
+    color: var(--stat-speed);
+  }
+
+  .more.own-add {
+    color: var(--accent);
+    font-weight: 700;
+    text-align: center;
+  }
+
+  .reuse {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem;
+    margin: 0.5rem 0 0;
+  }
+
+  .chip-add {
+    min-height: 44px;
+    padding: 0 0.75rem;
+    border-radius: 22px;
+    color: var(--accent);
+    font-weight: 600;
   }
 
   .icon {

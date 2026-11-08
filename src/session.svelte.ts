@@ -866,9 +866,12 @@ export class Session {
     });
   }
 
-  /** Removes and adds script files through MPMB's own files dialog (see the worker's setScripts). */
-  setScripts(changes: ScriptChanges): Promise<void> {
-    return this.work(() => this.client.setScripts(changes));
+  /**
+   * Removes and adds script files through MPMB's own files dialog (see the worker's setScripts). `quiet`
+   * for a file the app writes itself (own spells): MPMB's note and its Source Selection don't come up.
+   */
+  setScripts(changes: ScriptChanges, quiet = false): Promise<void> {
+    return this.work(() => this.client.setScripts(changes, quiet));
   }
 
   /** Opens MPMB's own dialog for pasted code, which the player fills in. */
