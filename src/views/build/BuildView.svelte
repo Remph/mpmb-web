@@ -4,6 +4,7 @@
   and for a new character. Every change goes through MPMB's own fields, as in the play view.
 -->
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { setCount } from '../../build/modifiers.ts';
   import { ARMOUR_FIELD, weaponField, weaponRows } from '../../build/gear.ts';
   import { openSkillPicks, readLangTools, readSkillSources, skillChoices } from '../../build/proficiencies.ts';
@@ -47,6 +48,10 @@
   }
 
   let { session, open, choice, at, toggleLanguage, t }: Props = $props();
+
+  // A restore point before the Build screen changes anything (Remph's pick, 2026-11-08); none when nothing
+  // changed since the last one.
+  onMount(() => void session.takePoint('build'));
 
   let step = $state<BuildStep>('class');
   $effect(() => {

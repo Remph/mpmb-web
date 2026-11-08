@@ -37,6 +37,7 @@ import { TabLock, browserLocks } from './store/tab-lock.ts';
 import type { Locks } from './store/tab-lock.ts';
 import type { UltCharges } from './homebrew/ult.ts';
 import type { CharacterHomebrew, CharacterMeta, PreviousVersion, StoredCharacter } from './store/characters.ts';
+import type { PointReason, RestorePoint } from './store/restore-points.ts';
 import type { Effect } from './play/effects.ts';
 import { EngineClient, EngineError } from './worker/client.ts';
 import type { Done, PopUps, WorkerLike } from './worker/client.ts';
@@ -112,6 +113,9 @@ export function expected(fields: FieldViews, steps: Step[]): FieldViews {
   });
   return next;
 }
+
+/** The name of MPMB's bookmark that empties the sheet. */
+const RESET = 'Reset';
 
 const closed = (): Promise<never> => Promise.reject(new Error('closed'));
 /**
@@ -454,6 +458,10 @@ export class Session {
     }
     // Taken from another tab: read it again, the other tab may have saved while the lock changed hands.
     const stored = steal ? ((await this.store?.get(id)) ?? found) : found;
+    // Opened again right after a rollback: the rollback kept the way back already, and a point of the sheet
+    // just rolled back to would only push out an older one.
+    if (this.rolledBack === id) this.rolledBack = null;
+    else await this.keepPoint(stored, 'opened');
     this.current = { meta: stored.meta, fields: {}, menu: [], status: 'opening', images: { ...stored.data.images } };
     // This opening, not a later one of the same character (read back: Svelte's state wraps the object).
     const shown = this.current;
@@ -475,6 +483,81 @@ export class Session {
       this.failed(err);
     }
     return true;
+  }
+
+  // ---- Restore points (store/restore-points.ts) ----
+
+  /** The character a rollback opens again, which takes no "opened" point. */
+  private rolledBack: string | null = null;
+
+  /**
+   * Keeps a restore point of a saved character. A point that can't be written (the disk is full) mustn't stop
+   * what the player is doing, so a failure only goes to the console.
+   */
+  private async keepPoint(character: StoredCharacter, reason: PointReason): Promise<void> {
+    try {
+      await this.store?.addPoint($state.snapshot(character), reason);
+    } catch (err) {
+      console.warn('No restore point:', err);
+    }
+  }
+
+  /**
+   * A restore point of the open character as saved after the work before it: before the Build screen and
+   * "Start over" change it.
+   */
+  takePoint(reason: PointReason): Promise<void> {
+    const open = this.current;
+    const before = this.running;
+    // In line itself, so that a change made right after (the Build screen's first tap) waits for the point.
+    const take = async (): Promise<void> => {
+      await settled(before);
+      if (!open || this.current !== open || readOnly(open.status) || !this.tabLock.holds(open.meta.id)) return;
+      const stored = await this.store?.get(open.meta.id);
+      if (stored) await this.keepPoint(stored, reason);
+    };
+    this.running = take();
+    return this.running;
+  }
+
+  /** The open character's restore points, the newest first. */
+  async points(): Promise<RestorePoint[]> {
+    const id = this.current?.meta.id;
+    return (id && (await this.store?.points(id))) || [];
+  }
+
+  /**
+   * Rolls the open character back to one of its points, after asking: the sheet as it is now becomes a point
+   * itself, so this can be undone. The character opens again on the sheet rolled back to.
+   */
+  async rollBack(point: RestorePoint, when: string): Promise<void> {
+    const open = this.current;
+    if (!open || readOnly(open.status) || !this.store) return;
+    const answer = await this.popUps.choose({
+      title: fill(this.t.rollbackAsk, { when }),
+      message: this.t.rollbackAskLine,
+      buttons: [
+        { value: 'cancel', label: this.t.cancel },
+        { value: 'rollback', label: this.t.rollbackButton, primary: true },
+      ],
+      cancel: 'cancel',
+    });
+    if (answer !== 'rollback') return;
+    await this.running;
+    if (this.current !== open || readOnly(open.status) || !this.tabLock.holds(open.meta.id)) return;
+    const current = await this.store.get(open.meta.id);
+    if (!current) return;
+    try {
+      await this.store.rollBack(current, $state.snapshot(point));
+    } catch (err) {
+      this.note('error', this.explain(err));
+      return;
+    }
+    await this.refresh();
+    this.client.close();
+    this.rolledBack = open.meta.id;
+    await this.open(open.meta.id);
+    this.note('ok', fill(this.t.rolledBack, { when }));
   }
 
   /** The open character is open in another tab: this tab takes it over, and the other one stops saving it. */
@@ -698,7 +781,9 @@ export class Session {
    * Clicks one of MPMB's bookmarks; what the scripts change is saved right after. The title names a menu of
    * MPMB's that the bookmark opens.
    */
-  runMenu(path: string[], menuTitle?: string): Promise<void> {
+  async runMenu(path: string[], menuTitle?: string): Promise<void> {
+    // MPMB's "Reset" empties the whole sheet ("Start over" in the Sheet menu, or from MPMB's full menu).
+    if (path.some((name) => name.trim() === RESET)) await this.takePoint('reset');
     return this.work(() => this.popUps.titled(menuTitle, () => this.client.bookmark(path)));
   }
 
@@ -1136,6 +1221,11 @@ export class Session {
           .map((c) => c.meta.name || this.t.unnamed);
         this.note('error', fill(this.t.restoreOpenElsewhere, { names: names.join(', ') }));
         return;
+      }
+      // The characters the backup replaces here, kept as they were, so a restore can be rolled back.
+      for (const { meta } of backup.characters) {
+        const here = await this.store?.get(meta.id);
+        if (here) await this.keepPoint(here, 'restore');
       }
       // The file is a backup of them: no reminder until they change again.
       await this.save(...backup.characters.map((c) => ({ ...c, meta: { ...c.meta, lastBackup: backup.created } })));

@@ -19,6 +19,9 @@
   import { look } from '../../look.svelte.ts';
   import { hasOneMode } from '../../look.ts';
   import { homebrew } from '../../homebrew/switches.svelte.ts';
+  import { pointWhen } from '../../store/restore-points.ts';
+  import type { RestorePoint } from '../../store/restore-points.ts';
+  import RollbackWindow from './RollbackWindow.svelte';
 
   interface Props {
     session: Session;
@@ -72,6 +75,25 @@
   let scripts = $state(false);
   /** The homebrew window, shown in this window's place too. */
   let rules = $state(false);
+  /** The rollback window, the same. */
+  let rollback = $state(false);
+  /** The open character's restore points, newest first; null while they are read. */
+  let points = $state<RestorePoint[] | null>(null);
+  $effect(() => {
+    // A read that fails (the database closed for a newer tab) shows "no points" instead of a tile that stays off.
+    void session.points().then(
+      (found) => (points = found),
+      () => (points = []),
+    );
+  });
+  const pointsLine = $derived(
+    points?.[0]
+      ? fill(t.menuRollbackLine, {
+          points: counted(t.rollbackCountOne, t.rollbackCount, points.length),
+          when: pointWhen(points[0].at, new Date(), t.locale, t.pointTodayInline),
+        })
+      : t.menuRollbackNone,
+  );
   /** The Look window, in this window's place as well. */
   let looks = $state(false);
   const lookLine = $derived(
@@ -104,7 +126,9 @@
   }
 </script>
 
-{#if scripts}
+{#if rollback && points}
+  <RollbackWindow {session} {points} {onclose} {t} />
+{:else if scripts}
   <AddOnsWindow {session} {open} {onclose} {t} />
 {:else if rules}
   <HomebrewWindow {onclose} {t} />
@@ -188,6 +212,9 @@
     <div class="tiles">
       <button type="button" class="tile" onclick={() => session.backUp([open.meta.id])}>
         <b>{t.backUp}</b><small>{t.menuBackUpLine}</small>
+      </button>
+      <button type="button" class="tile" disabled={busy || points === null} onclick={() => (rollback = true)}>
+        <b>{t.menuRollback}</b><small>{pointsLine}</small>
       </button>
       <button type="button" class="tile" onclick={() => (rules = true)}>
         <b>{t.homebrewTitle}</b><small>{rulesOn ? fill(t.homebrewOnCount, { count: rulesOn }) : t.homebrewLine}</small>

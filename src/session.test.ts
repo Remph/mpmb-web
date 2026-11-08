@@ -549,3 +549,98 @@ describe('backups and the reminder (finding 1)', () => {
     expect(session.characters[0]?.lastBackup).toBe('2026-11-01T10:00:00.000Z');
   });
 });
+
+describe('restore points (2026-11-08)', () => {
+  // Points are keyed by the time they were taken, and a change is told apart by its date: a minute between
+  // the steps, as between a player's, so a fast test machine doesn't make two steps the same millisecond.
+  let clock = Date.parse('2026-11-08T19:00:00Z');
+  const later = (): void => {
+    clock += 60_000;
+    vi.setSystemTime(clock);
+  };
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    later();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** The Notes field of the sheet a command opened in the engine. */
+  const notesOpened = (sent: Command[]): unknown => {
+    const last = sent.filter((c) => c.type === 'open').at(-1);
+    return last?.type === 'open' ? last.character?.fields['Notes']?.value : undefined;
+  };
+
+  test('opening keeps one; opening again without a change keeps no second one', async () => {
+    const session = await startSession();
+    const id = await openNew(session);
+    expect((await session.points()).map((p) => p.reason)).toEqual(['opened']);
+    await session.close();
+    await session.open(id);
+    expect(await session.points()).toHaveLength(1);
+  });
+
+  test('before the Build screen, one of the sheet as saved after the changes before it', async () => {
+    const session = await startSession();
+    await openNew(session);
+    later();
+    void session.change([{ edit: 'Notes', text: 'before building' }]);
+    await session.takePoint('build');
+    const [newest] = await session.points();
+    expect(newest?.reason).toBe('build');
+    expect(newest?.data.fields['Notes']).toEqual({ value: 'before building' });
+  });
+
+  test('rolling back asks, opens the sheet of the point, and keeps the sheet before it as a point', async () => {
+    const sent: Command[] = [];
+    const session = await startSession({ sent });
+    const id = await openNew(session);
+    later();
+    await session.change([{ edit: 'Notes', text: 'later' }]);
+    later();
+    const [opened] = await session.points();
+    if (!opened) throw new Error('no point on opening');
+    const rolling = session.rollBack(opened, 'Today, 19:42');
+    const asked = await answer(session, 'rollback');
+    await rolling;
+    expect(asked.choice.title).toBe(t.rollbackAsk.replace('{when}', 'Today, 19:42'));
+    expect(session.current).toMatchObject({ meta: { id }, status: 'saved' });
+    expect(notesOpened(sent)).toBeUndefined();
+    // The way back, and no "opened" point of the sheet just rolled back to.
+    const points = await session.points();
+    expect(points.map((p) => [p.reason, p.data.fields['Notes']])).toEqual([['rollback', { value: 'later' }]]);
+    expect(session.notes).toMatchObject([{ kind: 'ok', text: t.rolledBack.replace('{when}', 'Today, 19:42') }]);
+  });
+
+  test('"Cancel" rolls nothing back', async () => {
+    const session = await startSession();
+    await openNew(session);
+    await session.change([{ edit: 'Notes', text: 'later' }]);
+    const [opened] = await session.points();
+    if (!opened) throw new Error('no point on opening');
+    const rolling = session.rollBack(opened, 'Today, 19:42');
+    await answer(session, 'cancel');
+    await rolling;
+    expect((await session.points()).map((p) => p.reason)).toEqual(['opened']);
+  });
+
+  test('restoring a backup over a character keeps the character as it was first', async () => {
+    const session = await startSession();
+    const id = await openNew(session);
+    later();
+    await session.change([{ edit: 'Notes', text: 'mine' }]);
+    await session.close();
+    later();
+    const data = sheetOf('Anna');
+    const older = { meta: describeCharacter(data, NO_ADD_ONS, { id, created: '2026-10-01T00:00:00Z' }), data };
+    const restoring = session.restore(new File([JSON.stringify(makeBackup([older], SHEET_ID))], 'backup.json'));
+    await answer(session, 'restore');
+    await restoring;
+    later();
+    await session.open(id);
+    const points = await session.points();
+    expect(points.map((p) => p.reason)).toEqual(['opened', 'restore', 'opened']);
+    expect(points[1]?.data.fields['Notes']).toEqual({ value: 'mine' });
+  });
+});
