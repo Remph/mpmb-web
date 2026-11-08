@@ -94,8 +94,20 @@ const DATA_MARK = '// mpmb-web own spells: ';
 /**
  * MPMB's key for the spell. The "own " in front keeps it apart from MPMB's own spell of the same name
  * (a player's own "Fireball" mustn't replace the real one for every other source).
+ *
+ * Only a-z, 0-9 and single spaces: MPMB looks a spell row's key up again through ParseSpell, which drops
+ * accents, a " (x)" and punctuation at the end, and it splits the row's memory at "##". A key that changes
+ * on the way (an "é", a "(B)") silently leaves the spell off the sheet. Accents go, other letters
+ * ("ß", Cyrillic) are written as their code, so "Feuerstoß" and "Feuerstoss" stay two spells.
  */
-export const ownSpellKey = (name: string): string => OWN_PREFIX + name.trim().toLowerCase();
+export function ownSpellKey(name: string): string {
+  const code = (c: string): string => ` u${c.codePointAt(0)?.toString(16)} `;
+  const plain = name.trim().toLowerCase().normalize('NFKD').replace(/\p{M}/gu, '');
+  const words = (text: string): string => text.replace(/[^a-z0-9]+/g, ' ').trim();
+  const key = words(plain.replace(/[\p{L}\p{N}]/gu, (c) => (/[a-z0-9]/.test(c) ? c : code(c))));
+  // A name of only signs ("!!!") still needs a key of its own.
+  return OWN_PREFIX + (key || words(plain.replace(/./gu, code)));
+}
 
 /** Whether a key is one of the app's own spells. */
 export const isOwnSpellKey = (key: string): boolean => key.startsWith(OWN_PREFIX);
@@ -202,9 +214,10 @@ export function parseOwnSpells(script: string): OwnSpell[] {
 /** What's wrong with the form, by field; empty when it can be saved. */
 export function problems(spell: OwnSpell, others: OwnSpell[]): Partial<Record<'name' | 'damage' | 'line', string>> {
   const result: Partial<Record<'name' | 'damage' | 'line', string>> = {};
-  const name = spell.name.trim().toLowerCase();
-  if (!name) result.name = 'empty';
-  else if (others.some((o) => o.name.trim().toLowerCase() === name)) result.name = 'taken';
+  // Two names with the same key ("Spark!" and "Spark") would be one spell for MPMB.
+  const key = ownSpellKey(spell.name);
+  if (!spell.name.trim()) result.name = 'empty';
+  else if (others.some((o) => ownSpellKey(o.name) === key)) result.name = 'taken';
   if (spell.damage.trim() && !validDice(spell.damage)) result.damage = 'dice';
   if (!spell.line.trim()) result.line = 'empty';
   return result;

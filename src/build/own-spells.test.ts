@@ -151,10 +151,24 @@ describe('keys and checks', () => {
     expect(isOwnSpellKey('fire bolt')).toBe(false);
   });
 
+  test('keys hold only what MPMB’s ParseSpell gives back unchanged', () => {
+    // Accents, "(B)", "##" and a sign at the end would change on MPMB's way and leave the spell off the sheet.
+    expect(ownSpellKey('Éclair (B)')).toBe('own eclair b');
+    expect(ownSpellKey('Spark ## of  Doom!')).toBe('own spark of doom');
+    // Letters without a plain spelling keep a key of their own.
+    expect(ownSpellKey('Feuerstoß')).toBe('own feuersto udf');
+    expect(ownSpellKey('Feuerstoß')).not.toBe(ownSpellKey('Feuersto'));
+    expect(ownSpellKey('!!!')).toBe('own u21 u21 u21');
+    for (const name of ['Éclair (B)', 'Feuerstoß', 'Огонь', '!?', 'a.b'])
+      expect(ownSpellKey(name)).toMatch(/^own [a-z0-9]+( [a-z0-9]+)*$/);
+  });
+
   test('a name, its own; dice that read as dice; a line', () => {
     expect(problems({ ...JAB, line: 'x' }, [])).toEqual({});
     expect(problems({ ...JAB, name: ' ', line: 'x' }, [])).toEqual({ name: 'empty' });
     expect(problems({ ...JAB, line: 'x' }, [{ ...JAB, name: 'thought jab ' }])).toEqual({ name: 'taken' });
+    // The same key is the same spell for MPMB.
+    expect(problems({ ...JAB, line: 'x' }, [{ ...JAB, name: 'Thought Jab!' }])).toEqual({ name: 'taken' });
     expect(problems({ ...JAB, damage: '1d10+3', line: '' }, [])).toEqual({ damage: 'dice', line: 'empty' });
   });
 });

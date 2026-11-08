@@ -29,7 +29,8 @@ const JAB = withLine({
 });
 const WARD: OwnSpell = {
   ...BLANK_SPELL,
-  name: 'Glimmer Ward',
+  // An accent and a "(B)": MPMB's ParseSpell would change a key holding them (ownSpellKey).
+  name: 'Glimmer Ward (B) é',
   level: 1,
   school: 'Abjur',
   time: 'Bns',
