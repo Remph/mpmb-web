@@ -88,6 +88,15 @@ test('on a phone, no Build step and no play tab is wider than the screen or zoom
     await checkPhoneView(page, `Build step ${name}`);
   });
 
+  // MPMB's own dialogs have their own, smaller text (15 px): its Ability Scores dialog is full of text boxes.
+  await rail.getByRole('button', { name: /Ability scores/ }).click();
+  await page.getByRole('button', { name: 'Open MPMB’s ability scores dialog' }).click();
+  const scores = page.getByRole('dialog').last();
+  await expect(scores.getByRole('textbox').first()).toBeVisible();
+  expect.soft(await page.evaluate(SMALL_FIELDS), 'MPMB’s Ability Scores dialog: text under 16 px').toEqual([]);
+  await scores.getByRole('button', { name: 'Cancel' }).click();
+  await expect(scores.getByRole('textbox')).toHaveCount(0);
+
   // A weapon, for the attack's proficiency and ability window below (a text box in a window: where the zoom hurt).
   await rail.getByRole('button', { name: /Armour & weapons/ }).click();
   await page
