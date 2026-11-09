@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUILD, SOURCE_URL, sourceUrl } from './version.ts';
+import { BUILD, SOURCE_URL, sourceFileUrl, sourceUrl } from './version.ts';
 
 describe('version', () => {
   it('links a known commit to its source tree', () => {
@@ -8,6 +8,15 @@ describe('version', () => {
 
   it('falls back to the repo when the commit is unknown', () => {
     expect(sourceUrl('')).toBe(SOURCE_URL);
+  });
+
+  it('links a file of this build, or of main when the commit is unknown', () => {
+    expect(sourceFileUrl('eb9ca3b00a3b', 'src/pdf/write-sheet.ts')).toBe(
+      'https://github.com/Remph/mpmb-web/blob/eb9ca3b00a3b/src/pdf/write-sheet.ts',
+    );
+    expect(sourceFileUrl('', 'src/pdf/write-sheet.ts')).toBe(
+      'https://github.com/Remph/mpmb-web/blob/main/src/pdf/write-sheet.ts',
+    );
   });
 
   it('gets the commit from git at build time', () => {

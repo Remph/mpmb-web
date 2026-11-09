@@ -1209,6 +1209,9 @@ export const ui = {
     fillPdfDone: 'Fertig: „{file}“ liegt in deinen Downloads.',
     fillPdfAcrobat:
       'Öffne es in Adobe Acrobat oder dem kostenlosen Acrobat Reader: MPMBs Skripte und das Aussehen der Felder brauchen Acrobat. Andere PDF-Programme lassen manches weg.',
+    fillPdfScript:
+      'Das PDF bekommt ein kleines Skript, mit dem Acrobat die Werte beim ersten Öffnen einmal zeichnet. Sonst ändert es nichts.',
+    fillPdfScriptLink: 'Skript ansehen',
     fillPdfAgain: 'Noch einmal herunterladen',
     fillPdfOther: 'Anderes PDF wählen …',
     fillPdfFailed: 'Das hat nicht geklappt. {reason}',
@@ -2520,6 +2523,9 @@ export const ui = {
     fillPdfDone: 'Done: “{file}” is in your downloads.',
     fillPdfAcrobat:
       "Open it in Adobe Acrobat or the free Acrobat Reader: MPMB's scripts and the look of the fields need Acrobat. Other PDF viewers leave parts out.",
+    fillPdfScript:
+      'The PDF gets a small script that has Acrobat draw the values once when it first opens. It changes nothing else.',
+    fillPdfScriptLink: 'See the script',
     fillPdfAgain: 'Download again',
     fillPdfOther: 'Choose another PDF …',
     fillPdfFailed: "That didn't work. {reason}",

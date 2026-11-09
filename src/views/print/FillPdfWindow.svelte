@@ -10,6 +10,7 @@
   import { MPMB_DOWNLOAD, MPMB_PATREON } from '../../mpmb-links.ts';
   import Modal from '../../popups/Modal.svelte';
   import type { Session } from '../../session.svelte.ts';
+  import { BUILD, sourceFileUrl } from '../../version.ts';
 
   interface Props {
     session: Session;
@@ -20,6 +21,10 @@
   }
 
   let { session, name, onclose, t }: Props = $props();
+
+  // The filled PDF opens with a script of ours (redrawScript): say so, and show it, for anyone who wants to
+  // be sure what it does. The link points at the source of this very build.
+  const SCRIPT_SOURCE = sourceFileUrl(BUILD.commit, 'src/pdf/write-sheet.ts');
 
   type Phase =
     | { step: 'pick' }
@@ -59,6 +64,9 @@
     {:else if phase.step === 'done'}
       <p class="done">{fill(t.fillPdfDone, { file: phase.file })}</p>
       <p>{t.fillPdfAcrobat}</p>
+      <p class="muted">
+        {t.fillPdfScript} <a href={SCRIPT_SOURCE} target="_blank" rel="noopener">{t.fillPdfScriptLink}</a>
+      </p>
     {:else if phase.step === 'failed'}
       <p class="failed" role="alert">{fill(t.fillPdfFailed, { reason: phase.reason })}</p>
     {:else}
