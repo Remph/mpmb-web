@@ -14,6 +14,7 @@ import {
   PDFRawStream,
   PDFString,
   decodePDFRawStream,
+  rgb,
 } from '@cantoo/pdf-lib';
 import { describe, expect, test } from 'vitest';
 import { REFERENCE_CHARACTERS, referenceSheet } from '../../test/characters.ts';
@@ -21,7 +22,7 @@ import type { SheetSnapshot } from '../engine/types.ts';
 import { dataUrl } from './icons.ts';
 import { encodePng } from './png.ts';
 import { readSheetPdf } from './read-sheet.ts';
-import { WrongSheetError, writeSheetPdf } from './write-sheet.ts';
+import { REDRAW_MARK, WrongSheetError, redrawScript, writeSheetPdf } from './write-sheet.ts';
 
 /**
  * One page with a name, a check box and a species drop-down you can also type into, and template "Spells"
@@ -247,6 +248,140 @@ describe('writing a character into a sheet PDF', () => {
     const target = await readSheetPdf(blank);
     target.info = { ...target.info, SheetVersion: '2' };
     await expect(writeSheetPdf(blank, target)).rejects.toBeInstanceOf(WrongSheetError);
+  });
+});
+
+/** The script the PDF runs when it opens, or undefined. */
+async function openScript(pdf: Uint8Array): Promise<{ code: string; next: unknown } | undefined> {
+  const doc = await PDFDocument.load(pdf);
+  const action = doc.catalog.lookupMaybe(PDFName.of('OpenAction'), PDFDict);
+  if (!action) return undefined;
+  const js = action.lookup(PDFName.of('JS'));
+  const code =
+    js instanceof PDFRawStream
+      ? new TextDecoder().decode(decodePDFRawStream(js).decode())
+      : (js as PDFHexString | PDFString).decodeText();
+  return { code, next: action.get(PDFName.of('Next')) };
+}
+
+/** Runs the opening script on a stand-in for Acrobat's document, with `values` as its fields. */
+function runOpenScript(code: string, values: Record<string, string>, info: Record<string, string> = {}) {
+  const log: string[] = [];
+  const doc = {
+    info,
+    calculate: true,
+    delay: false,
+    getField: (n: string) =>
+      n in values
+        ? {
+            // As in Acrobat: text that looks like a number comes back as one ("+8" as 8).
+            get value() {
+              const v = values[n] ?? '';
+              return v.trim() !== '' && !Number.isNaN(Number(v)) ? Number(v) : v;
+            },
+            get valueAsString() {
+              return values[n] ?? '';
+            },
+            set value(v: string | number) {
+              // What Acrobat does on a set: draws the field. The stand-in notes the state it drew it in.
+              log.push(`${n}=${String(v)} calculate:${String(doc.calculate)} delay:${String(doc.delay)}`);
+            },
+          }
+        : null,
+  };
+  const consoleLog: string[] = [];
+  new Function('console', code).call(doc, { println: (s: string) => consoleLog.push(s) });
+  return { log, doc, consoleLog };
+}
+
+describe('drawing the values in Acrobat', () => {
+  test('a script at opening has Acrobat draw the changed text fields; no NeedAppearances', async () => {
+    const blank = await makeSheet();
+    const given = await readSheetPdf(blank);
+    const target = withSpellPage(given);
+    target.fields.Name = { ...given.fields.Name!, value: 'Ilsa' };
+    target.fields.Inspired = { ...given.fields.Inspired!, value: 'Yes' };
+    const written = await writeSheetPdf(blank, target);
+
+    const doc = await PDFDocument.load(written);
+    // NeedAppearances makes Acrobat lose the fields on MPMB's hidden template pages, and MPMB with them.
+    expect(doc.catalog.lookup(PDFName.of('AcroForm'), PDFDict).has(PDFName.of('NeedAppearances'))).toBe(false);
+    // The old drawing of a changed text field goes: it shows the blank sheet's empty box.
+    const nameWidget = doc.getForm().getTextField('Name').acroField.getWidgets()[0];
+    expect(nameWidget?.dict.has(PDFName.of('AP'))).toBe(false);
+
+    const script = await openScript(written);
+    expect(script?.code.startsWith(REDRAW_MARK)).toBe(true);
+    // The text fields with a new value, not the check box (its on and off drawings are in the PDF already).
+    const { log } = runOpenScript(script?.code ?? '', { Name: 'Ilsa', 'P1.Spells.Spell': 'Fire Bolt', Spell: '' });
+    expect(log).toEqual([
+      'Name=Ilsa calculate:false delay:true',
+      'P1.Spells.Spell=Fire Bolt calculate:false delay:true',
+    ]);
+  });
+
+  test('a number-like text stays as typed ("+8", not 8)', () => {
+    expect(runOpenScript(redrawScript(['To Hit'], 's'), { 'To Hit': '+8' }).log).toEqual([
+      'To Hit=+8 calculate:false delay:true',
+    ]);
+  });
+
+  test('the script runs once: its stamp in the document info stops it, and it puts calculations back on', () => {
+    const code = redrawScript(['Name', 'Gone'], 'stamp-1');
+    const first = runOpenScript(code, { Name: 'Ilsa' });
+    expect(first.log).toHaveLength(1);
+    expect(first.doc).toMatchObject({ calculate: true, delay: false, info: { MPMBWebDrawn: 'stamp-1' } });
+    expect(runOpenScript(code, { Name: 'Ilsa' }, { MPMBWebDrawn: 'stamp-1' }).log).toEqual([]);
+  });
+
+  test('field names outside ASCII are escaped, so the script reads the same in any encoding', () => {
+    const code = redrawScript(['Zauber • 1', 'a\u2028b'], 'x');
+    expect(code).toMatch(/^[\x20-\x7e\n]*$/);
+    expect(runOpenScript(code, { 'Zauber • 1': 'v', 'a\u2028b': 'w' }).log).toHaveLength(2);
+  });
+
+  test('a PDF an older version filled (NeedAppearances, no drawings) gets all its text values drawn', async () => {
+    const old = await PDFDocument.load(await makeSheet());
+    old.getForm().getTextField('Name').setText('Ilsa');
+    // An empty field that shows only through its drawing, like MPMB's white boxes over parts of a page.
+    const cover = old.getForm().createTextField('Whiteout');
+    cover.addToPage(old.getPage(0), { x: 120, y: 10, width: 60, height: 20, backgroundColor: rgb(1, 1, 1) });
+    old.catalog.lookup(PDFName.of('AcroForm'), PDFDict).set(PDFName.of('NeedAppearances'), old.context.obj(true));
+    const base = await old.save();
+    const written = await writeSheetPdf(base, await readSheetPdf(base));
+    const doc = await PDFDocument.load(written);
+    expect(doc.catalog.lookup(PDFName.of('AcroForm'), PDFDict).has(PDFName.of('NeedAppearances'))).toBe(false);
+    const widget = (field: string) => doc.getForm().getTextField(field).acroField.getWidgets()[0];
+    expect(widget('Name')?.dict.has(PDFName.of('AP'))).toBe(false);
+    // Acrobat doesn't draw a field without a drawing, so the empty white box must keep its own.
+    expect(widget('Whiteout')?.dict.has(PDFName.of('AP'))).toBe(true);
+    const script = await openScript(written);
+    expect(runOpenScript(script?.code ?? '', { Name: 'Ilsa' }).log).toEqual(['Name=Ilsa calculate:false delay:true']);
+  });
+
+  test('the next export replaces the script, and another opening action still runs after it', async () => {
+    const blank = await makeSheet();
+    const given = await readSheetPdf(blank);
+    const named = (value: string) => ({
+      ...given,
+      fields: { ...given.fields, Name: { ...given.fields.Name!, value } },
+    });
+    const first = await writeSheetPdf(blank, named('Ilsa'));
+    const second = await writeSheetPdf(first, named('Brom'), await readSheetPdf(first));
+    expect((await openScript(second))?.next).toBeUndefined();
+
+    const other = await PDFDocument.load(blank);
+    other.catalog.set(PDFName.of('OpenAction'), other.context.obj({ S: 'JavaScript', JS: PDFString.of('hello();') }));
+    const withOther = await other.save();
+    const once = await writeSheetPdf(withOther, named('Ilsa'));
+    expect(String((await openScript(once))?.next)).toContain('hello();');
+    const twice = await writeSheetPdf(once, named('Brom'), await readSheetPdf(once));
+    expect(String((await openScript(twice))?.next)).toContain('hello();');
+  });
+
+  test('no script when no text value changed', async () => {
+    const blank = await makeSheet();
+    expect(await openScript(await writeSheetPdf(blank, await readSheetPdf(blank)))).toBeUndefined();
   });
 });
 

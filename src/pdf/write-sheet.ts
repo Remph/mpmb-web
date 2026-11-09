@@ -11,8 +11,8 @@
 //   the template's own fields with one more widget. The writer works out, for each page of the character,
 //   which page of the given PDF it is, or which template it is a new copy of, and rebuilds the page list.
 // - The portrait and symbol: see write-icons.ts.
-// Text fields get no new appearance here: /NeedAppearances asks the viewer to draw them from the values,
-// as Acrobat does with MPMB's Format scripts.
+// - How the values look: see "Drawing the values" below. Text fields get no new appearance here; a script
+//   that runs when Acrobat opens the PDF has Acrobat draw them, with MPMB's Format scripts.
 //
 // The update is appended to the PDF (an incremental update, the way Acrobat saves), so MPMB's own bytes
 // stay as they are.
@@ -24,8 +24,10 @@ import {
   PDFHexString,
   PDFName,
   PDFNumber,
+  PDFRawStream,
   PDFRef,
   PDFString,
+  decodePDFRawStream,
 } from '@cantoo/pdf-lib';
 import type { PDFContext, PDFObject } from '@cantoo/pdf-lib';
 import type { FieldDef, SheetImages, SheetSnapshot, Trigger } from '../engine/types.ts';
@@ -87,6 +89,8 @@ const UTF16_UNIT_BYTES = 2;
 const UTF16_BOM = [0xfe, 0xff] as const;
 const BYTE = 0xff;
 const BITS_PER_BYTE = 8;
+/** The first line of the script that draws the values; finds the script of an earlier export again. */
+export const REDRAW_MARK = '// MPMB Web: draw the fields it filled';
 
 /** The PDF the player brought isn't the sheet the character was made on. */
 export class WrongSheetError extends Error {}
@@ -223,6 +227,15 @@ class SheetWriter {
   private readonly pdf: PDFDocument;
   private readonly given: SheetSnapshot;
   private readonly target: SheetSnapshot;
+  /**
+   * The given PDF was filled by a version of this writer that set /NeedAppearances, so none of its values has
+   * a drawing of its own: all filled fields need drawing, not only the ones this export changes. An empty field
+   * keeps the drawing it has: MPMB's white boxes that cover parts of a page ("Whiteout") are empty text fields
+   * that show only through it.
+   */
+  private readonly undrawn: boolean;
+  /** The text fields whose value Acrobat must draw when it opens the PDF. */
+  private readonly redraw: string[] = [];
 
   constructor(pdf: PDFDocument, given: SheetSnapshot, target: SheetSnapshot) {
     this.pdf = pdf;
@@ -235,6 +248,7 @@ class SheetWriter {
     const acroForm = lookDict(this.ctx, pdf.catalog.get(name('AcroForm')));
     if (!acroForm) throw new WrongSheetError('The PDF has no form.');
     this.acroForm = acroForm;
+    this.undrawn = this.ctx.lookupMaybe(acroForm.get(name('NeedAppearances')), PDFBool)?.asBoolean() === true;
     this.pageRefs = pdf.getPages().map((page) => page.ref);
     this.pageRefs.forEach((ref, i) =>
       lookArray(this.ctx, this.ctx.lookup(ref, PDFDict).get(name('Annots'))).forEach((a) =>
@@ -265,8 +279,7 @@ class SheetWriter {
     this.writePageTree(pages);
     this.writeCalcOrder();
     this.writeInfo();
-    // The viewer draws text fields from their values (and MPMB's Format scripts in Acrobat).
-    this.acroForm.set(name('NeedAppearances'), PDFBool.True);
+    this.writeRedraw();
   }
 
   // ---- Pages ----
@@ -394,7 +407,7 @@ class SheetWriter {
         const page = def.widgets[k]?.page ?? -1;
         if (page >= 0) placed[page]?.set(w.ref.toString(), w.ref);
       });
-      this.writeField(entry, def, givenDef);
+      this.writeField(field, entry, def, givenDef);
     });
 
     // Each page's widgets: the given page's order first, then new ones in the template page's order.
@@ -641,11 +654,14 @@ class SheetWriter {
   }
 
   /** The field's value, flags, texts, list and scripts, and each widget's flags, box and on/off state. */
-  private writeField(entry: Field, def: FieldDef, givenDef: FieldDef | undefined): void {
+  private writeField(field: string, entry: Field, def: FieldDef, givenDef: FieldDef | undefined): void {
     const d = entry.dict;
     const changed = <K extends keyof FieldDef>(key: K): boolean => !givenDef || !sameJson(givenDef[key], def[key]);
     if (changed('flags')) d.set(name('Ff'), PDFNumber.of(def.flags));
     if (changed('value')) this.setValue(d, def);
+    const filled = Array.isArray(def.value) ? def.value.length > 0 : Boolean(def.value);
+    const stale = changed('value') || (this.undrawn && filled);
+    if ((def.type === 'Tx' || def.type === 'Ch') && stale) this.undraw(field, entry, def);
     const strings = { richValue: 'RV', userName: 'TU', submitName: 'TM' } as const;
     (Object.keys(strings) as (keyof typeof strings)[]).forEach((key) => {
       if (!changed(key)) return;
@@ -690,6 +706,16 @@ class SheetWriter {
         wd.set(name('AS'), name(def.value === on ? on : 'Off'));
       }
     });
+  }
+
+  /**
+   * Drops the drawing (/AP) of a text field or drop-down whose value changed: it shows the old value. A text
+   * field with a value goes on the list for the script that has Acrobat draw it; Acrobat draws drop-downs
+   * without help.
+   */
+  private undraw(field: string, entry: Field, def: FieldDef): void {
+    entry.widgets.forEach((ref) => this.ctx.lookup(ref, PDFDict).delete(name('AP')));
+    if (def.type === 'Tx' && typeof def.value === 'string' && def.value !== '') this.redraw.push(field);
   }
 
   private setValue(d: PDFDict, def: FieldDef): void {
@@ -770,4 +796,72 @@ class SheetWriter {
     if (!info) return;
     changed.forEach(([k, v]) => info.set(name(k), PDFHexString.fromText(v)));
   }
+
+  // ---- Drawing the values ----
+  //
+  // Each field shows a drawing of its value (its appearance, /AP), which the program that sets the value
+  // makes. Acrobat makes it with the field's Format script (MPMB's "+2", "64,000"). This writer can't run
+  // those, and /NeedAppearances, which asks the viewer to draw every field when the PDF opens, breaks MPMB in
+  // Acrobat: its scripts then can't find the fields on hidden template pages ("SaveIMG.Patreon", checked by
+  // Remph in Acrobat on 2026-11-09). So a script that runs when the PDF opens sets each filled text field to
+  // its own value, and Acrobat draws it as if typed in. It runs once: the stamp it leaves in the document
+  // info stops it the next time, also after Acrobat saved the PDF.
+
+  private writeRedraw(): void {
+    this.acroForm.delete(name('NeedAppearances'));
+    if (!this.redraw.length) return;
+    const ours = (action: PDFObject | undefined): boolean => {
+      const js = lookDict(this.ctx, action)?.get(name('JS'));
+      const code = js instanceof PDFRef ? this.ctx.lookup(js) : js;
+      const text =
+        code instanceof PDFRawStream
+          ? new TextDecoder().decode(decodePDFRawStream(code).decode())
+          : textOf(this.ctx, code);
+      return text?.startsWith(REDRAW_MARK) ?? false;
+    };
+    const before = this.pdf.catalog.get(name('OpenAction'));
+    const action = this.ctx.obj({
+      S: 'JavaScript',
+      JS: textObject(this.ctx, redrawScript(this.redraw, crypto.randomUUID())),
+    });
+    // Another opening action (a page to show, a script) still runs after ours. Ours from an earlier export goes,
+    // and what ran after it runs after the new one.
+    const next = before && ours(before) ? lookDict(this.ctx, before)?.get(name('Next')) : before;
+    if (next) action.set(name('Next'), lookDict(this.ctx, next) ? next : this.ctx.obj({ S: 'GoTo', D: next }));
+    this.pdf.catalog.set(name('OpenAction'), this.ctx.register(action));
+  }
+}
+
+/**
+ * The script Acrobat runs when it opens the PDF: sets each of `fields` to its own value, so that Acrobat draws
+ * it, then leaves `stamp` in the document info so it doesn't run again. MPMB's calculations stay off meanwhile
+ * (a first try with them on kept Acrobat busy for minutes) and `delay` draws everything at the end.
+ */
+export function redrawScript(fields: string[], stamp: string): string {
+  // Plain ASCII, so the script reads the same in any text encoding; JSON alone may hold U+2028, which ends a
+  // line in older JavaScript.
+  const literal = (v: unknown): string =>
+    JSON.stringify(v).replace(/[^\x20-\x7e]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+  return [
+    REDRAW_MARK,
+    'try {',
+    `  if (this.info.MPMBWebDrawn !== ${literal(stamp)}) {`,
+    `    var names = ${literal(fields)};`,
+    '    this.calculate = false;',
+    '    this.delay = true;',
+    '    for (var i = 0; i < names.length; i++) {',
+    '      var f = this.getField(names[i]);',
+    // valueAsString: Acrobat's value turns text that looks like a number into one ("+8" into 8).
+    '      if (f) f.value = f.valueAsString;',
+    '    }',
+    '    this.delay = false;',
+    '    this.calculate = true;',
+    `    this.info.MPMBWebDrawn = ${literal(stamp)};`,
+    '  }',
+    '} catch (e) {',
+    '  this.delay = false;',
+    '  this.calculate = true;',
+    '  console.println("MPMB Web could not draw the fields: " + e);',
+    '}',
+  ].join('\n');
 }
