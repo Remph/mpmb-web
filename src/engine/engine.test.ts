@@ -67,9 +67,9 @@ function askName() {
 }
 `;
 
-const load = (answers: ScriptedAnswers = {}): Engine =>
+const load = (answers: ScriptedAnswers = {}, data: SheetSnapshot = sheet()): Engine =>
   Engine.load({
-    sheet: sheet(),
+    sheet: data,
     scripts: [{ name: 'Test', code: DOCUMENT_SCRIPT }],
     host: new ScriptedHost(answers),
     realm: vmRealm(),
@@ -220,7 +220,45 @@ describe('timers', () => {
   });
 });
 
+describe('field boxes', () => {
+  test("rect is Acrobat's order, upper y first, and setting it keeps the PDF's order", () => {
+    const engine = load();
+    // The PDF's /Rect of A is [0, 0, 100, 20]: lower left, then upper right.
+    expect(engine.evaluate('this.getField("A").rect')).toEqual([0, 20, 100, 0]);
+    // MPMB moves a field by changing the y values it read.
+    engine.evaluate('var r = this.getField("A").rect; r[1] += 50; r[3] += 50; this.getField("A").rect = r;');
+    expect(engine.snapshot().fields.A?.widgets[0]?.rect).toEqual([0, 50, 100, 70]);
+    expect(engine.evaluate('this.getField("A").rect')).toEqual([0, 70, 100, 50]);
+  });
+});
+
 describe('templates and pages', () => {
+  test("spawning copies the widgets on that template's page only", () => {
+    const sheetData = sheet();
+    // Like MPMB's spell rows: one field on two template pages, at other places.
+    sheetData.fields.Row = field(
+      {},
+      {
+        widgets: [
+          { page: TEMPLATE_PAGE, rect: [0, 0, 100, 20], flags: AF.print, template: 'Extra' },
+          { page: TEMPLATE_PAGE, rect: [0, 100, 100, 120], flags: AF.print, template: 'More' },
+          { page: TEMPLATE_PAGE, rect: [0, 150, 100, 170], flags: AF.print, template: 'More' },
+        ],
+      },
+    );
+    sheetData.templates = { ...sheetData.templates, Extra: ['Note', 'Row'], More: ['Row'] };
+    const engine = load({}, sheetData);
+    engine.evaluate('this.getTemplate("More").spawn(1, true, false)');
+    expect(engine.snapshot().fields['P1.More.Row']?.widgets).toEqual([
+      { page: 1, rect: [0, 100, 100, 120], flags: AF.print },
+      { page: 1, rect: [0, 150, 100, 170], flags: AF.print },
+    ]);
+    engine.evaluate('this.getTemplate("Extra").spawn(2, false, false)');
+    expect(engine.snapshot().fields.Row?.widgets.filter((w) => w.page === 2)).toEqual([
+      { page: 2, rect: [0, 0, 100, 20], flags: AF.print },
+    ]);
+  });
+
   test('spawning with renaming adds a page with copies of the template fields', () => {
     const engine = load();
     engine.evaluate('this.getTemplate("Extra").spawn(1, true, false)');

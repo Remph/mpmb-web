@@ -14,6 +14,7 @@
 import { Field, ParentField, newFieldState, resetValue, spansText, stateOf } from './field.ts';
 import type { FieldOwner, FieldState, Span } from './field.ts';
 import type { RealmTools } from './realm.ts';
+import { templateWidgets } from './spawned-widgets.ts';
 import type { Bookmark, FieldDef, SheetSnapshot, Trigger } from './types.ts';
 import { EVENT_NAMES, FF, TRIGGERS } from './types.ts';
 import { acrobatValue } from './util.ts';
@@ -584,19 +585,17 @@ export class SheetDocument implements FieldOwner {
     names.forEach((original) => {
       const src = this.states.get(original);
       if (!src) return;
-      // The template's own widget: the one that isn't on a real page.
-      const tplWidget = src.def.widgets.filter((w) => w.page === -1)[0] ?? src.def.widgets[0];
-      if (!tplWidget) return;
-      const widget = { ...tplWidget, page };
+      const widgets = templateWidgets(src.def.widgets, template).map(({ template: _, ...w }) => ({ ...w, page }));
+      if (!widgets.length) return;
       if (rename) {
         if (this.states.has(prefix + original)) return;
-        const def: FieldDef = { ...structuredClone(src.def), widgets: [widget] };
+        const def: FieldDef = { ...structuredClone(src.def), widgets };
         // Unverified against Acrobat: a renamed copy starts with the template field's current value.
         const copy = this.addField(prefix + original, def);
         copy.value = structuredClone(src.value);
         if (def.actions.C && !this.calcOrder.includes(copy.name)) this.calcOrder.push(copy.name);
       } else {
-        src.def.widgets = [...src.def.widgets, widget];
+        src.def.widgets = [...src.def.widgets, ...widgets];
       }
     });
     this.calcList = null;

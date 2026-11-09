@@ -61,6 +61,39 @@ async function makeSheet(): Promise<Uint8Array> {
   return doc.save({ useObjectStreams: false });
 }
 
+/**
+ * One page, and field "Row" with a widget on each of two template pages at different places, as MPMB's
+ * spell rows sit on SSfront and SSmore: "First" at y 50 with a red background, "More" at y 150 with a blue one.
+ */
+async function makeTwoTemplateSheet(): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([200, 200]);
+  const form = doc.getForm();
+  form.createTextField('Name').addToPage(page, { x: 10, y: 10, width: 100, height: 20, borderWidth: 0 });
+  const row = form.createTextField('Row');
+  row.addToPage(page, { x: 10, y: 50, width: 100, height: 20, borderWidth: 0, backgroundColor: rgb(1, 0, 0) });
+  row.addToPage(page, { x: 10, y: 150, width: 100, height: 20, borderWidth: 0, backgroundColor: rgb(0, 0, 1) });
+  const annots = page.node.Annots();
+  if (!annots) throw new Error('page 1 has no widgets');
+  const more = annots.get(annots.size() - 1);
+  const first = annots.get(annots.size() - 2);
+  annots.remove(annots.size() - 1);
+  annots.remove(annots.size() - 1);
+  const templatePage = (widget: typeof first) =>
+    doc.context.register(doc.context.obj({ Type: 'Template', MediaBox: [0, 0, 200, 200], Annots: [widget] }));
+  doc.catalog.set(
+    PDFName.of('Names'),
+    doc.context.obj({
+      Templates: { Names: [PDFString.of('First'), templatePage(first), PDFString.of('More'), templatePage(more)] },
+    }),
+  );
+  doc.setTitle('Test sheet');
+  const info = doc.context.lookup(doc.context.trailerInfo.Info, PDFDict);
+  info.set(PDFName.of('SheetType'), PDFString.of('Test'));
+  info.set(PDFName.of('SheetVersion'), PDFString.of('1'));
+  return doc.save({ useObjectStreams: false });
+}
+
 /** `sheet` with page 2 spawned from "Spells" with renaming, as MPMB's DoTemplate does. */
 function withSpellPage(sheet: SheetSnapshot): SheetSnapshot {
   const spell = sheet.fields.Spell;
@@ -70,7 +103,12 @@ function withSpellPage(sheet: SheetSnapshot): SheetSnapshot {
     numPages: 2,
     fields: {
       ...sheet.fields,
-      'P1.Spells.Spell': { ...spell, value: 'Fire Bolt', widgets: spell.widgets.map((w) => ({ ...w, page: 1 })) },
+      // A spawned widget is on a page, no longer on the template's.
+      'P1.Spells.Spell': {
+        ...spell,
+        value: 'Fire Bolt',
+        widgets: spell.widgets.map(({ template: _, ...w }) => ({ ...w, page: 1 })),
+      },
     },
   };
 }
@@ -243,6 +281,34 @@ describe('writing a character into a sheet PDF', () => {
     expect(shape(await readSheetPdf(await writeSheetPdf(oldExport, next)))).toEqual(shape(next));
   }, 30_000);
 
+  test("a page spawned from the second of two templates with the same field gets that template's widget", async () => {
+    const blank = await makeTwoTemplateSheet();
+    const given = await readSheetPdf(blank);
+    // The reader notes which template each widget off the pages sits on.
+    expect(given.fields.Row?.widgets.map((w) => [w.template, w.rect[1]])).toEqual([
+      ['First', 50],
+      ['More', 150],
+    ]);
+    const more = given.fields.Row?.widgets[1];
+    if (!more) throw new Error('no Row widget on More');
+    const { template: _, ...widget } = more;
+    const target: SheetSnapshot = {
+      ...given,
+      numPages: 2,
+      fields: {
+        ...given.fields,
+        'P1.More.Row': { ...given.fields.Row!, value: 'Fire Bolt', widgets: [{ ...widget, page: 1 }] },
+      },
+    };
+    const written = await writeSheetPdf(blank, target);
+    const back = await readSheetPdf(written);
+    expect(back.fields['P1.More.Row']?.widgets).toEqual([{ ...widget, page: 1 }]);
+    // A copy of More's widget (blue), not First's (red).
+    const pdf = await PDFDocument.load(written);
+    const copy = pdf.getForm().getTextField('P1.More.Row').acroField.getWidgets()[0];
+    expect(copy?.getAppearanceCharacteristics()?.getBackgroundColor()).toEqual([0, 0, 1]);
+  });
+
   test('a PDF of another sheet is refused', async () => {
     const blank = await makeSheet();
     const target = await readSheetPdf(blank);
@@ -264,8 +330,16 @@ async function openScript(pdf: Uint8Array): Promise<{ code: string; next: unknow
   return { code, next: action.get(PDFName.of('Next')) };
 }
 
-/** Runs the opening script on a stand-in for Acrobat's document, with `values` as its fields. */
-function runOpenScript(code: string, values: Record<string, string>, info: Record<string, string> = {}) {
+/**
+ * Runs the opening script on a stand-in for Acrobat's document, with `values` as its fields; those in `rich`
+ * are rich text fields with these styled runs.
+ */
+function runOpenScript(
+  code: string,
+  values: Record<string, string>,
+  info: Record<string, string> = {},
+  rich: Record<string, { text: string; fontFamily?: string[] }[]> = {},
+) {
   const log: string[] = [];
   const doc = {
     info,
@@ -285,6 +359,14 @@ function runOpenScript(code: string, values: Record<string, string>, info: Recor
             set value(v: string | number) {
               // What Acrobat does on a set: draws the field. The stand-in notes the state it drew it in.
               log.push(`${n}=${String(v)} calculate:${String(doc.calculate)} delay:${String(doc.delay)}`);
+            },
+            richText: n in rich,
+            get richValue() {
+              return rich[n] ?? [];
+            },
+            set richValue(spans: { text: string; fontFamily?: string[] }[]) {
+              const runs = spans.map((s) => `${s.text}${s.fontFamily ? `(${s.fontFamily.join()})` : ''}`).join('|');
+              log.push(`${n}=${runs} calculate:${String(doc.calculate)} delay:${String(doc.delay)}`);
             },
           }
         : null,
@@ -323,6 +405,35 @@ describe('drawing the values in Acrobat', () => {
   test('a number-like text stays as typed ("+8", not 8)', () => {
     expect(runOpenScript(redrawScript(['To Hit'], 's'), { 'To Hit': '+8' }).log).toEqual([
       'To Hit=+8 calculate:false delay:true',
+    ]);
+  });
+
+  test('a rich text label is drawn with its own styled runs, not as plain text', () => {
+    const runs = [{ text: '1' }, { text: 'st', fontFamily: ['Small Caps'] }, { text: ' Level' }];
+    const { log } = runOpenScript(
+      redrawScript(['Label', 'Plain'], 's'),
+      { Label: '1st Level', Plain: 'x' },
+      {},
+      { Label: runs },
+    );
+    expect(log).toEqual([
+      'Label=1|st(Small Caps)| Level calculate:false delay:true',
+      'Plain=x calculate:false delay:true',
+    ]);
+  });
+
+  test("a rich text field whose runs are an older text than its value gets its value: the app's change stays", () => {
+    // The app sets values as plain text and leaves the sheet's /RV as it was.
+    const { log } = runOpenScript(
+      redrawScript(['Notes', 'Lines'], 's'),
+      { Notes: 'Changed in the app', Lines: '21 -\r40 kg' },
+      {},
+      { Notes: [{ text: 'Test Notes', fontFamily: ['Small Caps'] }], Lines: [{ text: '21 -\n40 kg' }] },
+    );
+    expect(log).toEqual([
+      'Notes=Changed in the app calculate:false delay:true',
+      // Line breaks may differ between the runs and the value.
+      'Lines=21 -\n40 kg calculate:false delay:true',
     ]);
   });
 
