@@ -132,10 +132,15 @@ function styleToSpan(css: string): Span {
   return span;
 }
 
+/** The last code point Unicode has; String.fromCodePoint throws past it. */
+const LAST_CODE_POINT = 0x10ffff;
+
 const decode = (text: string): string =>
   text.replace(ENTITY, (whole, dec: string | undefined, hex: string | undefined, named: string | undefined) => {
-    if (dec) return String.fromCodePoint(Number(dec));
-    if (hex) return String.fromCodePoint(parseInt(hex, RADIX_HEX));
+    const code = dec ? Number(dec) : hex ? parseInt(hex, RADIX_HEX) : undefined;
+    // A reference past Unicode (a PDF from another tool) stays as it is written: throwing here would stop the
+    // snapshot, and with it saving the character.
+    if (code !== undefined) return code <= LAST_CODE_POINT ? String.fromCodePoint(code) : whole;
     return NAMED[named ?? ''] ?? whole;
   });
 

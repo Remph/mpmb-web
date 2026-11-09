@@ -48,6 +48,10 @@ describe("reading Acrobat's /RV", () => {
       '<?xml version="1.0"?><body style="font-size:9.0pt"><p>a &amp; b&#13;&#9670;</p><p dir="ltr">c<br/>d</p></body>';
     expect(richValueText(rv)).toBe('a & b\r◆\rc\rd');
   });
+
+  test('a character reference past Unicode stays as written instead of stopping the snapshot', () => {
+    expect(richValueText('<body><p>a&#99999999;b&#x110000;</p></body>')).toBe('a&#99999999;b&#x110000;');
+  });
 });
 
 describe('writing it', () => {
