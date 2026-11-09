@@ -856,10 +856,18 @@ export function redrawScript(fields: string[], stamp: string): string {
     '    for (var i = 0; i < names.length; i++) {',
     '      var f = this.getField(names[i]);',
     // A rich text field (MPMB's labels in small caps or another font) gets its own styled text back; set
-    // to its plain value, Acrobat would draw it in the field's one style. valueAsString: Acrobat's value
+    // to its plain value, Acrobat would draw it in the field's one style. Only while the runs still spell
+    // the value: the app sets values as plain text and leaves the sheet's /RV as it was, so the runs can be
+    // an older text, and setting them would undo the change. A line break is the same in any form: the
+    // runs of "21 -\n40 kg" spell the value "21 -\r40 kg", not "21 - 40 kg". valueAsString: Acrobat's value
     // turns text that looks like a number into one ("+8" into 8).
-    '      if (f && f.richText && f.richValue && f.richValue.length) f.richValue = f.richValue;',
-    '      else if (f) f.value = f.valueAsString;',
+    '      if (!f) continue;',
+    '      var runs = f.richText ? f.richValue : null;',
+    '      var text = "";',
+    '      for (var j = 0; runs && j < runs.length; j++) text += runs[j].text;',
+    '      var lines = /\\r\\n|\\r|\\n/g;',
+    '      if (runs && runs.length && text.replace(lines, "\\r") === f.valueAsString.replace(lines, "\\r")) f.richValue = runs;',
+    '      else f.value = f.valueAsString;',
     '    }',
     '    this.delay = false;',
     '    this.calculate = true;',

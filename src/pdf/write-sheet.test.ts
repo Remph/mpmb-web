@@ -422,6 +422,21 @@ describe('drawing the values in Acrobat', () => {
     ]);
   });
 
+  test("a rich text field whose runs are an older text than its value gets its value: the app's change stays", () => {
+    // The app sets values as plain text and leaves the sheet's /RV as it was.
+    const { log } = runOpenScript(
+      redrawScript(['Notes', 'Lines'], 's'),
+      { Notes: 'Changed in the app', Lines: '21 -\r40 kg' },
+      {},
+      { Notes: [{ text: 'Test Notes', fontFamily: ['Small Caps'] }], Lines: [{ text: '21 -\n40 kg' }] },
+    );
+    expect(log).toEqual([
+      'Notes=Changed in the app calculate:false delay:true',
+      // Line breaks may differ between the runs and the value.
+      'Lines=21 -\n40 kg calculate:false delay:true',
+    ]);
+  });
+
   test('the script runs once: its stamp in the document info stops it, and it puts calculations back on', () => {
     const code = redrawScript(['Name', 'Gone'], 'stamp-1');
     const first = runOpenScript(code, { Name: 'Ilsa' });
