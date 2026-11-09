@@ -5,7 +5,7 @@
 // - A character is stored as the difference from the blank sheet: only the fields (and the parts of
 //   a field) that differ, plus the fields of pages spawned from templates. That keeps a character
 //   small and lets a character made with one sheet version open on the same version's data.
-import type { Bookmark, FieldDef, SheetImages, SheetSnapshot, Trigger } from './types.ts';
+import type { Bookmark, FieldDef, SheetImages, SheetSnapshot, Trigger, Widget } from './types.ts';
 
 export const PACKED_FORMAT = 'mpmb-web-sheet';
 export const CHARACTER_FORMAT = 'mpmb-web-character';
@@ -181,5 +181,21 @@ function applyPatch(def: FieldDef, patch: FieldPatch): FieldDef {
     if (v === null) delete out[k];
     else out[k] = structuredClone(v);
   });
-  return out as unknown as FieldDef;
+  const result = out as unknown as FieldDef;
+  if (patch.widgets) result.widgets = withTemplates(def.widgets, result.widgets);
+  return result;
+}
+
+/**
+ * `widgets` with the template each widget off the pages sits on, taken from the blank sheet's widgets off
+ * the pages in the same order: a character saved before the sheet data noted templates has none.
+ */
+function withTemplates(blank: readonly Widget[], widgets: Widget[]): Widget[] {
+  const templates = blank.filter((w) => w.page === -1).map((w) => w.template);
+  let k = 0;
+  return widgets.map((w) => {
+    if (w.page !== -1) return w;
+    const template = templates[k++];
+    return w.template !== undefined || template === undefined ? w : { ...w, template };
+  });
 }

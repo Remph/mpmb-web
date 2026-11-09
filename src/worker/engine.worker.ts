@@ -29,6 +29,7 @@ import { readWildShapeOptions, WILD_SHAPE_OPTIONS_SCRIPT } from '../engine/wild-
 import { CHARACTER_FORMAT, FORMAT_VERSION, applyCharacter, diffCharacter, unpackSheet } from '../engine/sheet-data.ts';
 import type { SheetPack } from '../engine/sheet-pack.ts';
 import { blankSheet } from '../engine/sheet.ts';
+import { repairSpawnedWidgets } from '../engine/spawned-widgets.ts';
 import { fieldValues } from '../engine/sheet-changes.ts';
 import { serveDocument, sourceDocument } from '../engine/source-doc.ts';
 import type { SourceReply, SourceRequest } from '../engine/source-doc.ts';
@@ -195,7 +196,8 @@ function sendMenu(): void {
 function open(sheet: SheetSnapshot, sheetHost: Host = host): Opened {
   if (engine) throw new Error('This worker already has a sheet open; open the next one in a new worker.');
   engine = Engine.load({
-    sheet,
+    // Spell sheet pages the app made before 2026-11 have their rows at the first spell page's places.
+    sheet: repairSpawnedWidgets(sheetVersion.blank(), sheet).sheet,
     scripts: withAppLists(sheetVersion.scripts),
     host: sheetHost,
     realm: currentRealm(),

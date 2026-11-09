@@ -482,11 +482,15 @@ class SheetWriter {
       const found = givenWidgets.filter((ref) => this.pageOfAnnot.get(ref.toString()) === source.page)[nth];
       if (found) return { ref: found };
     }
-    // A new copy of the template's widget for this field.
+    // A new copy of the template's widget for this field: the nth of its widgets on the page of the template
+    // the page comes from. A field can have widgets on several templates, at other places (spell rows sit
+    // on SSfront and SSmore), and several on one.
     const original = SPAWNED.exec(field)?.[3] ?? field;
     const template = this.terminals.get(original);
-    const templateWidget =
-      template?.widgets.filter((ref) => this.onTemplate.has(ref.toString()))[0] ?? template?.widgets[0];
+    const from = source?.kind === 'given' ? undefined : source?.template;
+    const onTemplates = template?.widgets.filter((ref) => this.onTemplate.has(ref.toString())) ?? [];
+    const onFrom = onTemplates.filter((ref) => this.onTemplate.get(ref.toString()) === from);
+    const templateWidget = onFrom[nth] ?? onFrom[0] ?? onTemplates[0] ?? template?.widgets[0];
     if (!templateWidget) throw new Error(`${field}: nothing to copy its widget from`);
     const copy = this.copyWidget(templateWidget, pages[page]?.ref);
     this.copiedFrom.set(copy.toString(), templateWidget.toString());
@@ -851,8 +855,19 @@ export function redrawScript(fields: string[], stamp: string): string {
     '    this.delay = true;',
     '    for (var i = 0; i < names.length; i++) {',
     '      var f = this.getField(names[i]);',
-    // valueAsString: Acrobat's value turns text that looks like a number into one ("+8" into 8).
-    '      if (f) f.value = f.valueAsString;',
+    // A rich text field (MPMB's labels in small caps or another font) gets its own styled text back; set
+    // to its plain value, Acrobat would draw it in the field's one style. Only while the runs still spell
+    // the value: the app sets values as plain text and leaves the sheet's /RV as it was, so the runs can be
+    // an older text, and setting them would undo the change. A line break is the same in any form: the
+    // runs of "21 -\n40 kg" spell the value "21 -\r40 kg", not "21 - 40 kg". valueAsString: Acrobat's value
+    // turns text that looks like a number into one ("+8" into 8).
+    '      if (!f) continue;',
+    '      var runs = f.richText ? f.richValue : null;',
+    '      var text = "";',
+    '      for (var j = 0; runs && j < runs.length; j++) text += runs[j].text;',
+    '      var lines = /\\r\\n|\\r|\\n/g;',
+    '      if (runs && runs.length && text.replace(lines, "\\r") === f.valueAsString.replace(lines, "\\r")) f.richValue = runs;',
+    '      else f.value = f.valueAsString;',
     '    }',
     '    this.delay = false;',
     '    this.calculate = true;',

@@ -175,11 +175,19 @@ export class Field {
     const pages = this.widgets().map((w) => w.page);
     return pages.length === 1 ? (pages[0] ?? -1) : this[OWNER].array(pages);
   }
+  /**
+   * Acrobat's order: upper-left x, upper-left y, lower-right x, lower-right y. The PDF's /Rect (the widget's
+   * `rect`) holds the lower-left corner first. MPMB moves spell sheet headers by the difference of two
+   * fields' upper y (rect[1]); read as the lower y, each header met its row at the bottom, not the top.
+   */
   get rect(): number[] {
-    return this[OWNER].array(this.widgets()[0]?.rect ?? []);
+    const [x1 = 0, y1 = 0, x2 = 0, y2 = 0] = this.widgets()[0]?.rect ?? [];
+    return this[OWNER].array([Math.min(x1, x2), Math.max(y1, y2), Math.max(x1, x2), Math.min(y1, y2)]);
   }
   set rect(r: number[]) {
-    const rect = Array.from(r, Number);
+    const [x1 = 0, y1 = 0, x2 = 0, y2 = 0] = Array.from(r, Number);
+    // Any two opposite corners, stored as the PDF has it: lower left, then upper right.
+    const rect = [Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2)];
     this.updateWidgets(() => ({ rect: [...rect] }));
   }
 

@@ -47,6 +47,8 @@ export interface Widget {
   flags: number;
   /** Check boxes and radio buttons: the export value this widget has when it is on. */
   on?: string;
+  /** A widget on a template page (page -1): that template's name. Spawning it copies only its own widgets. */
+  template?: string;
 }
 
 export interface FieldDef {

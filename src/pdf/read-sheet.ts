@@ -104,6 +104,20 @@ export async function readSheetPdf(bytes: Uint8Array | ArrayBuffer): Promise<She
     });
   });
 
+  // Widget annotation -> the template whose hidden page it sits on. A field can have widgets on several
+  // templates (MPMB's spell sheet rows are on both SSfront and SSmore, at other places), and spawning a
+  // template copies the widgets of that template only.
+  const templateOfWidget = new Map<string, string>();
+  const templateNames = array(dict(dict(pdf.catalog.get(name('Names')))?.get(name('Templates')))?.get(name('Names')));
+  templateNames.forEach((entry, i) => {
+    if (i % NAME_TREE_STEP) return;
+    const template = text(entry);
+    if (template === undefined) return;
+    array(dict(templateNames[i + 1])?.get(name('Annots'))).forEach((a) => {
+      if (a instanceof PDFRef && !pageOfWidget.has(a.toString())) templateOfWidget.set(a.toString(), template);
+    });
+  });
+
   const fields: Record<string, FieldDef> = {};
   /** The widgets of the picture buttons (portrait, symbol), to read their icons after the walk. */
   const pictureWidgets = new Map<string, PDFDict[]>();
@@ -120,7 +134,10 @@ export async function readSheetPdf(bytes: Uint8Array | ArrayBuffer): Promise<She
     const w = dict(ref);
     const rect = array(w?.get(name('Rect'))).map((x) => Math.round((num(x) ?? 0) * RECT_DECIMALS) / RECT_DECIMALS);
     const page = ref instanceof PDFRef ? (pageOfWidget.get(ref.toString()) ?? -1) : -1;
-    return { page, rect, flags: num(w?.get(name('F'))) ?? 0 };
+    const widget: Widget = { page, rect, flags: num(w?.get(name('F'))) ?? 0 };
+    const template = page < 0 && ref instanceof PDFRef ? templateOfWidget.get(ref.toString()) : undefined;
+    if (template !== undefined) widget.template = template;
+    return widget;
   };
 
   /** The name of a check box or radio widget's "on" appearance state (anything but Off). */
@@ -213,7 +230,6 @@ export async function readSheetPdf(bytes: Uint8Array | ArrayBuffer): Promise<She
     const own = text(widget.get(name('T')));
     return [fullName(dict(widget.get(name('Parent')))), own].filter((p) => p).join('.');
   };
-  const templateNames = array(dict(dict(pdf.catalog.get(name('Names')))?.get(name('Templates')))?.get(name('Names')));
   templateNames.forEach((entry, i) => {
     if (i % NAME_TREE_STEP) return;
     const page = dict(templateNames[i + 1]);
