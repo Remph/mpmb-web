@@ -229,7 +229,9 @@ class SheetWriter {
   private readonly target: SheetSnapshot;
   /**
    * The given PDF was filled by a version of this writer that set /NeedAppearances, so none of its values has
-   * a drawing of its own: all of them need drawing, not only the ones this export changes.
+   * a drawing of its own: all filled fields need drawing, not only the ones this export changes. An empty field
+   * keeps the drawing it has: MPMB's white boxes that cover parts of a page ("Whiteout") are empty text fields
+   * that show only through it.
    */
   private readonly undrawn: boolean;
   /** The text fields whose value Acrobat must draw when it opens the PDF. */
@@ -657,7 +659,9 @@ class SheetWriter {
     const changed = <K extends keyof FieldDef>(key: K): boolean => !givenDef || !sameJson(givenDef[key], def[key]);
     if (changed('flags')) d.set(name('Ff'), PDFNumber.of(def.flags));
     if (changed('value')) this.setValue(d, def);
-    if ((def.type === 'Tx' || def.type === 'Ch') && (changed('value') || this.undrawn)) this.undraw(field, entry, def);
+    const filled = Array.isArray(def.value) ? def.value.length > 0 : Boolean(def.value);
+    const stale = changed('value') || (this.undrawn && filled);
+    if ((def.type === 'Tx' || def.type === 'Ch') && stale) this.undraw(field, entry, def);
     const strings = { richValue: 'RV', userName: 'TU', submitName: 'TM' } as const;
     (Object.keys(strings) as (keyof typeof strings)[]).forEach((key) => {
       if (!changed(key)) return;

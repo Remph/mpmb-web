@@ -14,6 +14,7 @@ import {
   PDFRawStream,
   PDFString,
   decodePDFRawStream,
+  rgb,
 } from '@cantoo/pdf-lib';
 import { describe, expect, test } from 'vitest';
 import { REFERENCE_CHARACTERS, referenceSheet } from '../../test/characters.ts';
@@ -342,11 +343,18 @@ describe('drawing the values in Acrobat', () => {
   test('a PDF an older version filled (NeedAppearances, no drawings) gets all its text values drawn', async () => {
     const old = await PDFDocument.load(await makeSheet());
     old.getForm().getTextField('Name').setText('Ilsa');
+    // An empty field that shows only through its drawing, like MPMB's white boxes over parts of a page.
+    const cover = old.getForm().createTextField('Whiteout');
+    cover.addToPage(old.getPage(0), { x: 120, y: 10, width: 60, height: 20, backgroundColor: rgb(1, 1, 1) });
     old.catalog.lookup(PDFName.of('AcroForm'), PDFDict).set(PDFName.of('NeedAppearances'), old.context.obj(true));
     const base = await old.save();
     const written = await writeSheetPdf(base, await readSheetPdf(base));
     const doc = await PDFDocument.load(written);
     expect(doc.catalog.lookup(PDFName.of('AcroForm'), PDFDict).has(PDFName.of('NeedAppearances'))).toBe(false);
+    const widget = (field: string) => doc.getForm().getTextField(field).acroField.getWidgets()[0];
+    expect(widget('Name')?.dict.has(PDFName.of('AP'))).toBe(false);
+    // Acrobat doesn't draw a field without a drawing, so the empty white box must keep its own.
+    expect(widget('Whiteout')?.dict.has(PDFName.of('AP'))).toBe(true);
     const script = await openScript(written);
     expect(runOpenScript(script?.code ?? '', { Name: 'Ilsa' }).log).toEqual(['Name=Ilsa calculate:false delay:true']);
   });
