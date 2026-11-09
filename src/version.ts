@@ -17,3 +17,8 @@ export const SOURCE_URL = 'https://github.com/Remph/mpmb-web';
 export function sourceUrl(commit: string): string {
   return commit ? `${SOURCE_URL}/tree/${commit}` : SOURCE_URL;
 }
+
+/** A file of this build's source on GitHub, or of main when the commit is unknown. */
+export function sourceFileUrl(commit: string, path: string): string {
+  return `${SOURCE_URL}/blob/${commit || 'main'}/${path}`;
+}

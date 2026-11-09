@@ -22,7 +22,8 @@ import type { SheetSnapshot } from '../engine/types.ts';
 import { dataUrl } from './icons.ts';
 import { encodePng } from './png.ts';
 import { readSheetPdf } from './read-sheet.ts';
-import { REDRAW_MARK, WrongSheetError, redrawScript, writeSheetPdf } from './write-sheet.ts';
+import { REDRAW_MARK, redrawScript } from './redraw-script.ts';
+import { WrongSheetError, writeSheetPdf } from './write-sheet.ts';
 
 /**
  * One page with a name, a check box and a species drop-down you can also type into, and template "Spells"
