@@ -2,6 +2,7 @@
 // properties; the state behind it lives in the document (FieldState), so that every Field object for
 // a name shows the same value. Acrobat keeps handing out the same object per name, and MPMB relies on
 // that: it stores its own properties on fields (`remVal`, `setValPrepared`) and reads them later.
+import { parseRichValue, sameText } from './rich-text.ts';
 import type { FieldDef, Widget } from './types.ts';
 import { DISPLAY, FF, displayFromFlags, flagsForDisplay } from './types.ts';
 
@@ -70,6 +71,23 @@ const FLAG_PROPERTIES: Record<string, number> = {
 
 /** Text of a rich text value: the spans' text joined. */
 export const spansText = (spans: readonly Span[]): string => spans.map((s) => String(s.text ?? '')).join('');
+
+/**
+ * The runs of a rich text field, as Acrobat's `richValue` hands them out: the ones a script set; else the
+ * styled runs the PDF keeps in /RV, while they still spell the value (Acrobat drops them once the value is set
+ * as plain text); else the value as one run. MPMB reads the runs, changes them and sets them again (the
+ * theme colour of "ARMOR:"), so the /RV's styling must come through, or setting them again would lose it.
+ */
+export function fieldSpans(state: FieldState): readonly Span[] {
+  if (state.spans) return state.spans;
+  const text = Array.isArray(state.value) ? state.value.join(',') : state.value;
+  const rv = state.def.richValue;
+  if (rv) {
+    const runs = parseRichValue(rv);
+    if (runs.length && sameText(spansText(runs), text)) return runs;
+  }
+  return [{ text }];
+}
 
 const OFF = 'Off';
 
@@ -282,8 +300,7 @@ export class Field {
   // ---- Rich text ----
 
   get richValue(): Span[] {
-    const s = this[STATE];
-    return this[OWNER].copy(s.spans ?? [{ text: this.valueAsString }]);
+    return this[OWNER].copy([...fieldSpans(this[STATE])]);
   }
   set richValue(spans: Span[]) {
     const list = Array.from(spans ?? [], (span) => ({ ...span }));
