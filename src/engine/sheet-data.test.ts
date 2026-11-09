@@ -36,6 +36,16 @@ describe('characters as differences from the blank sheet', () => {
     expect(baseFieldOf(blank, `P5.${template}.no such field`)).toBeUndefined();
   });
 
+  test('widgets saved before the sheet data noted templates get them from the blank sheet', () => {
+    const blank = blankSheet();
+    const row = blank.fields['spells.name.0'];
+    if (!row) throw new Error('no spells.name.0');
+    // As a character saved before: the template field's widgets, without `template`, one of them hidden.
+    const widgets = row.widgets.map(({ template: _, ...w }, i) => (i ? { ...w, flags: w.flags | 2 } : w));
+    const sheet = applyCharacter(blank, { ...diffCharacter(blank, blank), fields: { 'spells.name.0': { widgets } } });
+    expect(sheet.fields['spells.name.0']?.widgets.map((w) => w.template)).toEqual(['SSfront', 'SSmore']);
+  });
+
   test('a changed value is stored as a one-key patch', () => {
     const blank = blankSheet();
     const sheet = applyCharacter(blank, diffCharacter(blank, blank));

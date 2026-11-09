@@ -8,6 +8,7 @@ import type { SpellDraft } from '../src/build/spells.ts';
 import { BUILDER_INFO_SCRIPT, answerUnits, readBuilderInfo } from '../src/engine/builder.ts';
 import type { Engine } from '../src/engine/engine.ts';
 import type { DialogElement, DialogReply, DialogView, Host } from '../src/engine/host.ts';
+import type { Widget } from '../src/engine/types.ts';
 import { answerScores } from '../src/engine/scores.ts';
 import { SPELLS_READ_SCRIPT, applySpellPicks, readSpellsInfo } from '../src/engine/spells.ts';
 import { valueOf } from '../src/play/read.ts';
@@ -139,6 +140,39 @@ function spellFields(engine: Engine): Record<string, string> {
   return out;
 }
 
+/**
+ * Where each field of the spell sheet pages sits and whether it shows, by page order ("1.spellshead.Text.header.0"):
+ * the pages Acrobat spawned have the spawned template's places, and MPMB moves headers and dividers to their rows.
+ */
+function spellWidgets(engine: Engine): Record<string, Widget[]> {
+  const sheet = engine.snapshot();
+  const out: Record<string, Widget[]> = {};
+  spellPages(viewsOf(engine.doc)).forEach(({ prefix }, page) => {
+    Object.entries(sheet.fields)
+      .filter(([name]) => name.startsWith(prefix))
+      .forEach(([name, def]) => (out[`${page + 1}.${name.slice(prefix.length)}`] = def.widgets));
+  });
+  return out;
+}
+
+/**
+ * The fields whose widgets differ in number, flags or place, one line each. A place may be off by the last
+ * digit: the reader rounds to hundredths, and MPMB adds up rounded numbers.
+ */
+function misplaced(want: Record<string, Widget[]>, got: Record<string, Widget[]>): string {
+  const ROUNDING = 0.015;
+  const same = (a: Widget[] = [], b: Widget[] = []): boolean =>
+    a.length === b.length &&
+    a.every(
+      (w, i) => w.flags === b[i]?.flags && w.rect.every((n, k) => Math.abs(n - (b[i]?.rect[k] ?? NaN)) <= ROUNDING),
+    );
+  return [...new Set([...Object.keys(want), ...Object.keys(got)])]
+    .filter((k) => !same(want[k], got[k]))
+    .sort()
+    .map((k) => `${k}: ${JSON.stringify(want[k])} | ${JSON.stringify(got[k])}`)
+    .join('\n');
+}
+
 /** Both sides' differences, one line each: "page.field: Acrobat | app". */
 function differences(want: Record<string, string>, got: Record<string, string>): string {
   const SHOWN = 80;
@@ -157,6 +191,10 @@ describe.each(REFERENCE_CHARACTERS)('%s built in the app', (name) => {
   test('has the spell sheet pages Acrobat saved, field by field', () => {
     expect(engine.stats.errors).toEqual([]);
     expect(differences(spellFields(acrobat), spellFields(engine))).toBe('');
+  });
+
+  test('its spell sheet pages have their fields where Acrobat has them, shown or hidden alike', () => {
+    expect(misplaced(spellWidgets(acrobat), spellWidgets(engine))).toBe('');
   });
 
   test('MPMB making the spell sheet again in the app gives what Acrobat made', () => {
