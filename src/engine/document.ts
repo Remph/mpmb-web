@@ -11,7 +11,8 @@
 // - While `calculate` is off (MPMB's calcStop), values are stored without calculations; MPMB runs
 //   `calculateNow()` itself when it switches them back on.
 /* eslint-disable ts-patterns/no-param-reassign -- FieldState is the live, mutable state of a field: the store's job is to change it */
-import { Field, ParentField, newFieldState, resetValue, spansText, stateOf } from './field.ts';
+import { Field, ParentField, fieldSpans, newFieldState, resetValue, spansText, stateOf } from './field.ts';
+import { sameText, savedRichValue } from './rich-text.ts';
 import type { FieldOwner, FieldState, Span } from './field.ts';
 import type { RealmTools } from './realm.ts';
 import { templateWidgets } from './spawned-widgets.ts';
@@ -321,8 +322,8 @@ export class SheetDocument implements FieldOwner {
   private commit(state: FieldState, value: string | string[]): void {
     const changed = JSON.stringify(state.value) !== JSON.stringify(value);
     state.value = value;
-    // Rich text set as plain text loses its spans.
-    if (state.spans && spansText(state.spans) !== value) delete state.spans;
+    // Rich text set as plain text loses its spans. Runs may break lines with \n where the value has \r.
+    if (state.spans && (Array.isArray(value) || !sameText(spansText(state.spans), value))) delete state.spans;
     if (changed) {
       this.changes++;
       this.dirty = true;
@@ -337,7 +338,7 @@ export class SheetDocument implements FieldOwner {
       return;
     }
     const isRich = (state.def.flags & FF.richText) !== 0;
-    const richValue = isRich ? this.tools.copy(state.spans ?? [{ text: this.textOf(state) }]) : undefined;
+    const richValue = isRich ? this.tools.copy([...fieldSpans(state)]) : undefined;
     const ev = this.runEvent(state, 'F', { value: this.textOf(state), willCommit: true, richValue });
     if (!ev) return;
     state.formatted = ev.value === null || ev.value === undefined ? '' : String(ev.value);
@@ -428,7 +429,7 @@ export class SheetDocument implements FieldOwner {
         // A field removed by an earlier calculation in this run is skipped.
         if (this.states.get(state.name) !== state) return;
         const isRich = (state.def.flags & FF.richText) !== 0;
-        const before = isRich ? JSON.stringify(state.spans ?? [{ text: this.textOf(state) }]) : '';
+        const before = isRich ? JSON.stringify(fieldSpans(state)) : '';
         const richValue = isRich ? this.tools.copy(JSON.parse(before) as Span[]) : undefined;
         const ev = this.runEvent(state, 'C', { value: this.readValue(state), source, richValue });
         if (!ev || ev.rc === false) return;
@@ -436,7 +437,7 @@ export class SheetDocument implements FieldOwner {
         // which switch to "3 M" with the units): as in Acrobat, the field then holds the spans' text.
         const after = isRich && Array.isArray(ev.richValue) ? JSON.stringify(ev.richValue) : before;
         const spans = after === before ? null : (JSON.parse(after) as Span[]);
-        let value = spans ? spansText(spans) : this.normalize(state, ev.value);
+        let value = this.normalize(state, spans ? spansText(spans) : ev.value);
         if (!spans && JSON.stringify(value) === JSON.stringify(state.value)) return;
         // Acrobat validates a value a calculation changed before it stores it, and keeps the old value
         // if Validate rejects it. MPMB relies on that: a magic item, feat or species row it renames
@@ -637,6 +638,18 @@ export class SheetDocument implements FieldOwner {
 
   // ---- Snapshot (for saving and for comparing with Acrobat) ----
 
+  /**
+   * A rich text field's /RV as it should be saved: the runs a script set last (MPMB's small caps labels), or
+   * the old /RV made to spell the value. The engine keeps the runs only while it runs; without this, the
+   * saved character and a filled PDF kept the blank sheet's runs ("LBS" under the value "KG").
+   */
+  private snapshotRichValue(state: FieldState, def: FieldDef): void {
+    if (!def.richValue) return;
+    const rv = savedRichValue(def, this.textOf(state), state.spans);
+    if (rv) def.richValue = rv;
+    else delete def.richValue;
+  }
+
   snapshot(): SheetSnapshot {
     const fields: Record<string, FieldDef> = {};
     this.order.forEach((name) => {
@@ -645,6 +658,7 @@ export class SheetDocument implements FieldOwner {
       const empty = resetValue({ ...state, def: { ...state.def, defaultValue: undefined } });
       if (JSON.stringify(state.value) === JSON.stringify(empty) && def.value === undefined) delete def.value;
       else def.value = structuredClone(state.value);
+      this.snapshotRichValue(state, def);
       fields[name] = def;
     });
     return {

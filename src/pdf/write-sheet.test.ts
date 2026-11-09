@@ -18,7 +18,9 @@ import {
 } from '@cantoo/pdf-lib';
 import { describe, expect, test } from 'vitest';
 import { REFERENCE_CHARACTERS, referenceSheet } from '../../test/characters.ts';
+import { buildRichValue, parseRichValue, richValueText } from '../engine/rich-text.ts';
 import type { SheetSnapshot } from '../engine/types.ts';
+import { FF } from '../engine/types.ts';
 import { dataUrl } from './icons.ts';
 import { encodePng } from './png.ts';
 import { readSheetPdf } from './read-sheet.ts';
@@ -424,7 +426,7 @@ describe('drawing the values in Acrobat', () => {
   });
 
   test("a rich text field whose runs are an older text than its value gets its value: the app's change stays", () => {
-    // The app sets values as plain text and leaves the sheet's /RV as it was.
+    // A PDF filled before the writer kept /RV up to date: the blank's runs under a new value.
     const { log } = runOpenScript(
       redrawScript(['Notes', 'Lines'], 's'),
       { Notes: 'Changed in the app', Lines: '21 -\r40 kg' },
@@ -448,6 +450,8 @@ describe('drawing the values in Acrobat', () => {
 
   test('field names outside ASCII are escaped, so the script reads the same in any encoding', () => {
     const code = redrawScript(['Zauber • 1', 'a\u2028b'], 'x');
+    // Printable ASCII and line breaks only: matches "var a = 1;", not "Zauber • 1".
+    // Try it: https://regex101.com/?regex=%5E%5B%5Cx20-%5Cx7e%5Cn%5D*%24&testString=var%20a%20%3D%201%3B
     expect(code).toMatch(/^[\x20-\x7e\n]*$/);
     expect(runOpenScript(code, { 'Zauber • 1': 'v', 'a\u2028b': 'w' }).log).toHaveLength(2);
   });
@@ -494,6 +498,86 @@ describe('drawing the values in Acrobat', () => {
   test('no script when no text value changed', async () => {
     const blank = await makeSheet();
     expect(await openScript(await writeSheetPdf(blank, await readSheetPdf(blank)))).toBeUndefined();
+  });
+});
+
+/** MPMB's weight unit label as the blank sheet has it: "LB" at 7 pt and a small "S", in /RV. */
+const LBS_RV =
+  '<?xml version="1.0"?><body xmlns="http://www.w3.org/1999/xhtml" style="font-size:7.0pt;text-align:center;font-family:\'Footlight MT Light\',serif"><p>LB<span style="font-size:4.9pt">S</span></p></body>';
+
+/** makeSheet() with rich text field "Units" ("LBS", styled runs in /RV) that shows through its drawing. */
+async function makeRichSheet(): Promise<Uint8Array> {
+  const doc = await PDFDocument.load(await makeSheet());
+  const units = doc.getForm().createTextField('Units');
+  units.addToPage(doc.getPage(0), { x: 120, y: 10, width: 60, height: 20, borderWidth: 0 });
+  units.setText('LBS');
+  units.acroField.dict.set(PDFName.of('RV'), PDFHexString.fromText(LBS_RV));
+  units.acroField.dict.set(PDFName.of('Ff'), PDFNumber.of(FF.richText));
+  return doc.save({ useObjectStreams: false });
+}
+
+/** The /RV of field `name` in a PDF. */
+async function richValueOf(pdf: Uint8Array, name: string): Promise<string | undefined> {
+  const dict = (await PDFDocument.load(pdf)).getForm().getTextField(name).acroField.dict;
+  return dict.lookupMaybe(PDFName.of('RV'), PDFString, PDFHexString)?.decodeText();
+}
+
+describe('rich text labels (/RV)', () => {
+  test('runs MPMB set ("KG" in small caps) go into /RV, and the opening script draws them', async () => {
+    const blank = await makeRichSheet();
+    const given = await readSheetPdf(blank);
+    const kg = buildRichValue(
+      [
+        { text: 'K', textSize: 7 },
+        { text: 'G', textSize: 4.9 },
+      ],
+      LBS_RV,
+    );
+    const target = {
+      ...given,
+      fields: { ...given.fields, Units: { ...given.fields.Units!, value: 'KG', richValue: kg } },
+    };
+    const written = await writeSheetPdf(blank, target);
+    expect(await richValueOf(written, 'Units')).toBe(kg);
+    const widget = (await PDFDocument.load(written)).getForm().getTextField('Units').acroField.getWidgets()[0];
+    expect(widget?.dict.has(PDFName.of('AP'))).toBe(false);
+    const script = await openScript(written);
+    const { log } = runOpenScript(script?.code ?? '', { Units: 'KG' }, {}, { Units: parseRichValue(kg) as never });
+    expect(log).toEqual(['Units=K(Footlight MT Light,serif)|G(Footlight MT Light,serif) calculate:false delay:true']);
+  });
+
+  test("a character saved with the blank's runs under a new value: the value in the label's style", async () => {
+    // Saved before the app kept MPMB's runs: "KG", but the /RV still spells "LBS".
+    const blank = await makeRichSheet();
+    const given = await readSheetPdf(blank);
+    const target = { ...given, fields: { ...given.fields, Units: { ...given.fields.Units!, value: 'KG' } } };
+    const rv = await richValueOf(await writeSheetPdf(blank, target), 'Units');
+    expect(richValueText(rv ?? '')).toBe('KG');
+    expect(parseRichValue(rv ?? '')).toMatchObject([{ textSize: 7, fontFamily: ['Footlight MT Light', 'serif'] }]);
+  });
+
+  test('new runs on the same text (another colour) are drawn again too', async () => {
+    const blank = await makeRichSheet();
+    const given = await readSheetPdf(blank);
+    const red = buildRichValue(
+      [
+        { text: 'LB', textColor: ['RGB', 1, 0, 0] },
+        { text: 'S', textSize: 4.9, textColor: ['RGB', 1, 0, 0] },
+      ],
+      LBS_RV,
+    );
+    const target = { ...given, fields: { ...given.fields, Units: { ...given.fields.Units!, richValue: red } } };
+    const written = await writeSheetPdf(blank, target);
+    expect(await richValueOf(written, 'Units')).toBe(red);
+    const script = await openScript(written);
+    expect(runOpenScript(script?.code ?? '', { Units: 'LBS' }).log).toEqual(['Units=LBS calculate:false delay:true']);
+  });
+
+  test('a label nobody changed keeps its /RV and its drawing', async () => {
+    const blank = await makeRichSheet();
+    const written = await writeSheetPdf(blank, await readSheetPdf(blank));
+    expect(await richValueOf(written, 'Units')).toBe(LBS_RV);
+    expect(await openScript(written)).toBeUndefined();
   });
 });
 

@@ -29,10 +29,10 @@ export function redrawScript(fields: string[], stamp: string): string {
     '      var f = this.getField(names[i]);',
     // A rich text field (MPMB's labels in small caps or another font) gets its own styled text back; set
     // to its plain value, Acrobat would draw it in the field's one style. Only while the runs still spell
-    // the value: the app sets values as plain text and leaves the sheet's /RV as it was, so the runs can be
-    // an older text, and setting them would undo the change. A line break is the same in any form: the
-    // runs of "21 -\n40 kg" spell the value "21 -\r40 kg", not "21 - 40 kg". valueAsString: Acrobat's value
-    // turns text that looks like a number into one ("+8" into 8).
+    // the value: the writer makes /RV spell it (rich-text.ts), but a PDF filled by an older version may carry
+    // the blank's runs under a new value, and setting them would undo the change. A line break is the same in
+    // any form: the runs of "21 -\n40 kg" spell the value "21 -\r40 kg", not "21 - 40 kg". valueAsString:
+    // Acrobat's value turns text that looks like a number into one ("+8" into 8).
     '      if (!f) continue;',
     '      var runs = f.richText ? f.richValue : null;',
     '      var text = "";',

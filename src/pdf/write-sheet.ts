@@ -32,6 +32,7 @@ import {
 import type { PDFContext, PDFObject } from '@cantoo/pdf-lib';
 import type { FieldDef, SheetImages, SheetSnapshot, Trigger } from '../engine/types.ts';
 import { FF } from '../engine/types.ts';
+import { savedRichValue } from '../engine/rich-text.ts';
 import { readSheetPdf } from './read-sheet.ts';
 import { REDRAW_MARK, redrawScript } from './redraw-script.ts';
 import { trackChangesFast } from './track-changes.ts';
@@ -203,6 +204,19 @@ function utf16Bytes(text: string): Uint8Array {
 }
 
 const sameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * A text field with its /RV made to spell its value. The app saves the runs MPMB sets (the engine's snapshot),
+ * but a character saved before it did may still carry the blank sheet's runs under a new value ("LBS" under
+ * "KG"); Acrobat would then draw the old runs, or the opening script the value without the label's style.
+ */
+function withCurrentRichValue(def: FieldDef): FieldDef {
+  if (!def.richValue || typeof def.value !== 'string') return def;
+  const richValue = savedRichValue(def, def.value);
+  if (richValue === def.richValue) return def;
+  const { richValue: _stale, ...rest } = def;
+  return richValue ? { ...rest, richValue } : rest;
+}
 
 /** Where a page of the character comes from. */
 type PageSource =
@@ -657,13 +671,15 @@ class SheetWriter {
   }
 
   /** The field's value, flags, texts, list and scripts, and each widget's flags, box and on/off state. */
-  private writeField(field: string, entry: Field, def: FieldDef, givenDef: FieldDef | undefined): void {
+  private writeField(field: string, entry: Field, saved: FieldDef, givenDef: FieldDef | undefined): void {
     const d = entry.dict;
+    const def = withCurrentRichValue(saved);
     const changed = <K extends keyof FieldDef>(key: K): boolean => !givenDef || !sameJson(givenDef[key], def[key]);
     if (changed('flags')) d.set(name('Ff'), PDFNumber.of(def.flags));
     if (changed('value')) this.setValue(d, def);
     const filled = Array.isArray(def.value) ? def.value.length > 0 : Boolean(def.value);
-    const stale = changed('value') || (this.undrawn && filled);
+    // New styled runs on the same text need drawing too (a label in another colour).
+    const stale = changed('value') || changed('richValue') || (this.undrawn && filled);
     if ((def.type === 'Tx' || def.type === 'Ch') && stale) this.undraw(field, entry, def);
     const strings = { richValue: 'RV', userName: 'TU', submitName: 'TM' } as const;
     (Object.keys(strings) as (keyof typeof strings)[]).forEach((key) => {
