@@ -8,6 +8,7 @@
   import type { Texts } from '../../i18n.ts';
   import { fill } from '../../i18n.ts';
   import { MPMB_DOWNLOAD, MPMB_PATREON } from '../../mpmb-links.ts';
+  import { REDRAW_SCRIPT_PATH } from '../../pdf/redraw-script.ts';
   import Modal from '../../popups/Modal.svelte';
   import type { Session } from '../../session.svelte.ts';
   import { BUILD, sourceFileUrl } from '../../version.ts';
@@ -24,7 +25,7 @@
 
   // The filled PDF opens with a script of ours (redrawScript): say so, and show it, for anyone who wants to
   // be sure what it does. The link points at the source of this very build.
-  const SCRIPT_SOURCE = sourceFileUrl(BUILD.commit, 'src/pdf/write-sheet.ts');
+  const SCRIPT_SOURCE = sourceFileUrl(BUILD.commit, REDRAW_SCRIPT_PATH);
 
   type Phase =
     | { step: 'pick' }
