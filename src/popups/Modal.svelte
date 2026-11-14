@@ -156,6 +156,48 @@
     color: var(--ink);
   }
 
+  /*
+   * Phones (M13 step 2, mock-up pass 2): every window comes up from the bottom edge, full width, where the thumb
+   * is, and the buttons share the bottom row. No drag handle: it would promise a swipe that isn't there.
+   */
+  @media (max-width: 699px) {
+    dialog,
+    dialog.wide,
+    dialog.widest {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      max-height: calc(100svh - 2.5rem);
+      margin: auto 0 0;
+      border-width: 1px 0 0;
+      border-radius: 1.125rem 1.125rem 0 0;
+      box-shadow: 0 -0.5rem 2rem rgb(0 0 0 / 0.25);
+    }
+
+    h2 {
+      padding: 0.875rem 0.25rem 0.5rem 1rem;
+    }
+
+    .body {
+      padding: 0.25rem 1rem 1rem;
+    }
+
+    .actions {
+      padding: 0.75rem 1rem max(1rem, env(safe-area-inset-bottom));
+    }
+
+    /* Up to three buttons share the row equally (6 rem each fits three in 360 px); a fourth starts a new row. */
+    .actions > :global(*) {
+      flex: 1 1 6rem;
+      min-width: 0;
+    }
+
+    /* Without a button row the body reaches the bottom edge: keep it above the home bar. */
+    .body:last-of-type {
+      padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    }
+  }
+
   .close svg {
     width: 1.25rem;
     height: 1.25rem;

@@ -129,6 +129,13 @@ test('on a phone, no Build step and no play tab is wider than the screen or zoom
     await more.click();
     const window = page.getByRole('dialog', { name: 'More' });
     await checkPhoneView(page, 'More window');
+    // Windows come up from the bottom edge on a phone, full width (M13 step 2).
+    const box = await window.boundingBox();
+    expect(box && [Math.round(box.x), Math.round(box.width), Math.round(box.y + box.height)]).toEqual([
+      0,
+      PHONE.width,
+      PHONE.height,
+    ]);
     await window.getByRole('button', { name }).click();
     await expect(window).toHaveCount(0);
     await expect(more).toHaveAttribute('aria-current', 'page');
