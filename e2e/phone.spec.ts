@@ -110,14 +110,50 @@ test('on a phone, no Build step and no play tab is wider than the screen or zoom
     .click();
 
   await page.getByRole('link', { name: 'Done: to the play view' }).click();
-  await oneByOne(await page.getByRole('tab').all(), async (tab) => {
-    const name = await tab.innerText();
-    await tab.click();
-    await expect(tab).toHaveAttribute('aria-selected', 'true');
+  // The phone layout (M13): the places sit in a bar at the bottom; More opens the rarer ones and the rests.
+  const places = page.getByRole('navigation', { name: 'Parts of the sheet' });
+  const more = places.getByRole('button', { name: 'More' });
+  await oneByOne(await places.getByRole('button').all(), async (place) => {
+    const name = await place.innerText();
+    if (name === 'More') return;
+    await place.click();
+    await expect(place).toHaveAttribute('aria-current', 'page');
+    await checkPhoneView(page, `play tab ${name}`);
+  });
+  // Closed without a pick, More gives the focus back to its button.
+  await more.click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'More' })).toHaveCount(0);
+  await expect(more).toBeFocused();
+  await oneByOne(['Features', 'Profile', 'Notes'], async (name) => {
+    await more.click();
+    const window = page.getByRole('dialog', { name: 'More' });
+    await checkPhoneView(page, 'More window');
+    await window.getByRole('button', { name }).click();
+    await expect(window).toHaveCount(0);
+    await expect(more).toHaveAttribute('aria-current', 'page');
     await checkPhoneView(page, `play tab ${name}`);
   });
 
-  await page.getByRole('tab', { name: 'Combat' }).click();
+  // The hit points stay on screen while a tab scrolls, and every place in the bar is a 44 px target.
+  await places.getByRole('button', { name: 'Combat' }).click();
+  await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
+  const strip = page.getByRole('region', { name: 'Hit points' });
+  await expect.poll(async () => (await strip.boundingBox())?.y).toBe(0);
+  for (const place of await places.getByRole('button').all()) {
+    expect((await place.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  }
+  await page.evaluate('window.scrollTo(0, 0)');
+
+  // The Heal window's Heal / Temp HP switch keeps the number typed so far (one window for both kinds).
+  await strip.getByRole('button', { name: 'Heal', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Heal' }).getByRole('button', { name: '7', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Heal' }).getByRole('button', { name: 'Temp HP' }).click();
+  const tempPad = page.getByRole('dialog', { name: 'Temporary hit points' });
+  await expect(tempPad.locator('output')).toHaveText('7');
+  await tempPad.getByRole('button', { name: 'Apply' }).click();
+  await expect(strip).toContainText('+7 temp');
+
   await page.getByRole('button', { name: /^Proficiency and ability of Dagger/ }).click();
   await checkPhoneView(page, 'attack setup window');
 });

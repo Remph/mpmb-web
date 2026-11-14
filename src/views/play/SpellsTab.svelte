@@ -743,8 +743,9 @@
   .changes {
     margin-top: 0.75rem;
     padding: 0.5rem 0.75rem;
-    border-left: 3px solid var(--accent);
-    border-radius: 0 0.5rem 0.5rem 0;
+    /* A plain box all round, like the start page's notice (no stripe down one side). */
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+    border-radius: 0.75rem;
     background: var(--accent-soft);
     font-size: 0.9375rem;
   }

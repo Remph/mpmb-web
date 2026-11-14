@@ -288,6 +288,7 @@ export const ui = {
     tabFeatures: 'Merkmale',
     tabNotes: 'Notizen',
     tabProfile: 'Profil',
+    phonePlaces: 'Bereiche des Bogens',
 
     // Companion pages (MPMB's AScomp template): a bar under the top bar switches the play view to one.
     companions: 'Begleiter',
@@ -1615,6 +1616,7 @@ export const ui = {
     tabFeatures: 'Features',
     tabNotes: 'Notes',
     tabProfile: 'Profile',
+    phonePlaces: 'Parts of the sheet',
 
     // Companion pages (MPMB's AScomp template): a bar under the top bar switches the play view to one.
     companions: 'Companions',

@@ -51,6 +51,13 @@
     onacedge?: (edge: Edge) => void;
     /** A Wild Shape form shown in the companion's shape (formAsCompanion): its numbers replace the tiles. */
     form?: Companion | null;
+    /**
+     * Phones (M13): the hit points become a strip that stays at the top of every tab (CharacterView makes the
+     * column `display: contents`, so the strip sticks to the whole page), AC moves into it and Temp HP into the Heal
+     * window. `rest` is false on tabs other than Combat: then only the strip shows.
+     */
+    phone?: boolean;
+    rest?: boolean;
     t: Texts;
   }
 
@@ -65,6 +72,8 @@
     acEdge = '',
     onacedge = () => {},
     form = null,
+    phone = false,
+    rest = true,
     t,
   }: Props = $props();
 
@@ -196,13 +205,39 @@
   }
   const effectsOn = $derived(effects.filter(effectOn));
 
+  // ---- Phones: the strip and the tiles under it ----
+  /** AC sits in the strip on a phone, so its tile makes way for the hit dice (mock-up pass 2). */
+  const acTile = $derived(tiles.find((tile) => tile.kind === 'ac'));
+  const shownStatTiles = $derived(phone ? tiles.filter((tile) => tile.kind !== 'ac') : tiles);
+  /** "8d10 · 2d8": what is left, in dice notation; with three classes or more only the count fits the tile. */
+  const diceLeft = $derived(
+    hp.hitDice.length > 2
+      ? String(hp.hitDice.reduce((n, hd) => n + hd.total - hd.used, 0))
+      : hp.hitDice.map((hd) => `${hd.total - hd.used}${hd.die}`).join(' · '),
+  );
+  let diceOpen = $state(false);
+  let diceTile: HTMLButtonElement | undefined = $state();
+  async function closeDice() {
+    diceOpen = false;
+    await tick();
+    diceTile?.focus();
+  }
+  /** What is on right now, named under the strip, so a player who scrolled down still sees "Poisoned". */
+  const activeNow = $derived([
+    ...effectsOn.map((effect) => ({ name: effect.name, bad: false })),
+    ...conditions.active.map((c) => ({ name: conditionName(c), bad: true })),
+    ...(conditions.exhaustion > 0 ? [{ name: `${t.exhaustion} ${conditions.exhaustion}`, bad: true }] : []),
+  ]);
+
   // ---- The AC tile: how enemies roll against the character ----
   let markingAc = $state(false);
-  let acTile: HTMLButtonElement | undefined = $state();
+  let acTileButton: HTMLButtonElement | undefined = $state();
+  /** The strip's AC button on a phone, where the tile isn't drawn. */
+  let acButton: HTMLButtonElement | undefined = $state();
   async function closeAcMark() {
     markingAc = false;
     await tick();
-    acTile?.focus();
+    (acTileButton ?? acButton)?.focus();
   }
   const edgeWord = (e: 'adv' | 'dis'): string => (e === 'adv' ? t.advantage : t.disadvantage);
   /** What the effects that are on add to the AC (finding 05): a badge on the tile, named in its label and window. */
@@ -215,269 +250,351 @@
     acBadge ? `${value}${fill(t.acFromEffects, { bonus: acBadge, names: acEffects.names.join(', ') })}` : value;
 </script>
 
-<section class="hp" aria-labelledby="hp-title">
-  <div class="head">
-    <h2 id="hp-title">{form ? t.formHpTitle : t.hpTitle}</h2>
-    {#if temp > 0}<span class="temp">{fill(t.tempHp, { count: temp })}</span>{/if}
-  </div>
-  <p class="numbers">
-    <span class="now">{current}</span>
-    {#if top !== null}<span class="max">/ {top}</span>{/if}
-  </p>
-  <div class="bar" aria-hidden="true">
-    <i style:width={percent(current)}></i>
-    {#if lost > 0}<b style:width={percent(lost)}></b>{/if}
-  </div>
-  {#if lost > 0}
-    <div class="lowered">
-      <span>{fill(t.hpMaxLowered, { count: lost })} <s>{hp.max}</s></span>
-      <button type="button" {disabled} aria-label={fill(t.hpMaxRestoreLabel, { max: hp.max ?? 0 })} onclick={restoreMax}
-        >{t.hpMaxRestore}</button
-      >
-    </div>
-  {/if}
-  <div class="buttons">
-    <button
-      type="button"
-      class="primary"
-      {disabled}
-      onclick={() => {
-        lowersMax = false;
-        pad = 'damage';
-      }}>{t.damage}</button
-    >
-    <button type="button" {disabled} onclick={() => (pad = 'heal')}>{t.heal}</button>
-    <button type="button" {disabled} onclick={() => (pad = 'temp')}>{t.tempHpButton}</button>
-  </div>
-  {#if hp.hitDice.length}
-    <div class="dice">
-      <span class="label">{t.hitDice}</span>
-      {#each hp.hitDice as hd (hd.row)}
-        <span class="die">
-          <span>{hd.die}</span>
-          <Stepper
-            text={`${hd.total - hd.used}/${hd.total}`}
-            name={`${t.hitDice} ${hd.die}`}
-            canLess={hd.used < hd.total}
-            canMore={hd.used > 0}
+{#snippet deathSaves()}
+  <div class="death">
+    <span class="label">{t.deathSaves}</span>
+    {#each [['Success', t.successes, hp.deathSaves.successes], ['Fail', t.failures, hp.deathSaves.failures]] as const as [kind, label, count] (kind)}
+      <span class="saves" role="group" aria-label={label}>
+        <span class="muted">{label}</span>
+        {#each [1, 2, 3] as n (n)}
+          <button
+            type="button"
+            class="box"
+            class:fail={kind === 'Fail'}
+            aria-pressed={n <= count}
+            aria-label={`${label} ${n}`}
             {disabled}
-            onless={() => change([{ edit: `HD${hd.row} Used`, text: String(hd.used + 1) }])}
-            onmore={() => change([{ edit: `HD${hd.row} Used`, text: hd.used > 1 ? String(hd.used - 1) : '' }])}
-            {t}
-          />
-        </span>
-      {/each}
-    </div>
-  {/if}
-  {#if dying}
-    <div class="death">
-      <span class="label">{t.deathSaves}</span>
-      {#each [['Success', t.successes, hp.deathSaves.successes], ['Fail', t.failures, hp.deathSaves.failures]] as const as [kind, label, count] (kind)}
-        <span class="saves" role="group" aria-label={label}>
-          <span class="muted">{label}</span>
-          {#each [1, 2, 3] as n (n)}
-            <button
-              type="button"
-              class="box"
-              class:fail={kind === 'Fail'}
-              aria-pressed={n <= count}
-              aria-label={`${label} ${n}`}
-              {disabled}
-              onclick={() => change([{ click: `Death Save ${kind}${n}` }])}
-            ></button>
-          {/each}
-        </span>
-      {/each}
-    </div>
-  {/if}
-</section>
-
-{#if form}
-  <div class="tiles form">
-    {#each formTiles as tile (tile.label)}
-      <div class="tile" style:--stat={statColor(tile.kind)} style:--stat-soft={statSoft(tile.kind)}>
-        <span class="k">{tile.label}</span><span class="v">{tile.value}</span>
-      </div>
+            onclick={() => change([{ click: `Death Save ${kind}${n}` }])}
+          ></button>
+        {/each}
+      </span>
     {/each}
   </div>
-  {#each formLines as line (line.label)}
-    <div
-      class="tile line"
-      class:plain={line.kind === null}
-      style:--stat={line.kind && statColor(line.kind)}
-      style:--stat-soft={line.kind && statSoft(line.kind)}
+{/snippet}
+
+{#snippet hitDice()}
+  <div class="dice">
+    <span class="label">{t.hitDice}</span>
+    {#each hp.hitDice as hd (hd.row)}
+      <span class="die">
+        <span>{hd.die}</span>
+        <Stepper
+          text={`${hd.total - hd.used}/${hd.total}`}
+          name={`${t.hitDice} ${hd.die}`}
+          canLess={hd.used < hd.total}
+          canMore={hd.used > 0}
+          {disabled}
+          onless={() => change([{ edit: `HD${hd.row} Used`, text: String(hd.used + 1) }])}
+          onmore={() => change([{ edit: `HD${hd.row} Used`, text: hd.used > 1 ? String(hd.used - 1) : '' }])}
+          {t}
+        />
+      </span>
+    {/each}
+  </div>
+{/snippet}
+
+{#snippet lowered()}
+  <div class="lowered">
+    <span>{fill(t.hpMaxLowered, { count: lost })} <s>{hp.max}</s></span>
+    <button type="button" {disabled} aria-label={fill(t.hpMaxRestoreLabel, { max: hp.max ?? 0 })} onclick={restoreMax}
+      >{t.hpMaxRestore}</button
     >
-      <span class="k">{line.label}</span><span class="text">{line.value}</span>
-    </div>
-  {/each}
-{:else}
-  <div class="tiles">
-    {#each tiles as tile, i (i)}
-      {#if tile.initiative}
-        <!-- Tapping initiative marks it with advantage or disadvantage, like a skill. -->
+  </div>
+{/snippet}
+
+{#if phone}
+  <!-- Phones: one band with what every turn needs, sticky over every tab (mock-up pass 2). -->
+  <section class="strip" aria-labelledby="hp-title">
+    <h2 id="hp-title" class="sr">{form ? t.formHpTitle : t.hpTitle}</h2>
+    <p class="numbers">
+      <span class="now">{current}</span>
+      {#if top !== null}<span class="max">/ {top}</span>{/if}
+      <!-- The number alone, in the temp colour: "+5 temporär" didn't fit beside the buttons. -->
+      {#if temp > 0}<span class="temp"
+          ><span aria-hidden="true">+{temp}</span><span class="sr">{fill(t.tempHp, { count: temp })}</span></span
+        >{/if}
+    </p>
+    <div class="strip-buttons">
+      {#if acTile && !form}
         <button
           type="button"
-          class="tile"
-          style:--stat={statColor(tile.kind)}
-          style:--stat-soft={statSoft(tile.kind)}
-          aria-haspopup="dialog"
-          aria-label={`${tile.label} ${tile.value}${initiativeEdge ? `, ${initiativeEdge === 'adv' ? t.advantage : t.disadvantage}` : ''}`}
-          bind:this={initiativeTile}
-          onclick={() => (marking = true)}
-          ><span class="k">{tile.label}</span><span class="v"
-            >{tile.value}{#if initiativeEdge}<span class="edge {initiativeEdge}" aria-hidden="true"
-                >{ARROW[initiativeEdge]}</span
-              >{/if}</span
-          ></button
-        >
-      {:else if tile.kind === 'ac'}
-        <!-- Tapping AC marks how enemies roll against the character, like initiative's mark. -->
-        <button
-          type="button"
-          class="tile"
-          style:--stat={statColor(tile.kind)}
-          style:--stat-soft={statSoft(tile.kind)}
+          class="ac"
           aria-haspopup="dialog"
           aria-label={acEdge
-            ? fill(t.acEdgeLabel, { value: acSpoken(tile.value), edge: edgeWord(acEdge) })
-            : fill(t.acTileLabel, { value: acSpoken(tile.value) })}
+            ? fill(t.acEdgeLabel, { value: acSpoken(acTile.value), edge: edgeWord(acEdge) })
+            : fill(t.acTileLabel, { value: acSpoken(acTile.value) })}
           {disabled}
-          bind:this={acTile}
+          bind:this={acButton}
           onclick={() => (markingAc = true)}
-          ><span class="k" title={tile.short !== tile.label ? tile.label : undefined}
-            >{tile.short ?? tile.label}{#if acEdge}<small class="against {acEdge}"
-                >{acEdge === 'adv' ? t.acEdgeShortAdv : t.acEdgeShortDis}</small
-              >{/if}</span
-          ><span class="v"
-            >{tile.value}{#if acBadge}<span class="badge" aria-hidden="true">{acBadge}</span>{/if}{#if acEdge}<span
-                class="edge against {acEdge}"
-                aria-hidden="true">{ARROW[acEdge]}</span
-              >{/if}</span
+          ><small>{acTile.short ?? acTile.label}</small><b
+            >{acTile.value}{#if acBadge}<span class="badge">{acBadge}</span>{/if}{#if acEdge}<span
+                class="edge against {acEdge}">{ARROW[acEdge]}</span
+              >{/if}</b
           ></button
         >
-      {:else if tile.kind === 'speed'}
+      {/if}
+      <button
+        type="button"
+        class="primary"
+        {disabled}
+        onclick={() => {
+          lowersMax = false;
+          pad = 'damage';
+        }}><b aria-hidden="true">−</b><small>{t.damage}</small></button
+      >
+      <button type="button" {disabled} onclick={() => (pad = 'heal')}
+        ><b aria-hidden="true">+</b><small>{t.heal}</small></button
+      >
+    </div>
+    <div class="bar" aria-hidden="true">
+      <i style:width={percent(current)}></i>
+      {#if lost > 0}<b style:width={percent(lost)}></b>{/if}
+    </div>
+    {#if activeNow.length}
+      <p class="active">
+        <span class="sr">{t.rightNow}:</span>
+        {#each activeNow as a, i (i)}<span class="on" class:bad={a.bad}>{a.name}</span>{/each}
+      </p>
+    {/if}
+    {#if lost > 0}{@render lowered()}{/if}
+    {#if dying}{@render deathSaves()}{/if}
+  </section>
+{:else}
+  <section class="hp" aria-labelledby="hp-title">
+    <div class="head">
+      <h2 id="hp-title">{form ? t.formHpTitle : t.hpTitle}</h2>
+      {#if temp > 0}<span class="temp">{fill(t.tempHp, { count: temp })}</span>{/if}
+    </div>
+    <p class="numbers">
+      <span class="now">{current}</span>
+      {#if top !== null}<span class="max">/ {top}</span>{/if}
+    </p>
+    <div class="bar" aria-hidden="true">
+      <i style:width={percent(current)}></i>
+      {#if lost > 0}<b style:width={percent(lost)}></b>{/if}
+    </div>
+    {#if lost > 0}{@render lowered()}{/if}
+    <div class="buttons">
+      <button
+        type="button"
+        class="primary"
+        {disabled}
+        onclick={() => {
+          lowersMax = false;
+          pad = 'damage';
+        }}>{t.damage}</button
+      >
+      <button type="button" {disabled} onclick={() => (pad = 'heal')}>{t.heal}</button>
+      <button type="button" {disabled} onclick={() => (pad = 'temp')}>{t.tempHpButton}</button>
+    </div>
+    {#if hp.hitDice.length}{@render hitDice()}{/if}
+    {#if dying}{@render deathSaves()}{/if}
+  </section>
+{/if}
+
+{#if rest}
+  {#if form}
+    <div class="tiles form">
+      {#each formTiles as tile (tile.label)}
+        <div class="tile" style:--stat={statColor(tile.kind)} style:--stat-soft={statSoft(tile.kind)}>
+          <span class="k">{tile.label}</span><span class="v">{tile.value}</span>
+        </div>
+      {/each}
+    </div>
+    {#each formLines as line (line.label)}
+      <div
+        class="tile line"
+        class:plain={line.kind === null}
+        style:--stat={line.kind && statColor(line.kind)}
+        style:--stat-soft={line.kind && statSoft(line.kind)}
+      >
+        <span class="k">{line.label}</span><span class="text">{line.value}</span>
+      </div>
+    {/each}
+  {:else}
+    <div class="tiles">
+      {#each shownStatTiles as tile, i (i)}
+        {#if tile.initiative}
+          <!-- Tapping initiative marks it with advantage or disadvantage, like a skill. -->
+          <button
+            type="button"
+            class="tile"
+            style:--stat={statColor(tile.kind)}
+            style:--stat-soft={statSoft(tile.kind)}
+            aria-haspopup="dialog"
+            aria-label={`${tile.label} ${tile.value}${initiativeEdge ? `, ${initiativeEdge === 'adv' ? t.advantage : t.disadvantage}` : ''}`}
+            bind:this={initiativeTile}
+            onclick={() => (marking = true)}
+            ><span class="k">{tile.label}</span><span class="v"
+              >{tile.value}{#if initiativeEdge}<span class="edge {initiativeEdge}" aria-hidden="true"
+                  >{ARROW[initiativeEdge]}</span
+                >{/if}</span
+            ></button
+          >
+        {:else if tile.kind === 'ac'}
+          <!-- Tapping AC marks how enemies roll against the character, like initiative's mark. -->
+          <button
+            type="button"
+            class="tile"
+            style:--stat={statColor(tile.kind)}
+            style:--stat-soft={statSoft(tile.kind)}
+            aria-haspopup="dialog"
+            aria-label={acEdge
+              ? fill(t.acEdgeLabel, { value: acSpoken(tile.value), edge: edgeWord(acEdge) })
+              : fill(t.acTileLabel, { value: acSpoken(tile.value) })}
+            {disabled}
+            bind:this={acTileButton}
+            onclick={() => (markingAc = true)}
+            ><span class="k" title={tile.short !== tile.label ? tile.label : undefined}
+              >{tile.short ?? tile.label}{#if acEdge}<small class="against {acEdge}"
+                  >{acEdge === 'adv' ? t.acEdgeShortAdv : t.acEdgeShortDis}</small
+                >{/if}</span
+            ><span class="v"
+              >{tile.value}{#if acBadge}<span class="badge" aria-hidden="true">{acBadge}</span>{/if}{#if acEdge}<span
+                  class="edge against {acEdge}"
+                  aria-hidden="true">{ARROW[acEdge]}</span
+                >{/if}</span
+            ></button
+          >
+        {:else if tile.kind === 'speed'}
+          <button
+            type="button"
+            class="tile"
+            style:--stat={statColor(tile.kind)}
+            style:--stat-soft={statSoft(tile.kind)}
+            aria-haspopup="dialog"
+            aria-label={fill(t.speedEditLabel, { value: tile.value })}
+            {disabled}
+            bind:this={speedTile}
+            onclick={() => (editingSpeed = true)}
+            ><span class="k">{tile.label}</span><span class="v">{tile.value}</span></button
+          >
+        {:else}
+          <div class="tile" style:--stat={statColor(tile.kind)} style:--stat-soft={statSoft(tile.kind)}>
+            {#if tile.short && tile.short !== tile.label}
+              <!-- The short name for the eye (with the full one as its tooltip), the full name for screen readers. -->
+              <span class="k"
+                ><span aria-hidden="true" title={tile.label}>{tile.short}</span><span class="sr">{tile.label}</span
+                ></span
+              >
+            {:else}
+              <span class="k">{tile.label}</span>
+            {/if}<span class="v">{tile.value}</span>
+          </div>
+        {/if}
+      {/each}
+      {#if phone && hp.hitDice.length}
+        <!-- On a phone the hit dice leave the hit points card: a tile with what is left, the steppers behind it. -->
         <button
           type="button"
-          class="tile"
-          style:--stat={statColor(tile.kind)}
-          style:--stat-soft={statSoft(tile.kind)}
+          class="tile dice-tile"
+          style:--stat="var(--ink)"
+          style:--stat-soft="var(--surface)"
           aria-haspopup="dialog"
-          aria-label={fill(t.speedEditLabel, { value: tile.value })}
+          aria-label={`${t.hitDice}: ${hp.hitDice.map((hd) => `${hd.total - hd.used}/${hd.total} ${hd.die}`).join(', ')}`}
           {disabled}
-          bind:this={speedTile}
-          onclick={() => (editingSpeed = true)}
-          ><span class="k">{tile.label}</span><span class="v">{tile.value}</span></button
+          bind:this={diceTile}
+          onclick={() => (diceOpen = true)}><span class="k">{t.hitDice}</span><span class="v">{diceLeft}</span></button
         >
-      {:else}
-        <div class="tile" style:--stat={statColor(tile.kind)} style:--stat-soft={statSoft(tile.kind)}>
-          {#if tile.short && tile.short !== tile.label}
-            <!-- The short name for the eye (with the full one as its tooltip), the full name for screen readers. -->
-            <span class="k"
-              ><span aria-hidden="true" title={tile.label}>{tile.short}</span><span class="sr">{tile.label}</span></span
-            >
-          {:else}
-            <span class="k">{tile.label}</span>
-          {/if}<span class="v">{tile.value}</span>
-        </div>
       {/if}
-    {/each}
-  </div>
-{/if}
+    </div>
+  {/if}
 
-{#if ult && !form}
-  <UltCharges {ult} {disabled} onchange={onult} {t} />
-{/if}
+  {#if ult && !form}
+    <UltCharges {ult} {disabled} onchange={onult} {t} />
+  {/if}
 
-<!--
+  <!--
   "Right now" (UI review 3, finding 04): what is on at the moment, in one card, since each part is usually
   empty: the effect switches, the conditions, then Heroic Inspiration and the reaction. The summary of an
   effect that is on sits between them, so with nothing on all of it is one row of chips.
 -->
-<section class="panel" aria-labelledby="now-title">
-  <div class="head">
-    <h2 id="now-title">{t.rightNow}</h2>
-    {#if effects.length}
-      <button
-        type="button"
-        class="change"
-        aria-label={t.effectsChangeLabel}
-        aria-haspopup="dialog"
-        {disabled}
-        bind:this={effectsButton}
-        onclick={() => (editingEffects = true)}>{t.effectsChange}</button
-      >
-    {/if}
-  </div>
-  <div class="chips">
-    {#each effects as effect (effect.id)}
-      <button
-        type="button"
-        class="chip switch"
-        class:on={effectOn(effect)}
-        aria-pressed={effectOn(effect)}
-        {disabled}
-        onclick={() => toggleEffect(effect.id)}><span class="dot" aria-hidden="true"></span>{effect.name}</button
-      >
-    {/each}
-    {#if !effects.length}
+  <section class="panel" aria-labelledby="now-title">
+    <div class="head">
+      <h2 id="now-title">{t.rightNow}</h2>
+      {#if effects.length}
+        <button
+          type="button"
+          class="change"
+          aria-label={t.effectsChangeLabel}
+          aria-haspopup="dialog"
+          {disabled}
+          bind:this={effectsButton}
+          onclick={() => (editingEffects = true)}>{t.effectsChange}</button
+        >
+      {/if}
+    </div>
+    <div class="chips">
+      {#each effects as effect (effect.id)}
+        <button
+          type="button"
+          class="chip switch"
+          class:on={effectOn(effect)}
+          aria-pressed={effectOn(effect)}
+          {disabled}
+          onclick={() => toggleEffect(effect.id)}><span class="dot" aria-hidden="true"></span>{effect.name}</button
+        >
+      {/each}
+      {#if !effects.length}
+        <button
+          type="button"
+          class="chip add"
+          aria-haspopup="dialog"
+          {disabled}
+          bind:this={effectsButton}
+          onclick={() => (editingEffects = true)}>+ {t.addEffect}</button
+        >
+      {/if}
+      {#each conditions.active as c (c)}
+        <button
+          type="button"
+          class="chip cond"
+          aria-label={fill(t.removeCondition, { name: conditionName(c) })}
+          {disabled}
+          onclick={() => change([{ click: `Condition.${c}` }])}>{conditionName(c)} ✕</button
+        >
+      {/each}
+      {#if conditions.exhaustion > 0}
+        <button type="button" class="chip cond" aria-haspopup="dialog" {disabled} onclick={() => (picking = true)}
+          >{t.exhaustion} {conditions.exhaustion}</button
+        >
+      {/if}
       <button
         type="button"
         class="chip add"
+        aria-label={t.addCondition}
         aria-haspopup="dialog"
         {disabled}
-        bind:this={effectsButton}
-        onclick={() => (editingEffects = true)}>+ {t.addEffect}</button
+        onclick={() => (picking = true)}>+ {t.addConditionShort}</button
       >
-    {/if}
-    {#each conditions.active as c (c)}
-      <button
-        type="button"
-        class="chip cond"
-        aria-label={fill(t.removeCondition, { name: conditionName(c) })}
-        {disabled}
-        onclick={() => change([{ click: `Condition.${c}` }])}>{conditionName(c)} ✕</button
-      >
-    {/each}
-    {#if conditions.exhaustion > 0}
-      <button type="button" class="chip cond" aria-haspopup="dialog" {disabled} onclick={() => (picking = true)}
-        >{t.exhaustion} {conditions.exhaustion}</button
-      >
-    {/if}
-    <button
-      type="button"
-      class="chip add"
-      aria-label={t.addCondition}
-      aria-haspopup="dialog"
-      {disabled}
-      onclick={() => (picking = true)}>+ {t.addConditionShort}</button
-    >
-    {#each effectsOn as effect (effect.id)}
-      <p class="effect-on">{summary(effect)}</p>
-    {/each}
-    <!--
+      {#each effectsOn as effect (effect.id)}
+        <p class="effect-on">{summary(effect)}</p>
+      {/each}
+      <!--
       The browser ticks the box and the click toggles the sheet's field, so both agree. (Cancelling the
       click instead left the box unticked: the browser undid its tick after the sheet's answer had arrived.)
     -->
-    <label class="chip tick" class:ticked={toggles.inspiration}>
-      <input
-        type="checkbox"
-        checked={toggles.inspiration}
-        {disabled}
-        onchange={() => change([{ click: 'Inspiration' }])}
-      />
-      {t.inspirationShort}
-    </label>
-    <label class="chip tick" class:ticked={toggles.reactionUsed}>
-      <input
-        type="checkbox"
-        checked={toggles.reactionUsed}
-        {disabled}
-        onchange={() => change([{ click: 'Reaction Used This Round' }])}
-      />
-      {t.reactionUsed}
-    </label>
-  </div>
-</section>
+      <label class="chip tick" class:ticked={toggles.inspiration}>
+        <input
+          type="checkbox"
+          checked={toggles.inspiration}
+          {disabled}
+          onchange={() => change([{ click: 'Inspiration' }])}
+        />
+        {t.inspirationShort}
+      </label>
+      <label class="chip tick" class:ticked={toggles.reactionUsed}>
+        <input
+          type="checkbox"
+          checked={toggles.reactionUsed}
+          {disabled}
+          onchange={() => change([{ click: 'Reaction Used This Round' }])}
+        />
+        {t.reactionUsed}
+      </label>
+    </div>
+  </section>
+{/if}
 
 {#if marking}
   <EdgePopUp
@@ -530,17 +647,31 @@
       <span>{t.lowersMax}<small>{t.lowersMaxHint}</small></span>
     </label>
   </NumberPad>
-{:else if pad === 'heal'}
-  <NumberPad title={t.healTitle} applyLabel={t.heal} onapply={applyPad} onclose={() => (pad = null)} {t} />
-{:else if pad === 'temp'}
+{:else if pad === 'heal' || pad === 'temp'}
+  <!-- One window for both, so the phone's Heal / Temp HP switch keeps the typed number and the focus. -->
   <NumberPad
-    title={t.tempTitle}
-    hint={t.tempHint}
-    applyLabel={t.apply}
+    title={pad === 'heal' ? t.healTitle : t.tempTitle}
+    hint={pad === 'heal' ? '' : t.tempHint}
+    applyLabel={pad === 'heal' ? t.heal : t.apply}
     onapply={applyPad}
     onclose={() => (pad = null)}
+    top={phone ? healOrTemp : undefined}
     {t}
   />
+{/if}
+
+<!-- Phones have no Temp HP button in the strip: the Heal window switches between the two. -->
+{#snippet healOrTemp()}
+  <div class="switch-two" role="group" aria-label={t.healTitle}>
+    <button type="button" aria-pressed={pad === 'heal'} onclick={() => (pad = 'heal')}>{t.heal}</button>
+    <button type="button" aria-pressed={pad === 'temp'} onclick={() => (pad = 'temp')}>{t.tempHpButton}</button>
+  </div>
+{/snippet}
+
+{#if diceOpen}
+  <Modal title={t.hitDice} onescape={() => void closeDice()} closeLabel={t.close}>
+    {@render hitDice()}
+  </Modal>
 {/if}
 
 {#if picking}
@@ -1057,5 +1188,167 @@
     justify-content: space-between;
     margin-top: 1rem;
     font-weight: 700;
+  }
+  /*
+   * Phones: the strip (mock-up pass 2). Sticky at the top of the page, full width (the play view's padding is
+   * cancelled with negative margins), the hit points on the left, AC, Damage and Heal on the right.
+   */
+  .strip {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0 0.5rem;
+    margin: 0 -0.75rem 0.625rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--hp-soft);
+  }
+
+  .strip .numbers {
+    display: flex;
+    align-items: baseline;
+    gap: 0.25rem;
+  }
+
+  .strip .now {
+    font-size: 2.125rem;
+    line-height: 1;
+  }
+
+  .strip .max {
+    font-size: 0.9375rem;
+  }
+
+  .strip .temp {
+    align-self: center;
+    margin-left: 0.25rem;
+    padding: 0 0.375rem;
+    font-size: 0.8125rem;
+  }
+
+  .strip .bar {
+    grid-column: 1;
+    margin: 0.375rem 0 0;
+    height: 0.375rem;
+  }
+
+  .strip-buttons {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+    display: flex;
+    gap: 0.375rem;
+  }
+
+  .strip-buttons button {
+    display: grid;
+    place-items: center;
+    align-content: center;
+    min-width: 3.375rem;
+    min-height: 2.75rem;
+    padding: 0.125rem 0.375rem;
+    line-height: 1;
+  }
+
+  .strip-buttons b {
+    font-size: 1.25rem;
+  }
+
+  .strip-buttons small {
+    font-size: 0.6875rem;
+    font-weight: 700;
+  }
+
+  .strip-buttons .primary,
+  .strip-buttons .primary:not(:disabled):hover {
+    border-color: var(--hp);
+    background: var(--hp);
+    color: var(--on-hp);
+  }
+
+  /* AC in its tile's colours, so it reads as the same number as on a laptop. */
+  .strip-buttons .ac,
+  .strip-buttons .ac:not(:disabled):hover {
+    min-width: 3.25rem;
+    border-color: color-mix(in srgb, var(--stat-ac) 35%, transparent);
+    background: var(--stat-ac-soft);
+    color: var(--stat-ac);
+  }
+
+  .strip-buttons .ac small {
+    order: -1;
+    letter-spacing: 0.04em;
+  }
+
+  .strip-buttons .ac b {
+    font-size: 1.25rem;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .strip-buttons .ac .badge {
+    vertical-align: 0.125rem;
+  }
+
+  .active {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin: 0.375rem 0 0;
+  }
+
+  .active .on {
+    padding: 0 0.5rem;
+    border: 1px solid transparent;
+    border-radius: 1rem;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 0.8125rem;
+    font-weight: 700;
+  }
+
+  .active .on.bad {
+    border-color: var(--hp);
+    background: var(--surface);
+    color: var(--hp);
+  }
+
+  .strip .lowered,
+  .strip .death {
+    grid-column: 1 / -1;
+    margin: 0.375rem 0 0;
+  }
+
+  /* "8d10 · 2d8" fits the 93 px a 360 px phone leaves inside the tile at this size. */
+  .dice-tile .v {
+    /* Down to 14.7 px on a 320 px phone, where the tile is 12 px narrower (phones show no classic scroll bar). */
+    font-size: clamp(0.875rem, 4.6vw, 1.0625rem);
+    white-space: nowrap;
+  }
+
+  /* The Heal window's two kinds on a phone: a two-part switch above the number. */
+  .switch-two {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    margin-bottom: 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: 0.625rem;
+    overflow: hidden;
+  }
+
+  .switch-two button {
+    border: 0;
+    border-radius: 0;
+    background: var(--surface);
+    color: var(--ink-muted);
+    font-weight: 700;
+  }
+
+  .switch-two button[aria-pressed='true'] {
+    background: var(--accent-soft);
+    color: var(--accent);
   }
 </style>
