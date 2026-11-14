@@ -263,6 +263,12 @@ export const ui = {
     initiative: 'Initiative',
     spellSaveDc: 'Zauber-SG',
     passivePerception: 'Passive Wahrnehmung',
+    // The stat tiles' words (UI review 4, finding 04): one line in a tile about 75 px wide on a laptop. The full
+    // names above stay for screen readers and as the tooltip (named tile*: spellSaveDcShort is the spells tab's).
+    tileAc: 'Rüstungskl.',
+    tileProficiency: 'Übung',
+    tileSpellDc: 'Zauber-SG',
+    tilePassivePerception: 'Pass. Wahrn.',
     conditions: 'Zustände',
     exhaustion: 'Erschöpfung',
     addCondition: 'Zustand hinzufügen',
@@ -1586,6 +1592,10 @@ export const ui = {
     initiative: 'Initiative',
     spellSaveDc: 'Spell save DC',
     passivePerception: 'Passive Perception',
+    tileAc: 'Armor class',
+    tileProficiency: 'Proficiency',
+    tileSpellDc: 'Spell DC',
+    tilePassivePerception: 'Pass. Perc.',
     conditions: 'Conditions',
     exhaustion: 'Exhaustion',
     addCondition: 'Add condition',

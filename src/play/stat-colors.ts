@@ -12,7 +12,10 @@ export const statSoft = (kind: StatKind): string => `var(--stat-${kind}-soft)`;
 
 /** One number under hit points; `initiative` marks the tile that opens the advantage pop-up. */
 export interface StatTile {
+  /** The full name, for screen readers (and the tile itself when `short` is not given). */
   label: string;
+  /** A shorter name the tile shows when the full one would not fit on one line (UI review 4, finding 04). */
+  short?: string;
   value: string;
   kind: StatKind;
   initiative?: boolean;

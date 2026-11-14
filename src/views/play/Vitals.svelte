@@ -134,12 +134,17 @@
   }
   const tiles = $derived(
     shownTiles([
-      { label: t.acLabel, value: numbers.armorClass, kind: 'ac' },
+      { label: t.acLabel, short: t.tileAc, value: numbers.armorClass, kind: 'ac' },
       { label: t.initiative, value: numbers.initiative, kind: 'init', initiative: true },
       { label: t.speed, value: numbers.speed, kind: 'speed' },
-      { label: t.proficiency, value: numbers.proficiency, kind: 'prof' },
-      ...numbers.spellSaveDcs.map((dc) => ({ label: t.spellSaveDc, value: dc, kind: 'dc' as const })),
-      { label: t.passivePerception, value: numbers.passivePerception, kind: 'pp' },
+      { label: t.proficiency, short: t.tileProficiency, value: numbers.proficiency, kind: 'prof' },
+      ...numbers.spellSaveDcs.map((dc) => ({
+        label: t.spellSaveDc,
+        short: t.tileSpellDc,
+        value: dc,
+        kind: 'dc' as const,
+      })),
+      { label: t.passivePerception, short: t.tilePassivePerception, value: numbers.passivePerception, kind: 'pp' },
     ]),
   );
   const exhaustionText = (n: number): string => (n > 0 ? String(n) : '');
@@ -339,8 +344,8 @@
           {disabled}
           bind:this={acTile}
           onclick={() => (markingAc = true)}
-          ><span class="k"
-            >{tile.label}{#if acEdge}<small class="against {acEdge}"
+          ><span class="k" title={tile.short !== tile.label ? tile.label : undefined}
+            >{tile.short ?? tile.label}{#if acEdge}<small class="against {acEdge}"
                 >{acEdge === 'adv' ? t.acEdgeShortAdv : t.acEdgeShortDis}</small
               >{/if}</span
           ><span class="v"
@@ -365,7 +370,14 @@
         >
       {:else}
         <div class="tile" style:--stat={statColor(tile.kind)} style:--stat-soft={statSoft(tile.kind)}>
-          <span class="k">{tile.label}</span><span class="v">{tile.value}</span>
+          {#if tile.short && tile.short !== tile.label}
+            <!-- The short name for the eye (with the full one as its tooltip), the full name for screen readers. -->
+            <span class="k"
+              ><span aria-hidden="true" title={tile.label}>{tile.short}</span><span class="sr">{tile.label}</span></span
+            >
+          {:else}
+            <span class="k">{tile.label}</span>
+          {/if}<span class="v">{tile.value}</span>
         </div>
       {/if}
     {/each}
@@ -742,10 +754,25 @@
     flex-basis: 100%;
   }
 
+  /*
+   * Hit dice (UI review 4, finding 03): one die per row on a shared grid, so "d8" and "d10" take the same column
+   * and every row's − button, count and + button line up. The count already has a fixed width in the Stepper
+   * (wide enough for "20/20"), so a shared die column is all the rows need.
+   */
+  .dice {
+    display: grid;
+    grid-template-columns: max-content max-content;
+    justify-content: start;
+    column-gap: 0.5rem;
+  }
+
+  .dice .label {
+    grid-column: 1 / -1;
+  }
+
+  /* The die's name and its stepper become the grid's two cells. */
   .die {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
+    display: contents;
     font-weight: 700;
   }
 
@@ -783,9 +810,10 @@
     background: var(--hp);
   }
 
+  /* Equal columns whatever the words (finding 04): 1fr alone let a long German label widen its column. */
   .tiles {
     display: grid;
-    grid-template-columns: repeat(var(--tile-columns, 3), 1fr);
+    grid-template-columns: repeat(var(--tile-columns, 3), minmax(0, 1fr));
     gap: 0.375rem;
   }
 
@@ -818,7 +846,8 @@
     flex-direction: column;
     justify-content: space-between;
     min-height: 56px;
-    padding: 0.375rem 0.5rem;
+    /* 6 px at the sides too: in the laptop's 89 px tile that leaves 75 px for the label's one line. */
+    padding: 0.375rem;
     /* Each number in its own colour (--stat, set per tile), on a pale wash of it, so the row stands out. */
     border: 1px solid color-mix(in srgb, var(--stat) 35%, transparent);
     border-radius: 0.5rem;
@@ -935,6 +964,25 @@
   .k {
     font-size: 0.8125rem;
     line-height: 1.2;
+  }
+
+  /*
+   * A stat tile's name stays on one line, so the numbers in a row sit at one height (finding 04). The words are
+   * short enough (i18n's *Short); the ellipsis is only a safety net. A form's tiles are twice as wide and wrap.
+   */
+  .tiles:not(.form) .k {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .v {
