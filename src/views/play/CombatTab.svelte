@@ -532,7 +532,8 @@
 
   /*
    * Phones (M13, UI review 2 finding 14): the dots never squeeze. The name keeps at least 8 rem beside them; when
-   * that doesn't fit (six slot dots on a 360 px phone), the dots take the next line, right-aligned, in one row.
+   * that doesn't fit (six slot dots on a 360 px phone), the dots take the next line, right-aligned, in one row. The
+   * same for a pool's stepper (Lay on Hands): every row has one control after its name, and it always sits right.
    */
   @media (max-width: 699px) {
     .uses {
@@ -544,7 +545,7 @@
       flex: 1 1 8rem;
     }
 
-    .uses > :global(.dots) {
+    .uses > :global(:not(.name)) {
       flex: none;
       max-width: 100%;
       margin-left: auto;
