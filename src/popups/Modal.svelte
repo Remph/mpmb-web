@@ -3,6 +3,11 @@
   asks `onescape` instead of closing it, because every pop-up must answer the script waiting for it.
   The X in the top-right corner does the same as Escape.
 -->
+<script module lang="ts">
+  /** Each open window's openers, nearest first, for a window opened from inside it (see `openers` below). */
+  const openersOf = new WeakMap<HTMLDialogElement, Element[]>();
+</script>
+
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
@@ -37,6 +42,30 @@
 
   $effect(() => {
     if (dialog && !dialog.open) dialog.showModal();
+  });
+
+  /**
+   * Back to where the player was: the button that opened the window gets the focus again when it closes, also after
+   * Escape (review of #92). A caller that moves the focus itself (the stat tiles do, after a tick) still wins: this
+   * only acts when the focus fell to the page.
+   *
+   * A window opened from inside another one that then steps aside (the Sheet menu's Look, Rollback or Print) would
+   * lose its opener with the first window, so it also remembers that window's openers, nearest first, and goes back
+   * to the first one still on the page (the ☰ button). Read when the component is created, before the window
+   * underneath is gone.
+   */
+  const active = typeof document === 'undefined' ? null : document.activeElement;
+  const outer = active?.closest('dialog');
+  const openers: Element[] = [...(active ? [active] : []), ...((outer && openersOf.get(outer)) ?? [])];
+  $effect(() => {
+    if (dialog) openersOf.set(dialog, openers);
+  });
+  $effect(() => () => {
+    queueMicrotask(() => {
+      const lost = !document.activeElement || document.activeElement === document.body;
+      const back = openers.find((el) => el instanceof HTMLElement && el.isConnected);
+      if (lost && back instanceof HTMLElement) back.focus();
+    });
   });
 
   function cancel(event: Event) {
@@ -180,6 +209,11 @@
    * is, and the buttons share the bottom row. No drag handle: it would promise a swipe that isn't there.
    */
   @media (max-width: 699px) {
+    /* The page behind stays where it is while a window is open (a phone scrolls it under the sheet otherwise). */
+    :global(html:has(dialog[open])) {
+      overflow: hidden;
+    }
+
     dialog,
     dialog.wide,
     dialog.widest {

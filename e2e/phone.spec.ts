@@ -164,6 +164,22 @@ test('on a phone, no Build step and no play tab is wider than the screen or zoom
     await checkPhoneView(page, `play tab ${name}`);
   });
 
+  // Any window closed with Escape gives the focus back to the button that opened it (Modal does it, review of #92).
+  const damage = page.locator('.strip').getByRole('button', { name: 'Damage' });
+  await damage.click();
+  await expect(page.getByRole('dialog', { name: 'Take damage' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Take damage' })).toHaveCount(0);
+  await expect(damage).toBeFocused();
+  // A window that replaces the Sheet menu (Look) goes back to the menu's own button (review of #94).
+  const menuButton = page.getByRole('button', { name: 'Sheet menu', exact: true });
+  await menuButton.click();
+  await page.getByRole('dialog', { name: 'Sheet menu' }).getByRole('button', { name: /^Look/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Look' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(menuButton).toBeFocused();
+
   // The hit points stay on screen while a tab scrolls, and every place in the bar is a 44 px target.
   await places.getByRole('button', { name: 'Combat' }).click();
   await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
