@@ -33,7 +33,8 @@ test('quick taps on an effect switch add its AC bonus once', async ({ page }) =>
   await expect(page.locator('.ac')).toContainText('16');
   await page.getByRole('link', { name: 'Done: to the play view' }).click();
 
-  const armorClass = page.getByText('Armor class').locator('..');
+  // The AC tile, by its spoken name (the tile itself shows the short "AC").
+  const armorClass = page.getByRole('button', { name: /^Armor class \d/ });
   await expect(armorClass).toContainText('16');
   const card = page.locator('section[aria-labelledby=now-title]');
   await card.getByRole('button', { name: '+ Effect' }).click();

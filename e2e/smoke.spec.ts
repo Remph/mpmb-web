@@ -72,7 +72,8 @@ test('a new character gets a class, a species, armour and a weapon, and the play
   // The play view: the armour class and the attack.
   await page.getByRole('link', { name: 'Done: to the play view' }).click();
   await expect(page.locator('.attack').filter({ hasText: 'Longsword' })).toBeVisible();
-  await expect(page.getByText('Armor class').locator('..')).toContainText('16');
+  // The AC tile, by its spoken name (the tile itself shows the short "AC").
+  await expect(page.getByRole('button', { name: /^Armor class \d/ })).toContainText('16');
 
   // Speed (2026-11-07): the tile opens a window with MPMB's sources; a typed speed goes onto the sheet as in the
   // PDF, and MPMB keeps it.
