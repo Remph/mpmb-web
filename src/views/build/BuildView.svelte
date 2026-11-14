@@ -299,9 +299,10 @@
     text-align: left;
   }
 
+  /* The step you are on: the whole box in the accent, no stripe down one side. */
   .step.on {
     border-color: var(--accent);
-    box-shadow: inset 4px 0 0 var(--accent);
+    background: var(--accent-soft);
   }
 
   .n {

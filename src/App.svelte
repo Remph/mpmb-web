@@ -212,11 +212,12 @@
     padding: clamp(1.25rem, 4vw, 2.5rem) clamp(1rem, 4vw, 2rem) 3rem;
   }
 
+  /* A plain box all round (Nick, 2026-11-14: no coloured stripe down one side). */
   .notice {
     margin: 0 0 1.5rem;
     padding: 0.625rem 0.875rem;
-    border-left: 3px solid var(--accent);
-    border-radius: 0 0.5rem 0.5rem 0;
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+    border-radius: 0.75rem;
     background: var(--accent-soft);
     font-size: 0.9375rem;
   }
