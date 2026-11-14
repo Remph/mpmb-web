@@ -419,7 +419,31 @@ export interface MagicItem {
   attuned: boolean;
   /** Whether the item needs attunement: then the player can switch it on and off. */
   attunable: boolean;
+  /**
+   * The rarity ("uncommon", "very rare"), or '' when MPMB names none of the rules' rarities (an item typed by
+   * hand, a homebrew item's own word).
+   */
+  rarity: Rarity | '';
   description: string;
+}
+
+/** The rarities of the rules, rarest last. */
+export const RARITIES = ['common', 'uncommon', 'rare', 'very rare', 'legendary', 'artifact'] as const;
+export type Rarity = (typeof RARITIES)[number];
+
+/**
+ * An item's rarity from the tooltip MPMB gives its description field: the item's name on the first line,
+ * then "Wondrous item, uncommon (Requires Attunement)", the type and the rarity (either may be missing).
+ */
+export function rarityOf(tooltip: string | undefined): Rarity | '' {
+  const line = (tooltip ?? '').split(/\r\n|\r|\n/)[1] ?? '';
+  const text = line
+    .replace(/\s*\(requires attunement[^)]*\)\s*$/i, '')
+    .replace(/^requires attunement.*$/i, '')
+    .trim()
+    .toLowerCase();
+  // Rarest first, so "very rare" isn't read as "rare". Anything else (a homebrew "rarity varies") shows nothing.
+  return [...RARITIES].reverse().find((rarity) => new RegExp(`(^|, )${rarity}$`).test(text)) ?? '';
 }
 
 /** The PDF's two equipment lists: page 2 ("Adventuring Gear …") and page 3 ("Extra.Gear …"). */
@@ -526,6 +550,7 @@ export function readInventory(fields: FieldViews): Inventory {
         // the display alone while the overflow page isn't shown (setMIattunedVisibility), so the box can stay
         // visible for an item that needs none, or hidden for one that does (playtest 2026-11-14).
         attunable: attunable(fields, row),
+        rarity: rarityOf(fields[`Extra.Magic Item Description ${row}`]?.userName),
         description: valueOf(fields, `Extra.Magic Item Description ${row}`),
       }))
       .filter((item) => item.name !== ''),

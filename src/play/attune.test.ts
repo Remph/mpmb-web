@@ -58,5 +58,8 @@ describe('attuning a magic item', () => {
 
     engine = openSheet(engine.snapshot());
     expect(attunable()).toEqual(expected);
+    // The rarity (note 6) comes from MPMB's tooltip, which a save keeps too.
+    const bag = readInventory(viewsOf(engine.doc)).magicItems.find((item) => item.row === 7);
+    expect(bag?.rarity).toBe('uncommon');
   });
 });
