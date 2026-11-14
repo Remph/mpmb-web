@@ -1128,7 +1128,8 @@
   /* More: the rests side by side, then the three places as rows. */
   /*
    * Side by side while they fit; German "Morgengrauen" needs about 7.5 rem, so below that the third button takes a
-   * row of its own at full width (review of #92).
+   * row of its own at full width (review of #92). `max-content` keeps the longest word whole: with a basis alone,
+   * three buttons still shared a row at 408-420 px (Android's 412) and clipped "Morgengrauen" (review of #94).
    */
   .rests {
     display: flex;
@@ -1139,6 +1140,7 @@
 
   .rests button {
     flex: 1 1 7.5rem;
+    min-width: max-content;
     min-height: 3.25rem;
     font-weight: 700;
   }
