@@ -20,10 +20,23 @@
     onclose: () => void;
     /** Shown under the keys: the damage window's "Lowers max HP too". */
     children?: Snippet;
+    /** Shown above the number: on phones, the Heal window's Heal / Temp HP switch. */
+    top?: Snippet;
     t: Texts;
   }
 
-  let { title, hint = '', applyLabel, danger = false, maxDigits = 4, onapply, onclose, children, t }: Props = $props();
+  let {
+    title,
+    hint = '',
+    applyLabel,
+    danger = false,
+    maxDigits = 4,
+    onapply,
+    onclose,
+    children,
+    top,
+    t,
+  }: Props = $props();
   let digits = $state('');
   const amount = $derived(digits === '' ? 0 : Number(digits));
   const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
@@ -48,6 +61,7 @@
 <svelte:window onkeydown={keydown} />
 
 <Modal {title} onescape={onclose} closeLabel={t.close}>
+  {@render top?.()}
   {#if hint}<p class="hint">{hint}</p>{/if}
   <output class="display" class:danger aria-label={t.amount}>{digits || '0'}</output>
   <div class="keys">

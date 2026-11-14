@@ -14,17 +14,23 @@
     children: Snippet;
     /** When given, a last button folds the bar away (the play view; session feedback, 2026-11-04). */
     onfold?: () => void;
+    /** Phones (M13): one row, the way back as an arrow, the name cut short rather than wrapped. */
+    compact?: boolean;
   }
 
-  let { open, back, t, children, onfold }: Props = $props();
+  let { open, back, t, children, onfold, compact = false }: Props = $props();
 
   const statusText = $derived(
     { opening: t.opening, working: t.saving, saving: t.saving, saved: t.saved, error: '', elsewhere: '' }[open.status],
   );
 </script>
 
-<header class="top">
-  <a class="back" href={back.href}>← {back.label}</a>
+<header class="top" class:compact>
+  {#if compact}
+    <a class="back" href={back.href} aria-label={back.label}><span aria-hidden="true">‹</span></a>
+  {:else}
+    <a class="back" href={back.href}>← {back.label}</a>
+  {/if}
   <div class="who">
     <h1>{open.meta.name || t.unnamed}</h1>
     <p>{[open.meta.classes, open.meta.species].filter(Boolean).join(' · ')}</p>
@@ -138,10 +144,42 @@
     stroke-linejoin: round;
   }
 
-  /* Phones come later (roadmap); until then the buttons wrap. */
-  @media (max-width: 699px) {
-    .actions {
-      flex-wrap: wrap;
-    }
+  /* Phones (M13): one row of 56 px; the name and the classes cut short with an ellipsis instead of wrapping. */
+  .compact {
+    flex-wrap: nowrap;
+    gap: 0.25rem;
+    padding: 0.25rem max(0.25rem, env(safe-area-inset-right)) 0.25rem max(0.25rem, env(safe-area-inset-left));
+  }
+
+  .compact .back {
+    justify-content: center;
+    width: 44px;
+    flex: none;
+    font-size: 1.75rem;
+    line-height: 1;
+  }
+
+  .compact .who {
+    min-width: 0;
+  }
+
+  .compact h1 {
+    overflow: hidden;
+    font-size: 1rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .compact .who p {
+    font-size: 0.8125rem;
+  }
+
+  .compact .status {
+    flex: none;
+    font-size: 0.8125rem;
+  }
+
+  .compact .actions {
+    flex: none;
   }
 </style>

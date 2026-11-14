@@ -21,6 +21,8 @@
   import SheetMenu from './play/SheetMenu.svelte';
   import SpellsTab from './play/SpellsTab.svelte';
   import TopBar from './TopBar.svelte';
+  import Modal from '../popups/Modal.svelte';
+  import { TAB_ICONS } from './play/tab-icons.ts';
   import { readSpells } from '../play/spells.ts';
   import Vitals from './play/Vitals.svelte';
   import CompanionBar from './play/CompanionBar.svelte';
@@ -93,6 +95,22 @@
   /** From this width the checks have their own column; below it they are a tab. Matches the CSS. */
   const THREE_COLUMNS = 1100;
   const wide = $derived(width >= THREE_COLUMNS);
+  /**
+   * Below this width the phone layout (M13, mock-up pass 2, Nick picked the bottom tab bar): a one-row top bar,
+   * the hit points as a strip that stays on every tab, the tabs at the bottom, the rarer places under "More".
+   * Matches the CSS's 699 px. 0 before the first measurement: the laptop layout, as before.
+   */
+  const PHONE_BELOW = 700;
+  const phone = $derived(width > 0 && width < PHONE_BELOW);
+  /** The bottom bar's places; Features, Profile and Notes sit behind More. */
+  const MORE_TABS: readonly Tab[] = ['features', 'profile', 'notes'];
+  let moreOpen = $state(false);
+  function pickTab(key: Tab) {
+    tab = key;
+    moreOpen = false;
+    // A new place starts at its top, under the strip.
+    window.scrollTo({ top: 0 });
+  }
   const tabs = $derived(
     (
       [
@@ -109,6 +127,7 @@
   /** The Spells tab only for a character with spell sheet pages. */
   const hasSpells = $derived(readSpells(open.fields).length > 0);
   const shownTab = $derived((wide && tab === 'checks') || (tab === 'spells' && !hasSpells) ? 'combat' : tab);
+  const phoneTabs = $derived(tabs.filter(([key]) => !MORE_TABS.includes(key)));
 
   // Companion pages (Remph picked B, 2026-11-04): the bar under the top bar switches all three columns to a
   // companion. Which one is shown belongs to this view and this character; it isn't saved.
@@ -429,16 +448,27 @@
 <svelte:window bind:innerWidth={width} onbeforeprint={beforePrint} onafterprint={() => (printing = false)} />
 
 <div class="screen-only">
-  {#if !barFolded}
-    <TopBar {open} back={{ href: '#/', label: t.backToList }} {t} onfold={canFold ? () => setFolded(true) : undefined}>
-      {#if !noClass}
-        <button type="button" {disabled} onclick={() => rest('short')}>{t.shortRest}</button>
-        <button type="button" {disabled} onclick={() => rest('long')}>{t.longRest}</button>
+  {#if !barFolded || phone}
+    <TopBar
+      {open}
+      back={{ href: '#/', label: t.backToList }}
+      {t}
+      compact={phone}
+      onfold={canFold && !phone ? () => setFolded(true) : undefined}
+    >
+      {#if phone}
+        <!-- Rests and Dawn live in More on a phone; the bar keeps only the menu. -->
+        <button type="button" class="menu-icon" aria-label={t.sheetMenu} onclick={() => (menuOpen = true)}>☰</button>
+      {:else}
+        {#if !noClass}
+          <button type="button" {disabled} onclick={() => rest('short')}>{t.shortRest}</button>
+          <button type="button" {disabled} onclick={() => rest('long')}>{t.longRest}</button>
+        {/if}
+        {#if dawnList.length}
+          <button type="button" {disabled} onclick={() => (dawnOpen = true)}>{t.dawn}</button>
+        {/if}
+        <button type="button" onclick={() => (menuOpen = true)}>☰ {t.sheetMenu}</button>
       {/if}
-      {#if dawnList.length}
-        <button type="button" {disabled} onclick={() => (dawnOpen = true)}>{t.dawn}</button>
-      {/if}
-      <button type="button" onclick={() => (menuOpen = true)}>☰ {t.sheetMenu}</button>
     </TopBar>
   {/if}
 
@@ -606,7 +636,7 @@
         {/if}
       </div>
     {:else}
-      <div class="play">
+      <div class="play" class:phone>
         <div class="side left">
           {#if noClass}
             <section class="start" aria-labelledby="no-class-title">
@@ -625,35 +655,44 @@
               oneffects={(list) => void session.setEffects(list)}
               {acEdge}
               onacedge={(edge) => void session.setAcEdge(edge)}
+              {phone}
+              rest={!phone || shownTab === 'combat'}
               {t}
             />
           {/if}
         </div>
 
         <div class="middle">
-          <div class="tabrow">
-            <div class="tabs" role="tablist">
-              {#each tabs as [key, label] (key)}
-                <button
-                  type="button"
-                  role="tab"
-                  id={`tab-${key}`}
-                  aria-selected={shownTab === key}
-                  aria-controls="tab-panel"
-                  onclick={() => (tab = key)}>{label}</button
-                >
-              {/each}
+          {#if !phone}
+            <div class="tabrow">
+              <div class="tabs" role="tablist">
+                {#each tabs as [key, label] (key)}
+                  <button
+                    type="button"
+                    role="tab"
+                    id={`tab-${key}`}
+                    aria-selected={shownTab === key}
+                    aria-controls="tab-panel"
+                    onclick={() => (tab = key)}>{label}</button
+                  >
+                {/each}
+              </div>
+              {#if barFolded}
+                <UnfoldBar
+                  name={open.meta.name || t.unnamed}
+                  busy={open.status !== 'saved'}
+                  onunfold={() => setFolded(false)}
+                  {t}
+                />
+              {/if}
             </div>
-            {#if barFolded}
-              <UnfoldBar
-                name={open.meta.name || t.unnamed}
-                busy={open.status !== 'saved'}
-                onunfold={() => setFolded(false)}
-                {t}
-              />
-            {/if}
-          </div>
-          <div id="tab-panel" role="tabpanel" aria-labelledby={`tab-${shownTab}`}>
+          {/if}
+          <div
+            id="tab-panel"
+            role="tabpanel"
+            aria-labelledby={phone ? undefined : `tab-${shownTab}`}
+            aria-label={phone ? tabs.find(([key]) => key === shownTab)?.[1] : undefined}
+          >
             {#if shownTab === 'combat'}
               <CombatTab
                 {fields}
@@ -693,7 +732,68 @@
           </div>
         {/if}
       </div>
+      {#if phone}
+        <!-- Phones: the places at the bottom, in reach of the thumb; More opens the rests and the rarer places. -->
+        <nav class="tabbar" aria-label={t.phonePlaces}>
+          {#each phoneTabs as [key, label] (key)}
+            <button type="button" aria-current={shownTab === key ? 'page' : undefined} onclick={() => pickTab(key)}
+              ><svg viewBox="0 0 24 24" aria-hidden="true">{@html TAB_ICONS[key]}</svg>{label}</button
+            >
+          {/each}
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            aria-current={MORE_TABS.includes(shownTab) ? 'page' : undefined}
+            onclick={() => (moreOpen = true)}
+            ><svg viewBox="0 0 24 24" aria-hidden="true">{@html TAB_ICONS.more}</svg>{t.more}</button
+          >
+        </nav>
+      {/if}
     {/if}
+  {/if}
+
+  {#if moreOpen}
+    <Modal title={t.more} onescape={() => (moreOpen = false)} closeLabel={t.close}>
+      {#if !noClass || dawnList.length}
+        <div class="rests">
+          {#if !noClass}
+            <button
+              type="button"
+              {disabled}
+              onclick={() => {
+                moreOpen = false;
+                void rest('short');
+              }}>{t.shortRest}</button
+            >
+            <button
+              type="button"
+              {disabled}
+              onclick={() => {
+                moreOpen = false;
+                void rest('long');
+              }}>{t.longRest}</button
+            >
+          {/if}
+          {#if dawnList.length}
+            <button
+              type="button"
+              {disabled}
+              onclick={() => {
+                moreOpen = false;
+                dawnOpen = true;
+              }}>{t.dawn}</button
+            >
+          {/if}
+        </div>
+      {/if}
+      <div class="places">
+        {#each tabs.filter(([key]) => MORE_TABS.includes(key)) as [key, label] (key)}
+          <button type="button" aria-current={shownTab === key ? 'page' : undefined} onclick={() => pickTab(key)}
+            >{label}<span aria-hidden="true">›</span></button
+          >
+        {/each}
+      </div>
+    </Modal>
   {/if}
 
   {#if companionWindow}
@@ -916,7 +1016,7 @@
     }
   }
 
-  /* Phones come later (roadmap); until then everything stacks. */
+  /* Narrow screens stack the columns (companion and form pages, until they get the phone frame too). */
   @media (max-width: 699px) {
     .play {
       grid-template-columns: minmax(0, 1fr);
@@ -925,5 +1025,131 @@
     .side {
       position: static;
     }
+  }
+
+  /*
+   * Phones (M13, mock-up pass 2). A block, not a grid, and the left column "display: contents": a sticky element
+   * sticks only inside its parent, and a grid cell is just as tall as the strip, so Vitals' strip must sit straight
+   * in the tall play box to stay at the top while every tab scrolls. Room at the bottom for the tab bar.
+   */
+  .play.phone {
+    display: block;
+    padding: 0 0.75rem calc(4.5rem + env(safe-area-inset-bottom));
+  }
+
+  .play.phone .side.left {
+    display: contents;
+  }
+
+  .tabbar {
+    position: fixed;
+    z-index: 6;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    border-top: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .tabbar button {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: 0.125rem;
+    min-height: 3.75rem;
+    padding: 0 0.125rem;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: var(--ink-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    /* German "Inventar" and English "Inventory" fit 72 px; a longer word would get cut, not wrapped. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tabbar svg {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .tabbar button[aria-current='page'] {
+    color: var(--accent);
+  }
+
+  .tabbar button[aria-current='page']::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 22%;
+    left: 22%;
+    height: 3px;
+    border-radius: 0 0 3px 3px;
+    background: var(--accent);
+  }
+
+  .menu-icon {
+    width: 44px;
+    padding: 0;
+    border-color: transparent;
+    background: none;
+    color: var(--accent);
+    font-size: 1.375rem;
+  }
+
+  /* More: the rests side by side, then the three places as rows. */
+  .rests {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .rests button {
+    min-height: 3.25rem;
+    font-weight: 700;
+  }
+
+  .places {
+    display: grid;
+  }
+
+  .places button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 3.25rem;
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: none;
+    font-weight: 700;
+    text-align: left;
+  }
+
+  .places button:first-child {
+    border-top: 0;
+  }
+
+  .places button[aria-current='page'] {
+    color: var(--accent);
+  }
+
+  .places span {
+    color: var(--ink-muted);
+    font-size: 1.25rem;
   }
 </style>
