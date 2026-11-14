@@ -16,11 +16,22 @@
     wide?: boolean;
     /** MPMB's own dialogs: as wide as the screen allows, up to 96 rem. */
     widest?: boolean;
+    /** Phones: sits on top of the play view's tab bar instead of covering it (the More sheet). */
+    aboveTabBar?: boolean;
     children: Snippet;
     actions?: Snippet;
   }
 
-  let { title, onescape, closeLabel, wide = false, widest = false, children, actions }: Props = $props();
+  let {
+    title,
+    onescape,
+    closeLabel,
+    wide = false,
+    widest = false,
+    aboveTabBar = false,
+    children,
+    actions,
+  }: Props = $props();
   let dialog: HTMLDialogElement | undefined = $state();
   const titleId = `modal-${Math.random().toString(36).slice(2)}`;
 
@@ -44,7 +55,15 @@
   }
 </script>
 
-<dialog bind:this={dialog} class:wide class:widest aria-labelledby={titleId} oncancel={cancel} onclose={closed}>
+<dialog
+  bind:this={dialog}
+  class:wide
+  class:widest
+  class:above-bar={aboveTabBar}
+  aria-labelledby={titleId}
+  oncancel={cancel}
+  onclose={closed}
+>
   <h2 id={titleId}>{title}</h2>
   <div class="body">
     {@render children()}
@@ -154,6 +173,66 @@
   .close:focus-visible {
     background: var(--hover);
     color: var(--ink);
+  }
+
+  /*
+   * Phones (M13 step 2, mock-up pass 2): every window comes up from the bottom edge, full width, where the thumb
+   * is, and the buttons share the bottom row. No drag handle: it would promise a swipe that isn't there.
+   */
+  @media (max-width: 699px) {
+    dialog,
+    dialog.wide,
+    dialog.widest {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      max-height: calc(100svh - 2.5rem);
+      margin: auto 0 0;
+      border-width: 1px 0 0;
+      border-radius: 1.125rem 1.125rem 0 0;
+      box-shadow: 0 -0.5rem 2rem rgb(0 0 0 / 0.25);
+    }
+
+    h2 {
+      padding: 0.875rem 0.25rem 0.5rem 1rem;
+    }
+
+    .body {
+      padding: 0.25rem 1rem 1rem;
+    }
+
+    .actions {
+      padding: 0.75rem 1rem max(1rem, env(safe-area-inset-bottom));
+    }
+
+    /*
+     * Up to three buttons share the row equally (6 rem each fits three in 360 px); a fourth starts a new row.
+     * `min-width: auto` (app.css gives buttons 44 px) keeps a button as wide as its longest word: German
+     * "herunterladen" ran out of a third of 360 px, now the row wraps instead.
+     */
+    .actions > :global(*) {
+      flex: 1 1 6rem;
+      min-width: auto;
+    }
+
+    /* Without a button row the body reaches the bottom edge: keep it above the home bar. */
+    .body:last-of-type {
+      padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    }
+
+    /*
+     * The More sheet sits on the tab bar (mock-up pass 2), so the bar and its lit More stay in view under the
+     * dimmed backdrop. The bar's height: CharacterView's .tabbar (its places plus the border and the home bar).
+     */
+    dialog.above-bar {
+      --bar: calc(var(--tab-bar-height) + 1px + env(safe-area-inset-bottom));
+      max-height: calc(100svh - 2.5rem - var(--bar));
+      margin-bottom: var(--bar);
+    }
+
+    .above-bar .body:last-of-type {
+      padding-bottom: 1rem;
+    }
   }
 
   .close svg {

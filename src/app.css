@@ -18,6 +18,8 @@
    * apart that a score's name and its number are hard to read together.
    */
   --page-max: 105rem;
+  /* Phones: the play view's tab bar at the bottom (its places, without the border and the home bar). */
+  --tab-bar-height: 3.75rem;
   --font: 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color-scheme: light;
 
