@@ -69,7 +69,7 @@
   import { readUlt } from '../homebrew/ult.ts';
   import { readEffects } from '../play/effects.ts';
   import { readHitPoints, readLimitedFeatures, readSpellSlots, valueOf } from '../play/read.ts';
-  import { flushSync } from 'svelte';
+  import { flushSync, tick } from 'svelte';
   import PrintSheet from './print/PrintSheet.svelte';
   import { printableParts } from '../play/print.ts';
   import type { PrintPart } from '../play/print.ts';
@@ -105,6 +105,13 @@
   /** The bottom bar's places; Features, Profile and Notes sit behind More. */
   const MORE_TABS: readonly Tab[] = ['features', 'profile', 'notes'];
   let moreOpen = $state(false);
+  let moreButton: HTMLButtonElement | undefined = $state();
+  /** Closed without picking a place: back to the More button, like the other windows. */
+  async function closeMore() {
+    moreOpen = false;
+    await tick();
+    moreButton?.focus();
+  }
   function pickTab(key: Tab) {
     tab = key;
     moreOpen = false;
@@ -418,7 +425,8 @@
   const canFold = $derived(!elsewhereOnly && !(companion && isEmptyCompanion(companion)));
   const formTabs = $derived(companionTabs.filter(([key]) => key !== 'notes'));
   const shownFormTab = $derived(shownCompanionTab === 'notes' ? 'combat' : shownCompanionTab);
-  const barFolded = $derived(folded && canFold);
+  /** Phones always show their one-row top bar: nothing is folded there, so no unfold bar either. */
+  const barFolded = $derived(folded && canFold && !phone);
 
   // Magic items that come back at dawn get their own button: dawn and a long rest often fall together,
   // but not always, so the player says when (session feedback, 2026-11-04).
@@ -448,7 +456,7 @@
 <svelte:window bind:innerWidth={width} onbeforeprint={beforePrint} onafterprint={() => (printing = false)} />
 
 <div class="screen-only">
-  {#if !barFolded || phone}
+  {#if !barFolded}
     <TopBar
       {open}
       back={{ href: '#/', label: t.backToList }}
@@ -744,6 +752,7 @@
             type="button"
             aria-haspopup="dialog"
             aria-current={MORE_TABS.includes(shownTab) ? 'page' : undefined}
+            bind:this={moreButton}
             onclick={() => (moreOpen = true)}
             ><svg viewBox="0 0 24 24" aria-hidden="true">{@html TAB_ICONS.more}</svg>{t.more}</button
           >
@@ -753,7 +762,7 @@
   {/if}
 
   {#if moreOpen}
-    <Modal title={t.more} onescape={() => (moreOpen = false)} closeLabel={t.close}>
+    <Modal title={t.more} onescape={() => void closeMore()} closeLabel={t.close}>
       {#if !noClass || dawnList.length}
         <div class="rests">
           {#if !noClass}

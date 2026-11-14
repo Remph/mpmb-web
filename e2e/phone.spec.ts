@@ -120,6 +120,11 @@ test('on a phone, no Build step and no play tab is wider than the screen or zoom
     await expect(place).toHaveAttribute('aria-current', 'page');
     await checkPhoneView(page, `play tab ${name}`);
   });
+  // Closed without a pick, More gives the focus back to its button.
+  await more.click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'More' })).toHaveCount(0);
+  await expect(more).toBeFocused();
   await oneByOne(['Features', 'Profile', 'Notes'], async (name) => {
     await more.click();
     const window = page.getByRole('dialog', { name: 'More' });
@@ -139,6 +144,16 @@ test('on a phone, no Build step and no play tab is wider than the screen or zoom
     expect((await place.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   }
   await page.evaluate('window.scrollTo(0, 0)');
+
+  // The Heal window's Heal / Temp HP switch keeps the number typed so far (one window for both kinds).
+  await strip.getByRole('button', { name: 'Heal', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Heal' }).getByRole('button', { name: '7', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Heal' }).getByRole('button', { name: 'Temp HP' }).click();
+  const tempPad = page.getByRole('dialog', { name: 'Temporary hit points' });
+  await expect(tempPad.locator('output')).toHaveText('7');
+  await tempPad.getByRole('button', { name: 'Apply' }).click();
+  await expect(strip).toContainText('+7 temp');
+
   await page.getByRole('button', { name: /^Proficiency and ability of Dagger/ }).click();
   await checkPhoneView(page, 'attack setup window');
 });

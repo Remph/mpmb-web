@@ -647,20 +647,12 @@
       <span>{t.lowersMax}<small>{t.lowersMaxHint}</small></span>
     </label>
   </NumberPad>
-{:else if pad === 'heal'}
+{:else if pad === 'heal' || pad === 'temp'}
+  <!-- One window for both, so the phone's Heal / Temp HP switch keeps the typed number and the focus. -->
   <NumberPad
-    title={t.healTitle}
-    applyLabel={t.heal}
-    onapply={applyPad}
-    onclose={() => (pad = null)}
-    top={phone ? healOrTemp : undefined}
-    {t}
-  />
-{:else if pad === 'temp'}
-  <NumberPad
-    title={t.tempTitle}
-    hint={t.tempHint}
-    applyLabel={t.apply}
+    title={pad === 'heal' ? t.healTitle : t.tempTitle}
+    hint={pad === 'heal' ? '' : t.tempHint}
+    applyLabel={pad === 'heal' ? t.heal : t.apply}
     onapply={applyPad}
     onclose={() => (pad = null)}
     top={phone ? healOrTemp : undefined}
