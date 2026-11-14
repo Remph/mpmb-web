@@ -22,8 +22,10 @@ In the repo root: `pnpm install`, `pnpm test` (Vitest), `pnpm check` (svelte-che
 
 - Claude writes the code; The owner (GitHub `Remph`) reviews every diff, may edit it, and merges.
 - Every change goes on its own `feature/<short-name>` branch (never `claude/...`) with a pull request
-  (template in `.github/pull_request_template.md`). Never commit or push to `main`, never force-push,
-  never rebase (merge `main` in instead).
+  (template in `.github/pull_request_template.md`). Never commit or push to `main` (the only deploy
+  branch), never force-push, never rebase (merge `main` in instead).
+- The deny list in `.claude/settings.json` does not apply in the project's cloud threads (they ignore a
+  repo's settings and hooks), so there the written rules here are the only guard.
 - One thread pushes to a branch at a time: the review thread during the review, the building thread
   again afterwards. After a merge, new work goes on a new branch. If the owner merged a PR before its review
   finished, further fixes go on a new branch with a new PR.
