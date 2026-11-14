@@ -744,7 +744,11 @@
         <!-- Phones: the places at the bottom, in reach of the thumb; More opens the rests and the rarer places. -->
         <nav class="tabbar" aria-label={t.phonePlaces}>
           {#each phoneTabs as [key, label] (key)}
-            <button type="button" aria-current={shownTab === key ? 'page' : undefined} onclick={() => pickTab(key)}
+            <button
+              type="button"
+              aria-current={shownTab === key ? 'page' : undefined}
+              class:lit={!moreOpen && shownTab === key}
+              onclick={() => pickTab(key)}
               ><svg viewBox="0 0 24 24" aria-hidden="true">{@html TAB_ICONS[key]}</svg>{label}</button
             >
           {/each}
@@ -752,6 +756,7 @@
             type="button"
             aria-haspopup="dialog"
             aria-current={MORE_TABS.includes(shownTab) ? 'page' : undefined}
+            class:lit={moreOpen || MORE_TABS.includes(shownTab)}
             bind:this={moreButton}
             onclick={() => (moreOpen = true)}
             ><svg viewBox="0 0 24 24" aria-hidden="true">{@html TAB_ICONS.more}</svg>{t.more}</button
@@ -762,7 +767,7 @@
   {/if}
 
   {#if moreOpen}
-    <Modal title={t.more} onescape={() => void closeMore()} closeLabel={t.close}>
+    <Modal title={t.more} onescape={() => void closeMore()} closeLabel={t.close} aboveTabBar>
       {#if !noClass || dawnList.length}
         <div class="rests">
           {#if !noClass}
@@ -1070,7 +1075,8 @@
     justify-items: center;
     align-content: center;
     gap: 0.125rem;
-    min-height: 3.75rem;
+    /* The More sheet sits on top of the bar: Modal.svelte adds the border and the home bar to this. */
+    min-height: var(--tab-bar-height);
     padding: 0 0.125rem;
     border: 0;
     border-radius: 0;
@@ -1094,11 +1100,12 @@
     stroke-linejoin: round;
   }
 
-  .tabbar button[aria-current='page'] {
+  /* Lit: the place shown, or More while its sheet is open (it sits on the bar). aria-current stays the place. */
+  .tabbar button.lit {
     color: var(--accent);
   }
 
-  .tabbar button[aria-current='page']::before {
+  .tabbar button.lit::before {
     content: '';
     position: absolute;
     top: 0;

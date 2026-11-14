@@ -44,6 +44,21 @@ const SMALL_FIELDS = `[...document.querySelectorAll('input, textarea, select')]
   .map((field) => field.tagName.toLowerCase() + '.' + [...field.classList].filter((c) => !c.startsWith('svelte-')).join('.')
     + ' ' + getComputedStyle(field).fontSize + ' ' + (field.labels?.[0]?.innerText ?? field.getAttribute('aria-label') ?? ''))`;
 
+/**
+ * Buttons in an open window whose label runs past their edge. On a phone up to three buttons share a window's
+ * bottom row; a long German word ("herunterladen") once ran out of its third of 360 px (review of #92).
+ */
+const SPILLING_BUTTONS = `[...document.querySelectorAll('dialog[open] button')]
+  .filter((button) => button.getClientRects().length > 0 && button.innerText.trim())
+  .filter((button) => {
+    const box = button.getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(button);
+    const text = range.getBoundingClientRect();
+    return text.left < box.left - 0.5 || text.right > box.right + 0.5;
+  })
+  .map((button) => button.innerText.trim())`;
+
 /** One after another: each check clicks on the page the next one reads. */
 const oneByOne = <T>(items: T[], run: (item: T) => Promise<void>): Promise<void> =>
   items.reduce<Promise<void>>((done, item) => done.then(() => run(item)), Promise.resolve());
@@ -53,6 +68,7 @@ async function checkPhoneView(page: Page, where: string) {
   await page.evaluate("document.querySelectorAll('details').forEach((details) => (details.open = true))");
   expect.soft(await page.evaluate(STICKING_OUT), where).toEqual([]);
   expect.soft(await page.evaluate(SMALL_FIELDS), `${where}: text under 16 px`).toEqual([]);
+  expect.soft(await page.evaluate(SPILLING_BUTTONS), `${where}: button labels past their edge`).toEqual([]);
 }
 
 test('on a phone, no Build step and no play tab is wider than the screen or zooms into a field', async ({ page }) => {
@@ -65,10 +81,14 @@ test('on a phone, no Build step and no play tab is wider than the screen or zoom
   await page.goto('./');
   await checkPhoneView(page, 'start page');
   await page.getByRole('button', { name: 'New character' }).click();
-  await page
-    .getByRole('dialog', { name: 'Source selection' })
-    .getByRole('button', { name: 'Apply' })
-    .click({ timeout: STARTUP });
+  // MPMB's own closing buttons share the bottom row on a phone, like the app's (M13 step 2): a first-run Source
+  // selection has Apply alone, so it takes the whole row.
+  const sources = page.getByRole('dialog', { name: 'Source selection' });
+  const apply = sources.getByRole('button', { name: 'Apply' });
+  await apply.waitFor({ timeout: STARTUP });
+  expect((await apply.boundingBox())?.width ?? 0).toBeGreaterThan(PHONE.width - 48);
+  await checkPhoneView(page, 'Source selection');
+  await apply.click();
   const rail = page.getByRole('navigation', { name: 'Steps' });
   await expect(rail).toBeVisible({ timeout: STARTUP });
   // A class, so that the steps after it have something to show.
@@ -129,13 +149,15 @@ test('on a phone, no Build step and no play tab is wider than the screen or zoom
     await more.click();
     const window = page.getByRole('dialog', { name: 'More' });
     await checkPhoneView(page, 'More window');
-    // Windows come up from the bottom edge on a phone, full width (M13 step 2).
+    // Windows come up from the bottom on a phone, full width (M13 step 2); More sits on the tab bar, lit.
     const box = await window.boundingBox();
+    const barTop = (await places.boundingBox())?.y ?? 0;
     expect(box && [Math.round(box.x), Math.round(box.width), Math.round(box.y + box.height)]).toEqual([
       0,
       PHONE.width,
-      PHONE.height,
+      Math.round(barTop),
     ]);
+    await expect(more).toHaveClass(/\blit\b/);
     await window.getByRole('button', { name }).click();
     await expect(window).toHaveCount(0);
     await expect(more).toHaveAttribute('aria-current', 'page');

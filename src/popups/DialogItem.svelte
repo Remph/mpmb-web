@@ -493,4 +493,12 @@
     justify-content: flex-end;
     gap: 0.5rem;
   }
+
+  /* Phones: MPMB's OK / Cancel share the window's bottom row like the app's own buttons (Modal.svelte). */
+  @media (max-width: 699px) {
+    .closers > button {
+      flex: 1 1 6rem;
+      min-width: auto;
+    }
+  }
 </style>
