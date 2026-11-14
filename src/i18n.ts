@@ -512,7 +512,7 @@ export const ui = {
     acEdgeHint: 'Die Markierung bleibt, bis du sie änderst. Sie steht nur in der App, nicht im PDF.',
     acEdgeShortAdv: 'Gegner: Vorteil',
     acEdgeShortDis: 'Gegner: Nachteil',
-    acEdgeLabel: 'Rüstungsklasse {value}, Angriffe gegen dich mit {edge}',
+    acEdgeLabel: 'Rüstungsklasse {value}, Angriffe gegen dich: {edge}',
     acTileLabel: 'Rüstungsklasse {value}: markieren, wie Gegner gegen dich würfeln',
     acFromEffects: ' (davon {bonus} durch {names})',
     effectsTitle: 'Effekte',

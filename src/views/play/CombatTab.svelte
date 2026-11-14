@@ -503,6 +503,12 @@
     color: var(--hp);
   }
 
+  /* "▼▼ doppelter Nachteil" on one line widened the to-hit column on a phone until the name column was
+     narrower than the attack's setup chip, which then lay over the button (review of #95, 360 px German). */
+  .badge small.edge {
+    max-width: 5.5rem;
+  }
+
   .badge.damage {
     min-width: 6rem;
     background: var(--paper);
