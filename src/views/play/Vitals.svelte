@@ -914,6 +914,8 @@
     display: block;
     font-size: 0.75rem;
     font-weight: 700;
+    /* Its own lines under the label: the label's one-line rule would cut "Foes: disadvantage" off. */
+    white-space: normal;
   }
 
   .chip.switch {
@@ -968,7 +970,7 @@
 
   /*
    * A stat tile's name stays on one line, so the numbers in a row sit at one height (finding 04). The words are
-   * short enough (i18n's *Short); the ellipsis is only a safety net. A form's tiles are twice as wide and wrap.
+   * short enough (i18n's tile* words); the ellipsis is only a safety net. A form's tiles are twice as wide and wrap.
    */
   .tiles:not(.form) .k {
     overflow: hidden;

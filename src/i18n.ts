@@ -265,7 +265,8 @@ export const ui = {
     passivePerception: 'Passive Wahrnehmung',
     // The stat tiles' words (UI review 4, finding 04): one line in a tile about 75 px wide on a laptop. The full
     // names above stay for screen readers and as the tooltip (named tile*: spellSaveDcShort is the spells tab's).
-    tileAc: 'Rüstungskl.',
+    // RK is the German rulebooks' own short form for Rüstungsklasse (Nick, 2026-11-14).
+    tileAc: 'RK',
     tileProficiency: 'Übung',
     tileSpellDc: 'Zauber-SG',
     tilePassivePerception: 'Pass. Wahrn.',
@@ -1592,7 +1593,7 @@ export const ui = {
     initiative: 'Initiative',
     spellSaveDc: 'Spell save DC',
     passivePerception: 'Passive Perception',
-    tileAc: 'Armor class',
+    tileAc: 'AC',
     tileProficiency: 'Proficiency',
     tileSpellDc: 'Spell DC',
     tilePassivePerception: 'Pass. Perc.',

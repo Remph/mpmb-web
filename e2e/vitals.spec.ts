@@ -42,6 +42,22 @@ const LAYOUT = `(() => {
   return { dice, tiles };
 })()`;
 
+/**
+ * The AC tile's note on how foes roll ("Foes: disadvantage") sits inside the tile's one-line label; it must wrap
+ * onto lines of its own instead of being cut off at the tile's edge (the review of this fix found it cut).
+ */
+const MARK = `(() => {
+  const mark = document.querySelector('.tiles button.tile .k small.against');
+  return mark ? { text: mark.textContent, cut: mark.scrollWidth > mark.clientWidth } : null;
+})()`;
+
+/** Marks how foes roll against the character, through the AC tile's pop-up. */
+async function markAc(page: Page, choice: RegExp): Promise<void> {
+  await page.locator('.tiles button.tile').first().click();
+  await page.getByRole('dialog').getByRole('button', { name: choice }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+}
+
 /** The dice rows' −, count and + share their x; the tiles are one width, their labels one line and not cut. */
 async function checkLayout(page: Page, lang: string): Promise<void> {
   await expect(page.locator('.dice .stepper')).toHaveCount(HIT_DICE_KINDS, { timeout: STARTUP });
@@ -98,7 +114,16 @@ test('hit dice line up and the stat tiles are equal with one-line labels, in Eng
   // The short words on screen, the full names for screen readers.
   await expect(page.locator('.tiles')).toContainText('Pass. Perc.');
   await expect(page.locator('.tiles .sr').filter({ hasText: 'Passive Perception' })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /^Armor class \d+: mark how enemies roll/ })).toContainText('AC');
+  await markAc(page, /Disadvantage/);
+  expect(await page.evaluate(MARK)).toEqual({ text: 'Foes: disadvantage', cut: false });
+
+  // German, with the mark still on (the app keeps it): then back to normal for the one-line check.
   await page.evaluate(() => localStorage.setItem('mpmb-web.lang', 'de'));
   await page.reload();
+  await expect(page.locator('.tiles .k small.against')).toHaveText('Gegner: Nachteil', { timeout: STARTUP });
+  expect(await page.evaluate(MARK)).toEqual({ text: 'Gegner: Nachteil', cut: false });
+  await markAc(page, /^Normal$/);
   await checkLayout(page, 'de');
+  await expect(page.locator('.tiles button.tile').first().locator('.k')).toHaveText('RK');
 });
