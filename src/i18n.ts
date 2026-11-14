@@ -48,6 +48,13 @@ export const ui = {
     getPdfLabel: 'PDF holen: den Bogen bei MPMB (öffnet MPMBs Website in einem neuen Tab)',
     getPdfFrom: '„PDF holen“ öffnet MPMBs Website. Die Bögen gibt es auch auf',
     mpmbPatreon: 'MPMBs Patreon',
+    // The About window (playtest 2026-11-14, note 4). The players' first names live only here (Remph's exception).
+    aboutTitle: 'Über MPMB Web',
+    aboutMenuLine: 'Dank, Herkunft und Quellcode',
+    aboutThanksTitle: 'Danke',
+    aboutThanks:
+      'An André, Cedric und Oliver, die die ersten Runden mit MPMB Web am Tisch gespielt haben, und an Tobias, unseren Spielleiter. Eure Notizen von diesen Abenden haben die App besser gemacht. Danke!',
+    aboutGetPdf: 'MPMBs Bögen (PDF)',
 
     charactersTitle: 'Charaktere',
     importPdf: 'PDF importieren',
@@ -1400,6 +1407,12 @@ export const ui = {
     getPdfLabel: "Get the PDF sheet from MPMB (opens MPMB's website in a new tab)",
     getPdfFrom: "“Get the PDF” opens MPMB's website. The sheets are also on",
     mpmbPatreon: "MPMB's Patreon",
+    aboutTitle: 'About MPMB Web',
+    aboutMenuLine: 'Thanks, credits and source code',
+    aboutThanksTitle: 'Thank you',
+    aboutThanks:
+      'To André, Cedric and Oliver, who played the first sessions with MPMB Web at the table, and to Tobias, our DM. Your notes from those evenings made the app better. Thank you!',
+    aboutGetPdf: "MPMB's sheets (PDF)",
 
     charactersTitle: 'Characters',
     importPdf: 'Import PDF',
