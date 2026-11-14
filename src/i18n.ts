@@ -53,7 +53,7 @@ export const ui = {
     aboutMenuLine: 'Dank, Herkunft und Quellcode',
     aboutThanksTitle: 'Danke',
     aboutThanks:
-      'An Oliver, Cedric und Andre, die die ersten Runden mit MPMB Web am Tisch gespielt haben, und an Tobias, unseren Spielleiter. Eure Notizen von diesen Abenden haben die App besser gemacht. Danke!',
+      'An André, Cedric und Oliver, die die ersten Runden mit MPMB Web am Tisch gespielt haben, und an Tobias, unseren Spielleiter. Eure Notizen von diesen Abenden haben die App besser gemacht. Danke!',
     aboutGetPdf: 'MPMBs Bögen (PDF)',
 
     charactersTitle: 'Charaktere',
@@ -1411,7 +1411,7 @@ export const ui = {
     aboutMenuLine: 'Thanks, credits and source code',
     aboutThanksTitle: 'Thank you',
     aboutThanks:
-      'To Oliver, Cedric and Andre, who played the first sessions with MPMB Web at the table, and to Tobias, our DM. Your notes from those evenings made the app better. Thank you!',
+      'To André, Cedric and Oliver, who played the first sessions with MPMB Web at the table, and to Tobias, our DM. Your notes from those evenings made the app better. Thank you!',
     aboutGetPdf: "MPMB's sheets (PDF)",
 
     charactersTitle: 'Characters',

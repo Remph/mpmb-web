@@ -8,6 +8,8 @@ test('the About window opens from the start page and the sheet menu', async ({ p
   await opener.click();
   const about = page.getByRole('dialog', { name: 'About MPMB Web' });
   await expect(about.getByRole('heading', { name: 'Thank you' })).toBeVisible();
+  // Nick's spelling (accent included) and order (players alphabetically, then the DM).
+  await expect(about.getByText(/To André, Cedric and Oliver,/)).toBeVisible();
   await expect(about.getByText('Not made or endorsed by MPMB')).toBeVisible();
   await expect(about.getByText('CC‑BY‑4.0')).toBeVisible();
   await expect(about.getByRole('link', { name: "MPMB's sheets (PDF)" })).toHaveAttribute(
@@ -18,9 +20,10 @@ test('the About window opens from the start page and the sheet menu', async ({ p
     'href',
     /github\.com\/Remph\/mpmb-web/,
   );
-  // Escape closes it. (Focus back to the opener comes with the shared Modal change in the phone-fit PR.)
+  // Escape closes it and gives the focus back to the link that opened it (shared Modal, #94).
   await page.keyboard.press('Escape');
   await expect(about).toBeHidden();
+  await expect(opener).toBeFocused();
 
   await page.getByRole('button', { name: 'New character' }).click();
   await page
@@ -34,4 +37,8 @@ test('the About window opens from the start page and the sheet menu', async ({ p
     page.getByRole('dialog', { name: 'About MPMB Web' }).getByRole('heading', { name: 'Thank you' }),
   ).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Sheet menu' })).toBeHidden();
+  // The window took the Sheet menu's place, so Escape goes back to the menu button, not to the page.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'About MPMB Web' })).toBeHidden();
+  await expect(page.getByRole('button', { name: /Sheet menu/ })).toBeFocused();
 });
