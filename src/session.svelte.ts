@@ -17,6 +17,8 @@ import { FF } from './engine/types.ts';
 import type { ImageSlot, SheetImage, SheetImages } from './engine/types.ts';
 import { fitImages, fitPicture } from './play/pictures.ts';
 import { followMaxHp } from './play/rules.ts';
+import { withDouble } from './play/edge.ts';
+import type { Edge } from './play/edge.ts';
 import { keepChoices, readChoices, setupSteps, withChoice } from './play/attack-setup.ts';
 import type { AttackSetup } from './play/attack-setup.ts';
 import type { Texts } from './i18n.ts';
@@ -699,6 +701,12 @@ export class Session {
   /** Advantage or disadvantage on attack rolls against the open character; '' for neither. */
   setAcEdge(edge: '' | 'adv' | 'dis'): Promise<void> {
     return this.setHomebrew({ acEdge: edge || undefined });
+  }
+
+  /** Marks or unmarks a roll's advantage or disadvantage as double (house rule, src/play/edge.ts). */
+  setDoubleEdge(boxes: string, edge: Edge, double: boolean): Promise<void> {
+    const marks = withDouble(this.current?.meta.homebrew?.doubleEdges ?? {}, boxes, edge, double);
+    return this.setHomebrew({ doubleEdges: Object.keys(marks).length ? marks : undefined });
   }
 
   /**

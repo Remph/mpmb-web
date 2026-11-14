@@ -8,6 +8,7 @@ import type { SheetChange } from '../engine/sheet-changes.ts';
 import type { CharacterData } from '../engine/sheet-data.ts';
 import type { UltCharges } from '../homebrew/ult.ts';
 import type { SetupChoice } from '../play/attack-setup.ts';
+import type { DoubleMarks } from '../play/edge.ts';
 import type { Effect } from '../play/effects.ts';
 import type { InForm } from '../play/wild-shapes.ts';
 import { sheetColor, type SheetColor } from '../look.ts';
@@ -51,6 +52,8 @@ export interface CharacterHomebrew {
   attackChoices?: SetupChoice[];
   /** The Wild Shape form the character is in (src/play/wild-shapes.ts); the sheet has no box for it. */
   wildShape?: InForm;
+  /** Rolls marked with double advantage or disadvantage, the house rule (src/play/edge.ts). */
+  doubleEdges?: DoubleMarks;
 }
 
 /** A character moved to a new release of MPMB's sheet with MPMB's own import (M11). */
@@ -335,13 +338,14 @@ export function describeCharacter(
 
 /** A plain copy (the page's values can be reactive proxies, which IndexedDB can't store). */
 export function copyHomebrew(homebrew: CharacterHomebrew): CharacterHomebrew {
-  const { ult, effects, acEdge, attackChoices, wildShape } = homebrew;
+  const { ult, effects, acEdge, attackChoices, wildShape, doubleEdges } = homebrew;
   return {
     ...(ult ? { ult: { ...ult } } : {}),
     ...(effects ? { effects: effects.map(copyEffect) } : {}),
     ...(acEdge ? { acEdge } : {}),
     ...(attackChoices ? { attackChoices: attackChoices.map((c) => ({ ...c })) } : {}),
     ...(wildShape ? { wildShape: { ...wildShape } } : {}),
+    ...(doubleEdges ? { doubleEdges: { ...doubleEdges } } : {}),
   };
 }
 

@@ -5,6 +5,7 @@
   Every tap goes through MPMB's own fields (session.change), so rules and saving stay MPMB's.
 -->
 <script lang="ts">
+  import type { Edge } from '../play/edge.ts';
   import { fill } from '../i18n.ts';
   import type { Texts } from '../i18n.ts';
   import { dawn, dawnFeatures, longRest, pactSlots, shortRest } from '../play/rules.ts';
@@ -340,6 +341,9 @@
   const ult = $derived(homebrew.switches.ultCharges ? readUlt(open.meta.homebrew?.ult) : null);
   const effects = $derived(readEffects(open.meta.homebrew?.effects));
   const acEdge = $derived(open.meta.homebrew?.acEdge ?? '');
+  /** Rolls marked double, the house rule (src/play/edge.ts); kept with the character, never in the PDF. */
+  const doubles = $derived(open.meta.homebrew?.doubleEdges ?? {});
+  const ondouble = (boxes: string, edge: Edge, double: boolean) => void session.setDoubleEdge(boxes, edge, double);
   /**
    * A new character before its class is chosen: MPMB's sheet has 0 hit points, death saves and empty scores,
    * which looked like a dying character. A card that leads to the Build screen takes the hit point box's
@@ -602,6 +606,8 @@
             oneffects={(list) => void session.setEffects(list)}
             {acEdge}
             onacedge={(edge) => void session.setAcEdge(edge)}
+            {doubles}
+            {ondouble}
             form={formShape}
             {t}
           />
@@ -663,6 +669,8 @@
               oneffects={(list) => void session.setEffects(list)}
               {acEdge}
               onacedge={(edge) => void session.setAcEdge(edge)}
+              {doubles}
+              {ondouble}
               {phone}
               rest={!phone || shownTab === 'combat'}
               {t}
@@ -709,12 +717,14 @@
                 {change}
                 {ult}
                 onsetup={(row, set) => void session.setAttackSetup(row, set)}
+                {doubles}
+                {ondouble}
                 {t}
               />
             {:else if shownTab === 'spells'}
               <SpellsTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
             {:else if shownTab === 'checks'}
-              <Checks {fields} {disabled} {change} {t} />
+              <Checks {fields} {disabled} {change} {doubles} {ondouble} {t} />
             {:else if shownTab === 'inventory'}
               <InventoryTab {fields} {disabled} {change} load={() => session.builderInfo()} {t} />
             {:else if shownTab === 'features'}
@@ -736,7 +746,7 @@
 
         {#if wide}
           <div class="side right">
-            <Checks {fields} {disabled} {change} {t} />
+            <Checks {fields} {disabled} {change} {doubles} {ondouble} {t} />
           </div>
         {/if}
       </div>

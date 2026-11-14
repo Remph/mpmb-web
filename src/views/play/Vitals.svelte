@@ -9,7 +9,9 @@
   import type { Texts } from '../../i18n.ts';
   import type { Step } from '../../session.svelte.ts';
   import { tick } from 'svelte';
-  import { ARROW, edgeOf } from '../../play/edge.ts';
+  import { AGAINST, arrowOf, edgeOf, edgeWord as wordOf, isDouble } from '../../play/edge.ts';
+  import type { DoubleMarks } from '../../play/edge.ts';
+  import { homebrew } from '../../homebrew/switches.svelte.ts';
   import type { Edge } from '../../play/edge.ts';
   import { acFromEffects, effectOn, toggle } from '../../play/effects.ts';
   import type { Effect } from '../../play/effects.ts';
@@ -49,6 +51,9 @@
     /** Advantage or disadvantage on attack rolls against the character (kept in the app, not the sheet). */
     acEdge?: Edge;
     onacedge?: (edge: Edge) => void;
+    /** Rolls marked double (house rule, src/play/edge.ts) and how to change that. */
+    doubles?: DoubleMarks;
+    ondouble?: (boxes: string, edge: Edge, double: boolean) => void;
     /** A Wild Shape form shown in the companion's shape (formAsCompanion): its numbers replace the tiles. */
     form?: Companion | null;
     /**
@@ -71,6 +76,8 @@
     oneffects = () => {},
     acEdge = '',
     onacedge = () => {},
+    doubles = {},
+    ondouble,
     form = null,
     phone = false,
     rest = true,
@@ -125,6 +132,11 @@
   /** Initiative's advantage or disadvantage (the PDF's "Init Adv" and "Init Dis" boxes). */
   const initiativeMark = $derived(readRollMarks(fields).initiative);
   const initiativeEdge = $derived(edgeOf(initiativeMark));
+  /** MPMB's pair of boxes for initiative. */
+  const INITIATIVE_BOXES = 'Init';
+  const doubled = (boxes: string, e: Edge): boolean => homebrew.switches.doubleEdge && isDouble(doubles, boxes, e);
+  const initiativeDouble = $derived(doubled(INITIATIVE_BOXES, initiativeEdge));
+  const acDouble = $derived(doubled(AGAINST, acEdge));
   let marking = $state(false);
   /** Tapping Speed opens its window; focus goes back to the tile afterwards, as for initiative. */
   let editingSpeed = $state(false);
@@ -239,7 +251,7 @@
     await tick();
     (acTileButton ?? acButton)?.focus();
   }
-  const edgeWord = (e: 'adv' | 'dis'): string => (e === 'adv' ? t.advantage : t.disadvantage);
+  const edgeWord = (e: 'adv' | 'dis'): string => wordOf(t, e, acDouble);
   /** What the effects that are on add to the AC (finding 05): a badge on the tile, named in its label and window. */
   const acEffects = $derived(acFromEffects(fields, effects));
   const acBadge = $derived(
@@ -328,7 +340,7 @@
           onclick={() => (markingAc = true)}
           ><small>{acTile.short ?? acTile.label}</small><b
             >{acTile.value}{#if acBadge}<span class="badge">{acBadge}</span>{/if}{#if acEdge}<span
-                class="edge against {acEdge}">{ARROW[acEdge]}</span
+                class="edge against {acEdge}">{arrowOf(acEdge, acDouble)}</span
               >{/if}</b
           ></button
         >
@@ -422,12 +434,12 @@
             style:--stat={statColor(tile.kind)}
             style:--stat-soft={statSoft(tile.kind)}
             aria-haspopup="dialog"
-            aria-label={`${tile.label} ${tile.value}${initiativeEdge ? `, ${initiativeEdge === 'adv' ? t.advantage : t.disadvantage}` : ''}`}
+            aria-label={`${tile.label} ${tile.value}${initiativeEdge ? `, ${wordOf(t, initiativeEdge, initiativeDouble)}` : ''}`}
             bind:this={initiativeTile}
             onclick={() => (marking = true)}
             ><span class="k">{tile.label}</span><span class="v"
               >{tile.value}{#if initiativeEdge}<span class="edge {initiativeEdge}" aria-hidden="true"
-                  >{ARROW[initiativeEdge]}</span
+                  >{arrowOf(initiativeEdge, initiativeDouble)}</span
                 >{/if}</span
             ></button
           >
@@ -452,7 +464,7 @@
             ><span class="v"
               >{tile.value}{#if acBadge}<span class="badge" aria-hidden="true">{acBadge}</span>{/if}{#if acEdge}<span
                   class="edge against {acEdge}"
-                  aria-hidden="true">{ARROW[acEdge]}</span
+                  aria-hidden="true">{arrowOf(acEdge, acDouble)}</span
                 >{/if}</span
             ></button
           >
@@ -601,7 +613,9 @@
     title={t.initiative}
     roll={`${t.initiative} ${numbers.initiative}`}
     state={initiativeMark}
-    boxes="Init"
+    boxes={INITIATIVE_BOXES}
+    double={initiativeDouble}
+    ondouble={ondouble && ((edge, double) => ondouble(INITIATIVE_BOXES, edge, double))}
     {disabled}
     {change}
     onclose={() => void closeMark()}
@@ -616,6 +630,8 @@
     state={{ advantage: acEdge === 'adv', disadvantage: acEdge === 'dis' }}
     boxes=""
     onmark={onacedge}
+    double={acDouble}
+    ondouble={ondouble && ((edge, double) => ondouble(AGAINST, edge, double))}
     note={t.acEdgeNote}
     hint={t.acEdgeHint}
     {disabled}

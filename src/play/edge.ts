@@ -1,5 +1,6 @@
 // Advantage and disadvantage marks: the PDF's own check box pairs ("Ste Adv"/"Ste Dis", "Str ST Adv",
 // "Init Adv", "Att Adv") hold them, so a mark stays in the sheet and in a printed or filled PDF.
+import type { Texts } from '../i18n.ts';
 import type { Advantage } from './read.ts';
 import type { Step } from '../session.svelte.ts';
 
@@ -30,3 +31,37 @@ export const isAttackRoll = (toHit: string): boolean => toHit !== '' && !/^DC\b/
 
 /** The small arrows that show a mark next to a roll. */
 export const ARROW = { adv: '▲', dis: '▼' } as const;
+
+/**
+ * The group's house rule (playtest 2026-11-14, note 8): "double" advantage or disadvantage, three d20 and
+ * the highest or lowest counts. The PDF has only the plain pair of boxes, so the app keeps which pairs are
+ * doubled, and of which kind, with the character: { "Ste": "adv" }. A double mark counts only while the
+ * PDF's boxes still show that kind, so a mark changed elsewhere (in Acrobat) never shows doubled by mistake.
+ */
+export type DoubleMarks = Readonly<Record<string, 'adv' | 'dis'>>;
+
+/** The key of the "attacks against you" mark, which has no boxes of its own. */
+export const AGAINST = 'AC';
+
+export const isDouble = (marks: DoubleMarks, boxes: string, edge: Edge): boolean =>
+  edge !== '' && marks[boxes] === edge;
+
+/** The marks with `boxes` doubled as `edge`, or no longer doubled. */
+export function withDouble(marks: DoubleMarks, boxes: string, edge: Edge, double: boolean): DoubleMarks {
+  const { [boxes]: _old, ...rest } = marks;
+  return double && edge !== '' ? { ...rest, [boxes]: edge } : rest;
+}
+
+/** ▲, or ▲▲ for a double mark. */
+export const arrowOf = (edge: 'adv' | 'dis', double: boolean): string =>
+  double ? ARROW[edge] + ARROW[edge] : ARROW[edge];
+
+/** "advantage", "double disadvantage": the mark in words, for screen readers and legends. */
+export function edgeWord(
+  t: Pick<Texts, 'advantage' | 'disadvantage' | 'doubleAdvantage' | 'doubleDisadvantage'>,
+  edge: 'adv' | 'dis',
+  double: boolean,
+): string {
+  if (edge === 'adv') return double ? t.doubleAdvantage : t.advantage;
+  return double ? t.doubleDisadvantage : t.disadvantage;
+}
