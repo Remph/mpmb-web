@@ -5,10 +5,10 @@
 -->
 <script lang="ts">
   import { fill } from '../../i18n.ts';
-  import type { Texts } from '../../i18n.ts';
+  import type { Texts, UiKey } from '../../i18n.ts';
   import type { Step } from '../../session.svelte.ts';
   import { goldTotal, readInventory, valueOf } from '../../play/read.ts';
-  import type { GearItem, GearList } from '../../play/read.ts';
+  import type { GearItem, GearList, MagicItem, Rarity } from '../../play/read.ts';
   import type { FieldViews } from '../../worker/views.ts';
   import Modal from '../../popups/Modal.svelte';
   import Stepper from './Stepper.svelte';
@@ -63,6 +63,23 @@
       .sort((a, b) => Number(a.location !== '') - Number(b.location !== '')),
   );
   const free = $derived(inventory.freeRow[list]);
+
+  const RARITY_WORD: Record<Rarity, UiKey> = {
+    common: 'rarityCommon',
+    uncommon: 'rarityUncommon',
+    rare: 'rarityRare',
+    'very rare': 'rarityVeryRare',
+    legendary: 'rarityLegendary',
+    artifact: 'rarityArtifact',
+  };
+
+  /** "Uncommon · needs attunement" under a tapped item's name (playtest 2026-11-14, note 6). */
+  function kindOf(item: MagicItem): string {
+    const line = [item.rarity ? t[RARITY_WORD[item.rarity]] : '', item.attunable ? t.needsAttunement : '']
+      .filter(Boolean)
+      .join(' · ');
+    return line.charAt(0).toUpperCase() + line.slice(1);
+  }
 
   /** Page 3's free text box. Acrobat's line breaks ("\r") become the browser's. */
   const HOLDINGS = 'Extra.Other Holdings';
@@ -176,7 +193,7 @@
     {#if inventory.magicItems.length}
       <div class="items">
         {#each inventory.magicItems as item (item.row)}
-          {#if item.description || item.attunable}
+          {#if item.description || item.attunable || item.rarity}
             <button
               type="button"
               class="item"
@@ -192,8 +209,10 @@
           {/if}
         {/each}
         {#if openItem}
+          {@const kind = kindOf(openItem)}
           <div class="text" id="magic-text">
             <b>{openItem.name}</b>
+            {#if kind}<p class="kind">{kind}</p>{/if}
             {#if openItem.description}<p>{openItem.description}</p>{/if}
             <!-- MPMB's own attunement box: ticking it applies the item's features, unticking removes them
                  (playtest 2026-11-07). The rules allow three; MPMB doesn't stop a fourth, so neither do we. -->
@@ -573,6 +592,11 @@
   .text p {
     margin: 0.25rem 0 0;
     white-space: pre-line;
+  }
+
+  .text p.kind {
+    margin: 0.125rem 0 0.375rem;
+    color: var(--ink-muted);
   }
 
   .attune {

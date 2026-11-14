@@ -20,6 +20,7 @@ import {
   readTool,
   spacedLines,
   readFeatures,
+  rarityOf,
   readInventory,
   readSpellSlotUse,
   recoveryKind,
@@ -232,6 +233,23 @@ describe('play view extras', () => {
     expect(inventory.carried).toBe('5.45 kg');
     expect(inventory.lifestyle).toBe('comfortable');
     expect(inventory.lifestyleCost).toBe('2 gp');
+  });
+
+  it("reads each magic item's rarity from MPMB's tooltip (playtest 2026-11-14, note 6)", () => {
+    expect(readInventory(paladin).magicItems.map((i) => [i.name, i.rarity])).toEqual([
+      ['Adamantine Plate Armor', 'uncommon'],
+      ['+2 Halberd', 'rare'],
+      ['Headband of Intellect', 'uncommon'],
+      ['Stone of Good Luck', 'uncommon'],
+    ]);
+    const tip = (line: string): string => `𝐒𝐨𝐦𝐞 𝐈𝐭𝐞𝐦\n${line}\n • Source: SRD.`;
+    expect(rarityOf(tip('Wondrous item, very rare (Requires Attunement)'))).toBe('very rare');
+    expect(rarityOf(tip('Weapon (glaive, halberd), rare'))).toBe('rare');
+    expect(rarityOf(tip('Legendary'))).toBe('legendary');
+    expect(rarityOf(tip('Requires Attunement by a wizard'))).toBe('');
+    expect(rarityOf(tip('Wondrous item, rarity varies'))).toBe('');
+    expect(rarityOf('A name only')).toBe('');
+    expect(rarityOf(undefined)).toBe('');
   });
 
   it('knows the fields of each gear row and where a new item goes', () => {

@@ -2,7 +2,7 @@
 // draws its own layout but keeps every value in MPMB's fields, so the rules stay MPMB's and a
 // character still saves, backs up and opens like before. Field names are those of the Colorful A4 sheet.
 import { DISPLAY, displayFromFlags } from '../engine/types.ts';
-import type { FieldViews } from '../worker/views.ts';
+import { NO_ATTUNEMENT, type FieldViews } from '../worker/views.ts';
 
 /** The text a field shows: its Format text ("+4", "d10") or its value. */
 export function shown(fields: FieldViews, name: string): string {
@@ -419,7 +419,31 @@ export interface MagicItem {
   attuned: boolean;
   /** Whether the item needs attunement: then the player can switch it on and off. */
   attunable: boolean;
+  /**
+   * The rarity ("uncommon", "very rare"), or '' when MPMB names none of the rules' rarities (an item typed by
+   * hand, a homebrew item's own word).
+   */
+  rarity: Rarity | '';
   description: string;
+}
+
+/** The rarities of the rules, rarest last. */
+export const RARITIES = ['common', 'uncommon', 'rare', 'very rare', 'legendary', 'artifact'] as const;
+export type Rarity = (typeof RARITIES)[number];
+
+/**
+ * An item's rarity from the tooltip MPMB gives its description field: the item's name on the first line,
+ * then "Wondrous item, uncommon (Requires Attunement)", the type and the rarity (either may be missing).
+ */
+export function rarityOf(tooltip: string | undefined): Rarity | '' {
+  const line = (tooltip ?? '').split(/\r\n|\r|\n/)[1] ?? '';
+  const text = line
+    .replace(/\s*\(requires attunement[^)]*\)\s*$/i, '')
+    .replace(/^requires attunement.*$/i, '')
+    .trim()
+    .toLowerCase();
+  // Rarest first, so "very rare" isn't read as "rare". Anything else (a homebrew "rarity varies") shows nothing.
+  return [...RARITIES].reverse().find((rarity) => new RegExp(`(^|, )${rarity}$`).test(text)) ?? '';
 }
 
 /** The PDF's two equipment lists: page 2 ("Adventuring Gear …") and page 3 ("Extra.Gear …"). */
@@ -483,6 +507,11 @@ export function goldTotal(coins: Inventory['coins']): number | null {
   return Math.round(counted.reduce((sum, coin) => sum + coin.n * GOLD_VALUE[coin.key], 0) * COPPER) / COPPER;
 }
 
+function attunable(fields: FieldViews, row: number): boolean {
+  const box = fields[`Extra.Magic Item Attuned ${row}`];
+  return box !== undefined && box.submitName !== NO_ATTUNEMENT;
+}
+
 export function readInventory(fields: FieldViews): Inventory {
   const carried = shown(fields, 'Weight Carried');
   // The unit the sheet weighs in ("kg" or "lb"), from the carried weight: "5.45 kg". Try it:
@@ -516,8 +545,12 @@ export function readInventory(fields: FieldViews): Inventory {
         row,
         name: clean(valueOf(fields, `Extra.Magic Item ${row}`)),
         attuned: isOn(fields, `Extra.Magic Item Attuned ${row}`),
-        // MPMB shows the box only for an item that needs attunement.
-        attunable: isShown(fields, `Extra.Magic Item Attuned ${row}`),
+        // MPMB marks an item that needs no attunement with "hide" in the box's submitName and hides the box
+        // to match. The mark, not the display, is what counts: in the overflow rows (7th item on) MPMB leaves
+        // the display alone while the overflow page isn't shown (setMIattunedVisibility), so the box can stay
+        // visible for an item that needs none, or hidden for one that does (playtest 2026-11-14).
+        attunable: attunable(fields, row),
+        rarity: rarityOf(fields[`Extra.Magic Item Description ${row}`]?.userName),
         description: valueOf(fields, `Extra.Magic Item Description ${row}`),
       }))
       .filter((item) => item.name !== ''),

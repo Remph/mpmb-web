@@ -17,6 +17,8 @@ import { FF } from './engine/types.ts';
 import type { ImageSlot, SheetImage, SheetImages } from './engine/types.ts';
 import { fitImages, fitPicture } from './play/pictures.ts';
 import { followMaxHp } from './play/rules.ts';
+import { withDouble } from './play/edge.ts';
+import type { Edge } from './play/edge.ts';
 import { keepChoices, readChoices, setupSteps, withChoice } from './play/attack-setup.ts';
 import type { AttackSetup } from './play/attack-setup.ts';
 import type { Texts } from './i18n.ts';
@@ -174,6 +176,12 @@ export class Session {
    * 2026-11-04, finding 4a).
    */
   private queued = 0;
+  /**
+   * Whether a tap that opens one of MPMB's menus waits in line or has its menu open. A second such tap then
+   * does nothing (playtest 2026-11-14): on the slower iPad a player tapped ··· again before the menu showed,
+   * the second menu opened right after the first was answered, and "Delete line" took the next item too.
+   */
+  private menuInLine = false;
   /** This tab's hold on the open character, so another tab can't overwrite it (finding 2). */
   private readonly tabLock: TabLock;
 
@@ -695,6 +703,12 @@ export class Session {
     return this.setHomebrew({ acEdge: edge || undefined });
   }
 
+  /** Marks or unmarks a roll's advantage or disadvantage as double (house rule, src/play/edge.ts). */
+  setDoubleEdge(boxes: string, edge: Edge, double: boolean): Promise<void> {
+    const marks = withDouble(this.current?.meta.homebrew?.doubleEdges ?? {}, boxes, edge, double);
+    return this.setHomebrew({ doubleEdges: Object.keys(marks).length ? marks : undefined });
+  }
+
   /**
    * Sets an attack row's proficiency or ability, as the PDF's two boxes in front of the row do, and
    * remembers it: MPMB sets the boxes again when it recalculates the weapons (src/play/attack-setup.ts).
@@ -1076,6 +1090,8 @@ export class Session {
   change(steps: Step[]): Promise<void> {
     const open = this.current;
     if (!open || readOnly(open.status) || steps.length === 0) return this.running;
+    const opensMenu = steps.some((step) => 'click' in step && step.menuTitle !== undefined);
+    if (opensMenu && this.menuInLine) return this.running;
     const id = this.nextChange++;
     const next = expected(open.fields, steps);
     steps.forEach((step) => {
@@ -1095,7 +1111,11 @@ export class Session {
       });
     };
     const own = new Set(steps.map((step) => ('edit' in step ? step.edit : step.click)));
-    return this.queue(open, make, () => this.waiting.clear(), own);
+    const done = this.queue(open, make, () => this.waiting.clear(), own);
+    if (!opensMenu) return done;
+    this.menuInLine = true;
+    // queue() never rejects (it reports failures itself), so this runs once the menu's work is over.
+    return done.finally(() => (this.menuInLine = false));
   }
 
   /**
