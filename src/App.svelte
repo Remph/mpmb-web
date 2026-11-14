@@ -8,6 +8,7 @@
   import BuildView from './views/build/BuildView.svelte';
   import HomebrewWindow from './views/HomebrewWindow.svelte';
   import LookWindow from './views/LookWindow.svelte';
+  import AboutWindow from './views/AboutWindow.svelte';
   import { look } from './look.svelte.ts';
   import { sheetColor } from './look.ts';
   import { BUILD, SOURCE_URL, sourceUrl } from './version.ts';
@@ -69,6 +70,8 @@
   const CHARACTER_ROUTE = /^#\/character\/([^/]+)(\/build(?:\/choices\/([^/]*)|\/(gear|spells))?)?$/;
   let rules = $state(false);
   let looks = $state(false);
+  /** The About window: thanks, credits and the source (playtest 2026-11-14, note 4). */
+  let about = $state(false);
   let missing = $state(false);
   let building = $state(false);
   /** The feature whose choice the Build screen opens at, or null for its first step. */
@@ -147,6 +150,9 @@
   {#if looks}
     <LookWindow onclose={() => (looks = false)} {session} {t} />
   {/if}
+  {#if about}
+    <AboutWindow onclose={() => (about = false)} {t} />
+  {/if}
 
   <main>
     {#if missing}
@@ -162,6 +168,8 @@
       <p>{t.creditsMpmb}</p>
       <p>{t.creditsSrd}</p>
       <p class="links">
+        <!-- The thanks to the first players live in the About window, also in the play view's sheet menu. -->
+        <button type="button" class="link" onclick={() => (about = true)}>{t.aboutTitle}</button>
         <a href={SOURCE_URL}>{t.source}</a>
         <a href={MPMB_PATREON}>{t.supportMpmb}</a>
         {#if BUILD.commit}
@@ -252,10 +260,21 @@
     gap: 0 1.5rem;
   }
 
-  .links a {
+  .links a,
+  .links .link {
     display: inline-flex;
     align-items: center;
     min-height: 44px;
     color: var(--accent);
+  }
+
+  /* Opens a window but reads as one of the links beside it. */
+  .links .link {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
   }
 </style>

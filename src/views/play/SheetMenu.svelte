@@ -16,6 +16,7 @@
   import AddOnsWindow from './AddOnsWindow.svelte';
   import HomebrewWindow from '../HomebrewWindow.svelte';
   import LookWindow from '../LookWindow.svelte';
+  import AboutWindow from '../AboutWindow.svelte';
   import { look } from '../../look.svelte.ts';
   import { hasOneMode } from '../../look.ts';
   import { homebrew } from '../../homebrew/switches.svelte.ts';
@@ -96,6 +97,8 @@
   );
   /** The Look window, in this window's place as well. */
   let looks = $state(false);
+  /** The About window, the same. */
+  let about = $state(false);
   const lookLine = $derived(
     fill(t.lookMenuLine, {
       theme: { purple: t.lookPurple, campfire: t.lookCampfire, oled: t.lookOled }[look.current.theme],
@@ -134,6 +137,8 @@
   <HomebrewWindow {onclose} {t} />
 {:else if looks}
   <LookWindow {onclose} {session} {t} />
+{:else if about}
+  <AboutWindow {onclose} {t} />
 {:else}
   <Modal title={t.sheetMenu} onescape={onclose} closeLabel={t.close} wide>
     {#if !session.client.answersPopUps}
@@ -224,6 +229,9 @@
       </button>
       <button type="button" class="tile" onclick={toggleLanguage}>
         <b lang={t.switchLanguage === 'English' ? 'en' : 'de'}>{t.switchLanguage}</b><small>{t.menuLanguageLine}</small>
+      </button>
+      <button type="button" class="tile" onclick={() => (about = true)}>
+        <b>{t.aboutTitle}</b><small>{t.aboutMenuLine}</small>
       </button>
       <button type="button" class="tile warn" disabled={busy} onclick={() => run([MENU_ROOT, 'Reset'])}>
         <b>{t.menuReset}</b><small>{t.menuResetLine}</small>
