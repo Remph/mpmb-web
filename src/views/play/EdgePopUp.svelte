@@ -3,9 +3,10 @@
   The mark lives in the PDF's own pair of check boxes (src/play/edge.ts).
 -->
 <script lang="ts">
-  import type { Texts } from '../../i18n.ts';
+  import type { Texts, UiKey } from '../../i18n.ts';
   import Modal from '../../popups/Modal.svelte';
-  import { ARROW, edgeOf, markSteps } from '../../play/edge.ts';
+  import { homebrew } from '../../homebrew/switches.svelte.ts';
+  import { arrowOf, edgeOf, markSteps } from '../../play/edge.ts';
   import type { Edge } from '../../play/edge.ts';
   import type { Advantage } from '../../play/read.ts';
   import type { Step } from '../../session.svelte.ts';
@@ -19,6 +20,10 @@
     boxes: string;
     /** Instead of MPMB's boxes: a mark the app keeps itself (attacks against the character have none). */
     onmark?: (to: Edge) => void;
+    /** Whether the mark is double (house rule, src/play/edge.ts). */
+    double?: boolean;
+    /** Keeps a double mark, or takes it away: the app keeps it with the character, the PDF has no box. */
+    ondouble?: (edge: Edge, double: boolean) => void;
     /** Instead of the PDF note in the hint. */
     hint?: string;
     /** A line under the choices, when the mark means more than one roll ("every attack roll"). */
@@ -29,16 +34,52 @@
     t: Texts;
   }
 
-  let { title, roll, state, boxes, onmark, hint = '', note = '', disabled, change, onclose, t }: Props = $props();
+  let {
+    title,
+    roll,
+    state,
+    boxes,
+    onmark,
+    double = false,
+    ondouble,
+    hint = '',
+    note = '',
+    disabled,
+    change,
+    onclose,
+    t,
+  }: Props = $props();
 
-  const CHOICES: [Edge, 'rollNormal' | 'rollAdvantage' | 'rollDisadvantage'][] = [
-    ['', 'rollNormal'],
-    ['adv', 'rollAdvantage'],
-    ['dis', 'rollDisadvantage'],
+  interface Choice {
+    edge: Edge;
+    double: boolean;
+    text: UiKey;
+    line?: UiKey;
+  }
+  const PLAIN: Choice[] = [
+    { edge: '', double: false, text: 'rollNormal' },
+    { edge: 'adv', double: false, text: 'rollAdvantage' },
+    { edge: 'dis', double: false, text: 'rollDisadvantage' },
   ];
+  // The group's house rule, in the order and words of the hub's dice roller.
+  const WITH_DOUBLE: Choice[] = [
+    { edge: '', double: false, text: 'rollNormal' },
+    { edge: 'adv', double: false, text: 'rollAdvantage' },
+    { edge: 'adv', double: true, text: 'rollDoubleAdvantage', line: 'rollHighestOfThree' },
+    { edge: 'dis', double: false, text: 'rollDisadvantage' },
+    { edge: 'dis', double: true, text: 'rollDoubleDisadvantage', line: 'rollLowestOfThree' },
+  ];
+  const offersDouble = $derived(homebrew.switches.doubleEdge && ondouble !== undefined);
+  const choices = $derived(offersDouble ? WITH_DOUBLE : PLAIN);
   const current = $derived(edgeOf(state));
+  // With the switch off a double mark shows as the plain one it is in the PDF.
+  const isCurrent = (choice: Choice): boolean =>
+    choice.edge === current && (!offersDouble || choice.double === (double && current !== ''));
 
-  function mark(to: Edge) {
+  function mark(choice: Choice) {
+    const to = choice.edge;
+    // Also from double advantage to double disadvantage: the kept mark names the kind.
+    if (offersDouble && ondouble && (choice.double || double)) ondouble(to, choice.double);
     if (onmark) {
       if (to !== current) onmark(to);
       return onclose();
@@ -53,10 +94,17 @@
   {#if roll}<p class="roll">{roll}</p>{/if}
   <!-- Against the character the colours swap: enemies rolling with disadvantage is good news. -->
   <div class="choices" class:against={!!onmark}>
-    {#each CHOICES as [to, text] (to)}
-      <button type="button" class="choice {to}" aria-pressed={current === to} {disabled} onclick={() => mark(to)}
-        >{#if to}<span aria-hidden="true">{ARROW[to]}</span>{/if}
-        {t[text]}</button
+    {#each choices as choice (choice.text)}
+      <button
+        type="button"
+        class="choice {choice.edge}"
+        aria-pressed={isCurrent(choice)}
+        {disabled}
+        onclick={() => mark(choice)}
+        >{#if choice.edge}<span aria-hidden="true">{arrowOf(choice.edge, choice.double)}</span>{/if}
+        <span class="words"
+          >{t[choice.text]}{#if choice.line}<small>{t[choice.line]}</small>{/if}</span
+        ></button
       >
     {/each}
   </div>
@@ -90,6 +138,19 @@
     font-weight: 700;
     text-align: left;
     cursor: pointer;
+  }
+
+  .words {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+  }
+
+  /* What a double mark means, in the dice roller's words: quieter than the choice itself. */
+  .words small {
+    color: var(--ink-muted);
+    font-size: 0.8125rem;
+    font-weight: 400;
   }
 
   .choice.adv {

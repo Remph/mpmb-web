@@ -51,7 +51,7 @@ describe('ult charges', () => {
 
 describe('homebrew switches', () => {
   test('everything is off until turned on; unknown or broken storage is ignored', () => {
-    const off = { ultCharges: false, noAmmo: false, shortRestHalfHp: false, bgAnywhere: false };
+    const off = { ultCharges: false, noAmmo: false, shortRestHalfHp: false, bgAnywhere: false, doubleEdge: false };
     expect(parseSwitches(null)).toEqual(off);
     expect(parseSwitches('not json')).toEqual(off);
     expect(parseSwitches('{"ultCharges":"yes","other":true}')).toEqual(off);
@@ -59,5 +59,6 @@ describe('homebrew switches', () => {
     expect(parseSwitches('{"ultCharges":true}')).toEqual({ ...off, ultCharges: true });
     expect(parseSwitches('{"noAmmo":true}')).toEqual({ ...off, noAmmo: true });
     expect(parseSwitches('{"bgAnywhere":true}')).toEqual({ ...off, bgAnywhere: true });
+    expect(parseSwitches('{"doubleEdge":true}')).toEqual({ ...off, doubleEdge: true });
   });
 });

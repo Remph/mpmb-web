@@ -8,7 +8,9 @@
   import { tick } from 'svelte';
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
-  import { ARROW, edgeOf } from '../../play/edge.ts';
+  import { homebrew } from '../../homebrew/switches.svelte.ts';
+  import { ARROW, arrowOf, edgeOf, edgeWord, isDouble } from '../../play/edge.ts';
+  import type { DoubleMarks, Edge } from '../../play/edge.ts';
   import EdgePopUp from './EdgePopUp.svelte';
   import { readAbilities, readSkills, readTool } from '../../play/read.ts';
   import type { AbilityKey, Advantage, SkillKey } from '../../play/read.ts';
@@ -19,10 +21,15 @@
     fields: FieldViews;
     disabled: boolean;
     change: (steps: Step[]) => void;
+    /** Rolls marked double (house rule, src/play/edge.ts) and how to change that. */
+    doubles?: DoubleMarks;
+    ondouble?: (boxes: string, edge: Edge, double: boolean) => void;
     t: Texts;
   }
 
-  let { fields, disabled, change, t }: Props = $props();
+  let { fields, disabled, change, doubles = {}, ondouble, t }: Props = $props();
+  /** Whether the mark on MPMB's pair of boxes `boxes` shows doubled: only while the house rule is on. */
+  const doubled = (boxes: string, e: Edge): boolean => homebrew.switches.doubleEdge && isDouble(doubles, boxes, e);
 
   const abilities = $derived(readAbilities(fields));
   const skills = $derived(readSkills(fields));
@@ -100,12 +107,14 @@
               type="button"
               class="save"
               aria-haspopup="dialog"
-              aria-label={`${fill(t.saveTitle, { ability: t[`ability${a.key}`] })} ${a.save}${e ? `, ${label(e)}` : ''}`}
+              aria-label={`${fill(t.saveTitle, { ability: t[`ability${a.key}`] })} ${a.save}${e ? `, ${edgeWord(t, e, doubled(`${a.key} ST`, e))}` : ''}`}
               onclick={(ev) => open({ kind: 'save', key: a.key }, ev.currentTarget)}
             >
               <span class="prof" class:no={!a.saveProficient} title={a.saveProficient ? t.proficient : undefined}
               ></span>{a.save}
-              {#if e}<span class="edge {e}" aria-label={label(e)}>{ARROW[e]}</span>{/if}
+              {#if e}<span class="edge {e}" aria-label={edgeWord(t, e, doubled(`${a.key} ST`, e))}
+                  >{arrowOf(e, doubled(`${a.key} ST`, e))}</span
+                >{/if}
             </button>
           </td>
         </tr>
@@ -132,7 +141,9 @@
           <span>
             <span class="prof" class:no={!s.proficient} class:exp={s.expertise}></span>{t[`skill${s.key}`]}
             <span class="ability">{t[`short${s.ability}`]}</span>
-            {#if e}<span class="edge {e}" aria-label={label(e)}>{ARROW[e]}</span>{/if}
+            {#if e}<span class="edge {e}" aria-label={edgeWord(t, e, doubled(s.key, e))}
+                >{arrowOf(e, doubled(s.key, e))}</span
+              >{/if}
           </span>
           <b>{s.bonus}</b>
         </button>
@@ -147,6 +158,8 @@
     roll={marked.roll}
     state={marked.state}
     boxes={marked.boxes}
+    double={doubled(marked.boxes, edgeOf(marked.state))}
+    ondouble={ondouble && ((edge, double) => marked && ondouble(marked.boxes, edge, double))}
     {disabled}
     {change}
     onclose={() => void close()}

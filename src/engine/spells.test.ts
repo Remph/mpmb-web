@@ -10,7 +10,15 @@ import { checkboxField, freeRow, readSpells, rowAfter } from '../play/spells.ts'
 import { viewsOf } from '../worker/views.ts';
 import { valueOf } from '../play/read.ts';
 import type { Engine } from './engine.ts';
-import { SPELLS_READ_SCRIPT, answerSpellDialogs, applySpellPicks, newSpellRow, readSpellsInfo } from './spells.ts';
+import {
+  COUNT_SPELL_SHEETS_SCRIPT,
+  SPELLS_READ_SCRIPT,
+  answerSpellDialogs,
+  applySpellPicks,
+  keepingPrepared,
+  newSpellRow,
+  readSpellsInfo,
+} from './spells.ts';
 import type { RowMenus, SpellPicks } from './spells.ts';
 import type { DialogView, Host } from './host.ts';
 
@@ -152,6 +160,68 @@ describe("picks through MPMB's spell dialogs", () => {
       .map((s) => s.name);
     expect(prepared).toEqual(['Web', 'Fireball']);
     expect(evoker().map((s) => s.name)).toContain('Shield');
+  });
+});
+
+describe("MPMB's own new spell sheet (playtest 2026-11-14, note 2)", () => {
+  it('keeps the prepared spells that are still on the sheet, wherever MPMB makes it', () => {
+    const wizard = openSheet(referenceSheet('wizard10-evoker'));
+    wizard.evaluate(COUNT_SPELL_SHEETS_SCRIPT);
+    const evoker = () =>
+      readSpells(viewsOf(wizard.doc))
+        .filter((s) => s.key === 'wizard')
+        .flatMap((s) => s.levels.flatMap((l) => l.spells));
+    evoker()
+      .filter((s) => s.mark.prepared === true)
+      .forEach((s) => wizard.click(checkboxField(s)));
+    evoker()
+      .filter((s) => s.name === 'Fireball' || s.name === 'Web')
+      .forEach((s) => wizard.click(checkboxField(s)));
+    const before = viewsOf(wizard.doc);
+    // MPMB's Spells menu, "(Re)generate a Spell Sheet": the same function its Changes window calls.
+    keepingPrepared(wizard, before, () => wizard.evaluate('MakeSpellMenu_SpellOptions(["ssheet", "generate"])'));
+    expect(wizard.stats.errors).toEqual([]);
+    expect(
+      evoker()
+        .filter((s) => s.mark.prepared === true)
+        .map((s) => s.name),
+    ).toEqual(['Web', 'Fireball']);
+
+    // A job that makes no new pages leaves the ticks alone, even ones taken off since `before`.
+    const web = evoker().find((s) => s.name === 'Web');
+    keepingPrepared(wizard, before, () => web && wizard.click(checkboxField(web)));
+    expect(
+      evoker()
+        .filter((s) => s.mark.prepared === true)
+        .map((s) => s.name),
+    ).toEqual(['Fireball']);
+  });
+
+  it("keeps them through the Changes window's spell button after a level-up", () => {
+    // MPMB's Changes window after a new level offers new spell sheets (its "bSPo" button); the app shows
+    // that window to the player in the same edit, so the edit command's wrapper must catch it.
+    const host = new ScriptedHost({ dialogs: { 'CHANGES ALERT DIALOG': { steps: [{ click: 'bSPo' }] } } });
+    const wizard = openSheet(referenceSheet('wizard10-evoker'), host);
+    wizard.evaluate(COUNT_SPELL_SHEETS_SCRIPT);
+    const evoker = () =>
+      readSpells(viewsOf(wizard.doc))
+        .filter((s) => s.key === 'wizard')
+        .flatMap((s) => s.levels.flatMap((l) => l.spells));
+    evoker()
+      .filter((s) => s.mark.prepared === true)
+      .forEach((s) => wizard.click(checkboxField(s)));
+    evoker()
+      .filter((s) => s.name === 'Fireball' || s.name === 'Web')
+      .forEach((s) => wizard.click(checkboxField(s)));
+    const before = viewsOf(wizard.doc);
+    keepingPrepared(wizard, before, () => wizard.edit('Class and Levels', 'Evoker 11'));
+    expect(host.asked.map((a) => a.what)).toContain('SPELL LIST GENERATION DIALOG');
+    expect(wizard.stats.errors).toEqual([]);
+    expect(
+      evoker()
+        .filter((s) => s.mark.prepared === true)
+        .map((s) => s.name),
+    ).toEqual(['Web', 'Fireball']);
   });
 });
 

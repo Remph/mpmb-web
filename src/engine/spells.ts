@@ -14,6 +14,7 @@
 import { valueOf } from '../play/read.ts';
 import { checkboxField, readSpells } from '../play/spells.ts';
 import { viewsOf } from '../worker/views.ts';
+import type { FieldViews } from '../worker/views.ts';
 import type { Engine } from './engine.ts';
 import type { DialogReply, DialogView } from './host.ts';
 
@@ -378,9 +379,9 @@ function spellPicksScript(
 const GENERATE_SCRIPT = 'MakeSpellMenu_SpellOptions(["ssheet", "generate"])';
 
 /** A spell on the sheet, by its source and key: what stays the same spell across a new spell sheet. */
-const preparedOnSheet = (engine: Engine): Set<string> =>
+const preparedIn = (fields: FieldViews): Set<string> =>
   new Set(
-    readSpells(viewsOf(engine.doc)).flatMap((source) =>
+    readSpells(fields).flatMap((source) =>
       source.levels.flatMap((l) =>
         l.spells.filter((s) => s.mark.prepared === true).map((s) => `${source.key}|${s.key}`),
       ),
@@ -388,10 +389,55 @@ const preparedOnSheet = (engine: Engine): Set<string> =>
   );
 
 /**
+ * MPMB's new spell sheet pages start with no spell ticked as prepared. This ticks the spells that were
+ * prepared in `before` and are on the new pages again, by a click on MPMB's own box as the player would
+ * do. Spells no longer on the sheet just drop out.
+ */
+function tickAgain(engine: Engine, before: FieldViews): void {
+  const prepared = preparedIn(before);
+  if (prepared.size === 0) return;
+  readSpells(viewsOf(engine.doc))
+    .flatMap((source) =>
+      source.levels.flatMap((l) =>
+        l.spells.filter((s) => s.mark.prepared === false && prepared.has(`${source.key}|${s.key}`)),
+      ),
+    )
+    .forEach((spell) => engine.click(checkboxField(spell)));
+}
+
+/**
+ * Counts MPMB's spell sheet generations in the sheet's realm (AppSpellSheetsMade). MPMB makes new pages
+ * not only from the Build screen: its Changes window after a level-up offers it, so do its Spells menu and a
+ * new spellcasting ability (playtest 2026-11-14, note 2). Wrapping the global catches them all: MPMB's
+ * scripts and its timers look the function up by name each time. Run once per opened sheet.
+ */
+export const COUNT_SPELL_SHEETS_SCRIPT = `(function () {
+  if (typeof AppSpellSheetsMade !== "undefined") return;
+  AppSpellSheetsMade = 0;
+  var generate = GenerateSpellSheet;
+  GenerateSpellSheet = function () {
+    AppSpellSheetsMade += 1;
+    return generate.apply(this, arguments);
+  };
+})()`;
+
+const spellSheetsMade = (engine: Engine): number => Number(engine.evaluate('AppSpellSheetsMade')) || 0;
+
+/**
+ * Runs `job`; when MPMB made new spell sheet pages on the way, the spells prepared in `before` (the fields
+ * as they were before the job) get their tick back.
+ */
+export function keepingPrepared<T>(engine: Engine, before: FieldViews, job: () => T): T {
+  const made = spellSheetsMade(engine);
+  const result = job();
+  if (spellSheetsMade(engine) > made) tickAgain(engine, before);
+  return result;
+}
+
+/**
  * The Spells step's "Update spell sheet": the picks into CurrentSpells, then MPMB's "(Re)generate a Spell
  * Sheet" with the app pressing OK in each spell dialog (other pop-ups on the way still go to the player).
- * MPMB's new pages start with no spell ticked as prepared; the spells that were prepared and are still
- * there get their tick back, by a click on MPMB's own box as the player would do.
+ * The spells that were prepared and are still there get their tick back (tickAgain).
  */
 export function applySpellPicks(
   engine: Engine,
@@ -403,17 +449,11 @@ export function applySpellPicks(
   const counts = Object.fromEntries(
     info.sources.map((s) => [s.key, { cantrips: s.cantrips?.count ?? 0, spells: s.spells?.count ?? 0 }]),
   );
-  const prepared = preparedOnSheet(engine);
+  const before = viewsOf(engine.doc);
   engine.evaluate(spellPicksScript(picks, counts, sheet));
   answered(answerSpellDialogs, () => engine.evaluate(GENERATE_SCRIPT));
   engine.runTimers();
-  readSpells(viewsOf(engine.doc))
-    .flatMap((source) =>
-      source.levels.flatMap((l) =>
-        l.spells.filter((s) => s.mark.prepared === false && prepared.has(`${source.key}|${s.key}`)),
-      ),
-    )
-    .forEach((spell) => engine.click(checkboxField(spell)));
+  tickAgain(engine, before);
 }
 
 /** MPMB's cReturn for "Insert empty rows" > "1 empty row" in a spell row's menu. */

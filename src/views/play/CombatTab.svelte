@@ -4,7 +4,8 @@
 -->
 <script lang="ts">
   import { tick } from 'svelte';
-  import { ARROW, edgeOf, isAttackRoll } from '../../play/edge.ts';
+  import { arrowOf, edgeOf, edgeWord, isAttackRoll, isDouble } from '../../play/edge.ts';
+  import type { DoubleMarks, Edge } from '../../play/edge.ts';
   import { gearHref } from '../../build/choose-link.ts';
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
@@ -44,10 +45,13 @@
     ult?: UltCharges | null;
     /** An attack row's proficiency or ability (the chip's window); the session remembers it. */
     onsetup: (row: number, set: Partial<AttackSetupValues>) => void;
+    /** Rolls marked double (house rule, src/play/edge.ts) and how to change that. */
+    doubles?: DoubleMarks;
+    ondouble?: (boxes: string, edge: Edge, double: boolean) => void;
     t: Texts;
   }
 
-  let { fields, characterId, disabled, change, ult = null, onsetup, t }: Props = $props();
+  let { fields, characterId, disabled, change, ult = null, onsetup, doubles = {}, ondouble, t }: Props = $props();
 
   const attacks = $derived(readAttacks(fields));
   const perAction = $derived(attacksPerAction(fields));
@@ -57,7 +61,10 @@
   const rules = $derived(ruleIndex(fields));
   const attackMark = $derived(readRollMarks(fields).attacks);
   const attackEdge = $derived(edgeOf(attackMark));
-  const edgeLabel = (e: 'adv' | 'dis'): string => (e === 'adv' ? t.advantage : t.disadvantage);
+  /** MPMB's pair of boxes for every attack roll. */
+  const ATTACK_BOXES = 'Att';
+  const attackDouble = $derived(homebrew.switches.doubleEdge && isDouble(doubles, ATTACK_BOXES, attackEdge));
+  const edgeLabel = (e: 'adv' | 'dis'): string => edgeWord(t, e, attackDouble);
 
   /** The to-hit button that opened the advantage pop-up: focus goes back there when it closes. */
   let markFrom: HTMLButtonElement | null = $state(null);
@@ -171,7 +178,7 @@
             onclick={(ev) => openMark(ev.currentTarget)}
             >{attack.toHit}
             {#if attackEdge}<small class="edge {attackEdge}" aria-hidden="true"
-                >{ARROW[attackEdge]} {edgeLabel(attackEdge)}</small
+                >{arrowOf(attackEdge, attackDouble)} {edgeLabel(attackEdge)}</small
               >{/if}</button
           >
         {:else if attack.toHit}
@@ -194,7 +201,9 @@
     title={t.attackRolls}
     roll=""
     state={attackMark}
-    boxes="Att"
+    boxes={ATTACK_BOXES}
+    double={attackDouble}
+    ondouble={ondouble && ((edge, double) => ondouble(ATTACK_BOXES, edge, double))}
     note={t.attackRollsNote}
     {disabled}
     {change}
@@ -494,6 +503,12 @@
     color: var(--hp);
   }
 
+  /* "▼▼ doppelter Nachteil" on one line widened the to-hit column on a phone until the name column was
+     narrower than the attack's setup chip, which then lay over the button (review of #95, 360 px German). */
+  .badge small.edge {
+    max-width: 5.5rem;
+  }
+
   .badge.damage {
     min-width: 6rem;
     background: var(--paper);
@@ -528,6 +543,28 @@
   .uses small {
     display: block;
     font-size: 0.8125rem;
+  }
+
+  /*
+   * Phones (M13, UI review 2 finding 14): the dots never squeeze. The name keeps at least 8 rem beside them; when
+   * that doesn't fit (six slot dots on a 360 px phone), the dots take the next line, right-aligned, in one row. The
+   * same for a pool's stepper (Lay on Hands): every row has one control after its name, and it always sits right.
+   */
+  @media (max-width: 699px) {
+    .uses {
+      flex-wrap: wrap;
+      column-gap: 0.25rem;
+    }
+
+    .uses .name {
+      flex: 1 1 8rem;
+    }
+
+    .uses > :global(:not(.name)) {
+      flex: none;
+      max-width: 100%;
+      margin-left: auto;
+    }
   }
 
   /* A name that opens its text: still a plain row, only a ▸ says it opens (no tile, Remph 2026-11-07). */

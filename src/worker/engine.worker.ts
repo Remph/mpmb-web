@@ -37,7 +37,14 @@ import { allowTimer } from '../engine/startup.ts';
 import type { Bookmark, ImageSlot, SheetImage, SheetImages, SheetSnapshot } from '../engine/types.ts';
 import { offers } from '../engine/choices.ts';
 import { answerScores } from '../engine/scores.ts';
-import { SPELLS_READ_SCRIPT, applySpellPicks, newSpellRow, readSpellsInfo } from '../engine/spells.ts';
+import {
+  COUNT_SPELL_SHEETS_SCRIPT,
+  SPELLS_READ_SCRIPT,
+  applySpellPicks,
+  keepingPrepared,
+  newSpellRow,
+  readSpellsInfo,
+} from '../engine/spells.ts';
 import type { RowMenus } from '../engine/spells.ts';
 import { answerWelcome } from '../engine/welcome.ts';
 import { readSheetPdf } from '../pdf/read-sheet.ts';
@@ -205,6 +212,7 @@ function open(sheet: SheetSnapshot, sheetHost: Host = host): Opened {
   });
   // Opening the sheet in Acrobat runs the timers MPMB set while loading (those the app allows).
   engine.runTimers();
+  engine.evaluate(COUNT_SPELL_SHEETS_SCRIPT);
   // Acrobat shows the text that Format scripts made when the PDF was saved; here each field's Format
   // runs once, so that the page gets "+3" for a modifier stored as 3, not only after it changes.
   engine.doc.formatAll();
@@ -239,6 +247,16 @@ async function readPdf(bytes: ArrayBuffer): Promise<SheetSnapshot> {
   }
 }
 
+/**
+ * Runs a command that may run MPMB's scripts. When they make new spell sheet pages on the way (MPMB's
+ * Changes window after a level-up, its Spells menu), the spells the page showed as prepared get their tick
+ * back, as on the Build screen (playtest 2026-11-14, note 2). `shown` is still the sheet before the command.
+ */
+const keeping = <T>(job: (sheet: Engine) => T): T => {
+  const sheet = opened();
+  return keepingPrepared(sheet, shown, () => job(sheet));
+};
+
 const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }>) => unknown } = {
   open: ({ character, pack }) => {
     usePack(pack);
@@ -261,10 +279,10 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
     checkSheetType(sheet);
     return writeSheetPdf(bytes, opened().snapshot(), sheet);
   },
-  edit: ({ field, text, cancelable }) => opened().edit(field, text, { cancelable }),
+  edit: ({ field, text, cancelable }) => keeping((sheet) => sheet.edit(field, text, { cancelable })),
   click: ({ field, widget, shift, newRow }) =>
-    newRow ? newSpellRow(opened(), field, true, ROW_MENUS) : opened().click(field, widget, shift),
-  bookmark: ({ path }) => opened().clickBookmark(path),
+    keeping((sheet) => (newRow ? newSpellRow(sheet, field, true, ROW_MENUS) : sheet.click(field, widget, shift))),
+  bookmark: ({ path }) => keeping((sheet) => sheet.clickBookmark(path)),
   save: () => diffCharacter(sheetVersion.blank(), opened().snapshot()),
   values: () => fieldValues(opened().snapshot()),
   serve: ({ port, buffer }) => serve(opened(), port, buffer),
@@ -280,8 +298,8 @@ const COMMANDS: { [K in Command['type']]: (command: Extract<Command, { type: K }
   builder: () => readBuilderInfo(opened().evaluate(BUILDER_INFO_SCRIPT)),
   units: ({ system }) => switchUnits(opened(), system),
   scores: ({ changes }) => answered(answerScores(changes), () => opened().click('Ability Scores Button')),
-  pick: ({ field, answer }) => pick(answer, () => opened().click(field)),
-  pickBookmark: ({ path, answer }) => pick(answer, () => opened().clickBookmark(path)),
+  pick: ({ field, answer }) => keeping((sheet) => pick(answer, () => sheet.click(field))),
+  pickBookmark: ({ path, answer }) => keeping((sheet) => pick(answer, () => sheet.clickBookmark(path))),
   spells: () => readSpellsInfo(opened().evaluate(SPELLS_READ_SCRIPT)),
   companionOptions: () => readCompanionOptions(opened().evaluate(COMPANION_OPTIONS_SCRIPT)),
   wildShapeOptions: () => readWildShapeOptions(opened().evaluate(WILD_SHAPE_OPTIONS_SCRIPT)),

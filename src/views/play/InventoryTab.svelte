@@ -5,10 +5,10 @@
 -->
 <script lang="ts">
   import { fill } from '../../i18n.ts';
-  import type { Texts } from '../../i18n.ts';
+  import type { Texts, UiKey } from '../../i18n.ts';
   import type { Step } from '../../session.svelte.ts';
   import { goldTotal, readInventory, valueOf } from '../../play/read.ts';
-  import type { GearItem, GearList } from '../../play/read.ts';
+  import type { GearItem, GearList, MagicItem, Rarity } from '../../play/read.ts';
   import type { FieldViews } from '../../worker/views.ts';
   import Modal from '../../popups/Modal.svelte';
   import Stepper from './Stepper.svelte';
@@ -63,6 +63,23 @@
       .sort((a, b) => Number(a.location !== '') - Number(b.location !== '')),
   );
   const free = $derived(inventory.freeRow[list]);
+
+  const RARITY_WORD: Record<Rarity, UiKey> = {
+    common: 'rarityCommon',
+    uncommon: 'rarityUncommon',
+    rare: 'rarityRare',
+    'very rare': 'rarityVeryRare',
+    legendary: 'rarityLegendary',
+    artifact: 'rarityArtifact',
+  };
+
+  /** "Uncommon · needs attunement" under a tapped item's name (playtest 2026-11-14, note 6). */
+  function kindOf(item: MagicItem): string {
+    const line = [item.rarity ? t[RARITY_WORD[item.rarity]] : '', item.attunable ? t.needsAttunement : '']
+      .filter(Boolean)
+      .join(' · ');
+    return line.charAt(0).toUpperCase() + line.slice(1);
+  }
 
   /** Page 3's free text box. Acrobat's line breaks ("\r") become the browser's. */
   const HOLDINGS = 'Extra.Other Holdings';
@@ -176,7 +193,7 @@
     {#if inventory.magicItems.length}
       <div class="items">
         {#each inventory.magicItems as item (item.row)}
-          {#if item.description || item.attunable}
+          {#if item.description || item.attunable || item.rarity}
             <button
               type="button"
               class="item"
@@ -192,8 +209,10 @@
           {/if}
         {/each}
         {#if openItem}
+          {@const kind = kindOf(openItem)}
           <div class="text" id="magic-text">
             <b>{openItem.name}</b>
+            {#if kind}<p class="kind">{kind}</p>{/if}
             {#if openItem.description}<p>{openItem.description}</p>{/if}
             <!-- MPMB's own attunement box: ticking it applies the item's features, unticking removes them
                  (playtest 2026-11-07). The rules allow three; MPMB doesn't stop a fourth, so neither do we. -->
@@ -446,6 +465,17 @@
     margin: 0;
   }
 
+  /* Narrow phones in German: "Magische Gegenstände · 2 eingestimmt" leaves "Ändern" too little room, so it wraps. */
+  @media (max-width: 699px) {
+    .head:has(.change) {
+      flex-wrap: wrap;
+    }
+
+    .change {
+      flex: none;
+    }
+  }
+
   h2 {
     margin: 0 0 0.5rem;
     font-size: 1rem;
@@ -564,6 +594,11 @@
     white-space: pre-line;
   }
 
+  .text p.kind {
+    margin: 0.125rem 0 0.375rem;
+    color: var(--ink-muted);
+  }
+
   .attune {
     display: flex;
     flex-wrap: wrap;
@@ -636,6 +671,31 @@
 
   .count {
     font-weight: 400;
+  }
+
+  /*
+   * Phones (M13): the two gear lists share the width, each name on its line and the count under it, rather than
+   * "Adventuring gear 3" breaking wherever it runs out of room.
+   */
+  @media (max-width: 699px) {
+    .lists {
+      display: flex;
+    }
+
+    .lists button {
+      flex: 1 1 0;
+      min-width: 0;
+      padding: 0.25rem 0.5rem;
+      line-height: 1.2;
+      /* "Abenteuerausrüstung" is one word wider than half a phone: break it as German does, with a hyphen. */
+      hyphens: auto;
+      overflow-wrap: anywhere;
+    }
+
+    .lists .count {
+      display: block;
+      font-size: 0.8125rem;
+    }
   }
 
   /* The name looks like text until it is tapped, then it is a field to type in. */
@@ -811,6 +871,26 @@
   .coin span {
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+
+  /*
+   * Phones (M13): five coins in 312 px leave 56 px each, too narrow for "Platinum" or "Elektrum" (they broke
+   * mid-word). The short name stays in sight; the long one stays in the field's label for screen readers.
+   */
+  @media (max-width: 699px) {
+    .coin b {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .coin span {
+      font-size: 0.875rem;
+      font-weight: 700;
+    }
   }
 
   .pp {

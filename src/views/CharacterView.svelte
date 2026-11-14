@@ -5,6 +5,7 @@
   Every tap goes through MPMB's own fields (session.change), so rules and saving stay MPMB's.
 -->
 <script lang="ts">
+  import type { Edge } from '../play/edge.ts';
   import { fill } from '../i18n.ts';
   import type { Texts } from '../i18n.ts';
   import { dawn, dawnFeatures, longRest, pactSlots, shortRest } from '../play/rules.ts';
@@ -340,6 +341,9 @@
   const ult = $derived(homebrew.switches.ultCharges ? readUlt(open.meta.homebrew?.ult) : null);
   const effects = $derived(readEffects(open.meta.homebrew?.effects));
   const acEdge = $derived(open.meta.homebrew?.acEdge ?? '');
+  /** Rolls marked double, the house rule (src/play/edge.ts); kept with the character, never in the PDF. */
+  const doubles = $derived(open.meta.homebrew?.doubleEdges ?? {});
+  const ondouble = (boxes: string, edge: Edge, double: boolean) => void session.setDoubleEdge(boxes, edge, double);
   /**
    * A new character before its class is chosen: MPMB's sheet has 0 hit points, death saves and empty scores,
    * which looked like a dying character. A card that leads to the Build screen takes the hit point box's
@@ -602,6 +606,8 @@
             oneffects={(list) => void session.setEffects(list)}
             {acEdge}
             onacedge={(edge) => void session.setAcEdge(edge)}
+            {doubles}
+            {ondouble}
             form={formShape}
             {t}
           />
@@ -663,6 +669,8 @@
               oneffects={(list) => void session.setEffects(list)}
               {acEdge}
               onacedge={(edge) => void session.setAcEdge(edge)}
+              {doubles}
+              {ondouble}
               {phone}
               rest={!phone || shownTab === 'combat'}
               {t}
@@ -709,12 +717,14 @@
                 {change}
                 {ult}
                 onsetup={(row, set) => void session.setAttackSetup(row, set)}
+                {doubles}
+                {ondouble}
                 {t}
               />
             {:else if shownTab === 'spells'}
               <SpellsTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
             {:else if shownTab === 'checks'}
-              <Checks {fields} {disabled} {change} {t} />
+              <Checks {fields} {disabled} {change} {doubles} {ondouble} {t} />
             {:else if shownTab === 'inventory'}
               <InventoryTab {fields} {disabled} {change} load={() => session.builderInfo()} {t} />
             {:else if shownTab === 'features'}
@@ -736,7 +746,7 @@
 
         {#if wide}
           <div class="side right">
-            <Checks {fields} {disabled} {change} {t} />
+            <Checks {fields} {disabled} {change} {doubles} {ondouble} {t} />
           </div>
         {/if}
       </div>
@@ -1126,15 +1136,21 @@
   }
 
   /* More: the rests side by side, then the three places as rows. */
+  /*
+   * Side by side while they fit; German "Morgengrauen" needs about 7.5 rem, so below that the third button takes a
+   * row of its own at full width (review of #92). `max-content` keeps the longest word whole: with a basis alone,
+   * three buttons still shared a row at 408-420 px (Android's 412) and clipped "Morgengrauen" (review of #94).
+   */
   .rests {
-    display: grid;
-    grid-auto-columns: minmax(0, 1fr);
-    grid-auto-flow: column;
+    display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
     margin-bottom: 0.75rem;
   }
 
   .rests button {
+    flex: 1 1 7.5rem;
+    min-width: max-content;
     min-height: 3.25rem;
     font-weight: 700;
   }
