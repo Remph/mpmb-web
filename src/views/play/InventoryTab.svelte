@@ -446,6 +446,17 @@
     margin: 0;
   }
 
+  /* Narrow phones in German: "Magische Gegenstände · 2 eingestimmt" leaves "Ändern" too little room, so it wraps. */
+  @media (max-width: 699px) {
+    .head:has(.change) {
+      flex-wrap: wrap;
+    }
+
+    .change {
+      flex: none;
+    }
+  }
+
   h2 {
     margin: 0 0 0.5rem;
     font-size: 1rem;
@@ -638,6 +649,31 @@
     font-weight: 400;
   }
 
+  /*
+   * Phones (M13): the two gear lists share the width, each name on its line and the count under it, rather than
+   * "Adventuring gear 3" breaking wherever it runs out of room.
+   */
+  @media (max-width: 699px) {
+    .lists {
+      display: flex;
+    }
+
+    .lists button {
+      flex: 1 1 0;
+      min-width: 0;
+      padding: 0.25rem 0.5rem;
+      line-height: 1.2;
+      /* "Abenteuerausrüstung" is one word wider than half a phone: break it as German does, with a hyphen. */
+      hyphens: auto;
+      overflow-wrap: anywhere;
+    }
+
+    .lists .count {
+      display: block;
+      font-size: 0.8125rem;
+    }
+  }
+
   /* The name looks like text until it is tapped, then it is a field to type in. */
   .name {
     flex: 1 1 auto;
@@ -811,6 +847,26 @@
   .coin span {
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+
+  /*
+   * Phones (M13): five coins in 312 px leave 56 px each, too narrow for "Platinum" or "Elektrum" (they broke
+   * mid-word). The short name stays in sight; the long one stays in the field's label for screen readers.
+   */
+  @media (max-width: 699px) {
+    .coin b {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .coin span {
+      font-size: 0.875rem;
+      font-weight: 700;
+    }
   }
 
   .pp {

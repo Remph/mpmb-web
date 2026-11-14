@@ -530,6 +530,27 @@
     font-size: 0.8125rem;
   }
 
+  /*
+   * Phones (M13, UI review 2 finding 14): the dots never squeeze. The name keeps at least 8 rem beside them; when
+   * that doesn't fit (six slot dots on a 360 px phone), the dots take the next line, right-aligned, in one row.
+   */
+  @media (max-width: 699px) {
+    .uses {
+      flex-wrap: wrap;
+      column-gap: 0.25rem;
+    }
+
+    .uses .name {
+      flex: 1 1 8rem;
+    }
+
+    .uses > :global(.dots) {
+      flex: none;
+      max-width: 100%;
+      margin-left: auto;
+    }
+  }
+
   /* A name that opens its text: still a plain row, only a ▸ says it opens (no tile, Remph 2026-11-07). */
   button.name.read {
     min-height: 44px;

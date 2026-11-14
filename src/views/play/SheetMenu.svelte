@@ -346,6 +346,23 @@
     font-weight: 600;
   }
 
+  /*
+   * Narrow windows (UI review 3, finding 09): the Units switch goes under its name, the two parts sharing the
+   * width, instead of squeezing "Lengths and weights" onto three lines.
+   */
+  @media (max-width: 499px) {
+    .setting:has(.seg) {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.375rem;
+      padding: 0.5rem 0;
+    }
+
+    .seg {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
   .seg button + button {
     border-left: 1px solid var(--line);
   }

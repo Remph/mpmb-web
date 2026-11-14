@@ -39,6 +39,19 @@
     if (dialog && !dialog.open) dialog.showModal();
   });
 
+  /**
+   * Back to where the player was: the button that opened the window gets the focus again when it closes, also after
+   * Escape (review of #92). A caller that moves the focus itself (the stat tiles do, after a tick) still wins: this
+   * only acts when the focus fell to the page.
+   */
+  const opener = typeof document === 'undefined' ? null : document.activeElement;
+  $effect(() => () => {
+    queueMicrotask(() => {
+      const lost = !document.activeElement || document.activeElement === document.body;
+      if (lost && opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    });
+  });
+
   function cancel(event: Event) {
     event.preventDefault();
     onescape();
@@ -180,6 +193,11 @@
    * is, and the buttons share the bottom row. No drag handle: it would promise a swipe that isn't there.
    */
   @media (max-width: 699px) {
+    /* The page behind stays where it is while a window is open (a phone scrolls it under the sheet otherwise). */
+    :global(html:has(dialog[open])) {
+      overflow: hidden;
+    }
+
     dialog,
     dialog.wide,
     dialog.widest {
