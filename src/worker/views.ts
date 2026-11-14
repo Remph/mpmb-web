@@ -19,8 +19,8 @@ export interface FieldView {
   /**
    * Acrobat's submitName, only where MPMB marks a choice there ("Soldier (background)_#_A Gaming Set_#_1-1",
    * SetProf for languages and tools) or where an action came from ("Conjure/Bond Pact Weapon#!#Warlock:
-   * Pact of the Blade", AddAction). Other fields keep large toSource data in it, which the page doesn't
-   * need.
+   * Pact of the Blade", AddAction), and "hide" on a magic item's Attuned box for an item that needs no
+   * attunement. Other fields keep large toSource data in it, which the page doesn't need.
    */
   submitName?: string;
   options?: (string | [string, string])[];
@@ -30,6 +30,9 @@ export interface FieldView {
 }
 
 export type FieldViews = Record<string, FieldView>;
+
+/** MPMB's submitName on a magic item's Attuned box when the item needs no attunement (How(...) == "hide"). */
+export const NO_ATTUNEMENT = 'hide';
 
 function viewOf(state: FieldState): FieldView {
   const { def } = state;
@@ -42,7 +45,8 @@ function viewOf(state: FieldState): FieldView {
   };
   if (state.formatted !== undefined) view.text = state.formatted;
   if (def.userName !== undefined) view.userName = def.userName;
-  if (def.submitName?.includes('_#_') || def.submitName?.includes('#!#')) view.submitName = def.submitName;
+  const mark = def.submitName;
+  if (mark?.includes('_#_') || mark?.includes('#!#') || mark === NO_ATTUNEMENT) view.submitName = mark;
   if (def.options !== undefined) view.options = def.options;
   if (def.maxLen !== undefined) view.maxLen = def.maxLen;
   // A deep copy: the engine keeps changing its state objects, the view must not change with them.

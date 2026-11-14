@@ -2,7 +2,7 @@
 // draws its own layout but keeps every value in MPMB's fields, so the rules stay MPMB's and a
 // character still saves, backs up and opens like before. Field names are those of the Colorful A4 sheet.
 import { DISPLAY, displayFromFlags } from '../engine/types.ts';
-import type { FieldViews } from '../worker/views.ts';
+import { NO_ATTUNEMENT, type FieldViews } from '../worker/views.ts';
 
 /** The text a field shows: its Format text ("+4", "d10") or its value. */
 export function shown(fields: FieldViews, name: string): string {
@@ -483,6 +483,11 @@ export function goldTotal(coins: Inventory['coins']): number | null {
   return Math.round(counted.reduce((sum, coin) => sum + coin.n * GOLD_VALUE[coin.key], 0) * COPPER) / COPPER;
 }
 
+function attunable(fields: FieldViews, row: number): boolean {
+  const box = fields[`Extra.Magic Item Attuned ${row}`];
+  return box !== undefined && box.submitName !== NO_ATTUNEMENT;
+}
+
 export function readInventory(fields: FieldViews): Inventory {
   const carried = shown(fields, 'Weight Carried');
   // The unit the sheet weighs in ("kg" or "lb"), from the carried weight: "5.45 kg". Try it:
@@ -516,8 +521,11 @@ export function readInventory(fields: FieldViews): Inventory {
         row,
         name: clean(valueOf(fields, `Extra.Magic Item ${row}`)),
         attuned: isOn(fields, `Extra.Magic Item Attuned ${row}`),
-        // MPMB shows the box only for an item that needs attunement.
-        attunable: isShown(fields, `Extra.Magic Item Attuned ${row}`),
+        // MPMB marks an item that needs no attunement with "hide" in the box's submitName and hides the box
+        // to match. The mark, not the display, is what counts: in the overflow rows (7th item on) MPMB leaves
+        // the display alone while the overflow page isn't shown (setMIattunedVisibility), so the box can stay
+        // visible for an item that needs none, or hidden for one that does (playtest 2026-11-14).
+        attunable: attunable(fields, row),
         description: valueOf(fields, `Extra.Magic Item Description ${row}`),
       }))
       .filter((item) => item.name !== ''),
