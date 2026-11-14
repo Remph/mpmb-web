@@ -109,6 +109,7 @@ async function startSession(
       return { result: null };
     }
     if (command.type === 'addOns') return { result: NO_ADD_ONS };
+    if (command.type === 'click') return { result: null };
     if (command.type === 'importPdf') {
       const text = new TextDecoder().decode(command.bytes);
       if (text === 'not a pdf') return { error: 'Invalid PDF structure', code: 'unreadable-pdf' };
@@ -402,6 +403,44 @@ describe('changes on the open character (tech review 2026-11-04)', () => {
     await session.close();
     await session.open(id);
     expect(sent.at(-1)).toMatchObject({ type: 'open', character: { fields: { Notes: { value: 'three' } } } });
+  });
+
+  test('a second tap on a menu button before its menu is answered does nothing (playtest 2026-11-14)', async () => {
+    const sent: Command[] = [];
+    let answerMenu = (): void => undefined;
+    const hold = (command: Command): Promise<void> | undefined =>
+      command.type === 'click' ? new Promise<void>((resolve) => (answerMenu = resolve)) : undefined;
+    const session = await startSession({ sent, hold });
+    await openNew(session);
+    sent.length = 0;
+    const clicks = (): number => sent.filter((c) => c.type === 'click').length;
+
+    const taps = [
+      session.change([{ click: 'Adventuring Gear Button 1', menuTitle: 'Rope' }]),
+      session.change([{ click: 'Adventuring Gear Button 1', menuTitle: 'Rope' }]),
+      // Another menu button too: one menu at a time.
+      session.change([{ click: 'Adventuring Gear Button 2', menuTitle: 'Torch' }]),
+    ];
+    await vi.waitFor(() => expect(clicks()).toBe(1));
+    answerMenu();
+    await Promise.all(taps);
+    expect(clicks()).toBe(1);
+
+    // Once the menu is answered, the button works again.
+    const again = session.change([{ click: 'Adventuring Gear Button 1', menuTitle: 'Rope' }]);
+    await vi.waitFor(() => expect(clicks()).toBe(2));
+    answerMenu();
+    await again;
+  });
+
+  test('quick taps on a button without a menu all count', async () => {
+    const sent: Command[] = [];
+    const session = await startSession({ sent });
+    await openNew(session);
+    sent.length = 0;
+    void session.change([{ click: 'Dot 1' }]);
+    await session.change([{ click: 'Dot 1' }]);
+    expect(sent.filter((c) => c.type === 'click')).toHaveLength(2);
   });
 
   test('a new maximum takes the "current maximum" box along (level up, 2026-11-07)', async () => {
