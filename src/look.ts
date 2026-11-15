@@ -1,5 +1,6 @@
 // The app's look: which theme, light or dark, and whether characters show their sheet colour. Kept in this
 // browser only (like the language), read before the first paint by public/look.js and then by the app.
+import { fill, type Texts } from './i18n.ts';
 
 /** The themes, in the Look window's order: the app's own, remph.de's campfire, true black for OLED screens. */
 export const THEMES = ['purple', 'campfire', 'oled'] as const;
@@ -25,6 +26,16 @@ export const LOOK_KEY = 'mpmb-web.look';
 const ALWAYS_DARK: readonly Theme[] = ['oled'];
 
 export const hasOneMode = (theme: Theme): boolean => ALWAYS_DARK.includes(theme);
+
+/** The look in one line ("Campfire, dark"), under Look in the Sheet menu and the start page's Settings. */
+export function lookLine(current: Look, t: Texts): string {
+  return fill(t.lookMenuLine, {
+    theme: { purple: t.lookPurple, campfire: t.lookCampfire, oled: t.lookOled }[current.theme],
+    mode: hasOneMode(current.theme)
+      ? t.lookDark
+      : { device: t.lookDevice, light: t.lookLight, dark: t.lookDark }[current.mode],
+  });
+}
 
 const isTheme = (value: unknown): value is Theme => THEMES.includes(value as Theme);
 const isMode = (value: unknown): value is Mode => MODES.includes(value as Mode);

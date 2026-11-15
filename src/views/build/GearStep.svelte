@@ -526,4 +526,36 @@
       grid-template-columns: minmax(0, 1fr);
     }
   }
+
+  /*
+   * Phones (UI review 2, finding 15): the weapon's name and line get the row's whole width instead of one word per
+   * line beside Change and ✕, which go under the numbers; the attack setup chip no longer lies over Change. The
+   * armour's ✕ stays beside the armour instead of on a line of its own.
+   */
+  @media (max-width: 499px) {
+    .weapon {
+      grid-template-columns: 1.75rem minmax(0, 1fr);
+      align-items: start;
+      padding-block: 0.5rem;
+    }
+
+    .weapon .n {
+      margin-top: 0.125rem;
+    }
+
+    .weapon.empty {
+      align-items: center;
+      padding-block: 0.25rem;
+    }
+
+    .acts {
+      grid-column: 2;
+      grid-row: 3;
+      justify-content: space-between;
+    }
+
+    .pick {
+      flex-basis: 10rem;
+    }
+  }
 </style>

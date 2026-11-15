@@ -160,7 +160,7 @@
   </label>
 </section>
 
-<section class="card">
+<section class="card classes">
   <header class="head">
     <div>
       <h2>{t.buildClassTitle}</h2>
@@ -474,7 +474,11 @@
     font-size: 0.875rem;
   }
 
-  @media (max-width: 900px) {
+  /*
+   * Under 42 rem of card (iPads, and 901-980 px beside the steps' list, where four columns cut "Paladin"): class
+   * and subclass side by side, the level under them.
+   */
+  @container (max-width: 42rem) {
     .row {
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
     }
@@ -486,6 +490,36 @@
     .remove {
       grid-row: 1;
       grid-column: 3;
+    }
+  }
+
+  /* The rows below follow the card's own width: beside the steps' list (700-760 px) it is as narrow as on a phone. */
+  .classes {
+    container-type: inline-size;
+  }
+
+  /*
+   * A narrow card (phones, UI review 2, finding 12, and 700-760 px beside the steps): class and subclass each get a
+   * row of their own, so the class's name and the subclass's ("Oath of Devotion") show whole instead of
+   * "SRD'24 53 ▾" and "Oath o…". ✕ stays beside the class. 32 rem: two columns hold "Paladin SRD'24 53 ▾" from there.
+   */
+  @container (max-width: 32rem) {
+    .row {
+      grid-template-columns: minmax(0, 1fr) 44px;
+    }
+
+    .cls {
+      grid-column: 1;
+    }
+
+    .sub,
+    .lvl {
+      grid-column: 1 / -1;
+    }
+
+    .remove {
+      grid-row: 1;
+      grid-column: 2;
     }
   }
 </style>

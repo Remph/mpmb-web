@@ -85,6 +85,11 @@
 
   /** Wide enough for the add list next to the chosen spells (the laptops, the iPad across). */
   const wide = new MediaQuery('min-width: 1100px');
+  /**
+   * Phones (UI review 2, finding 17): the line that says whether the sheet is up to date sits above the sources, so
+   * the sticky bar keeps only its two buttons, side by side, instead of a fifth of the screen.
+   */
+  const phone = new MediaQuery('max-width: 699px');
 
   /**
    * `keep`: the picks to carry over a save the step made itself (an own spell written), which would
@@ -532,6 +537,12 @@
   </div>
 {/snippet}
 
+{#snippet status()}
+  <p class="muted status">
+    {changes ? counted(t.spellsChangedOne, t.spellsChanged, changes) : t.spellsUpToDate}
+  </p>
+{/snippet}
+
 <section class="card" aria-labelledby="spells-title">
   <header class="head">
     <div>
@@ -551,6 +562,7 @@
   {:else if !info.sources.length || !source || !draft}
     <p class="note">{t.spellsNone}</p>
   {:else}
+    {#if phone.current}{@render status()}{/if}
     <div class="sources" role="group" aria-label={t.spellsSources}>
       {#each info.sources as s (s.key)}
         <button
@@ -756,9 +768,7 @@
     {/if}
 
     <footer class="bar">
-      <p class="muted">
-        {changes ? counted(t.spellsChangedOne, t.spellsChanged, changes) : t.spellsUpToDate}
-      </p>
+      {#if !phone.current}{@render status()}{/if}
       <div class="acts">
         {#if !wide.current && addable}
           <button type="button" class="add" disabled={disabled || busy} onclick={() => (adding = { start: null })}
@@ -1173,8 +1183,10 @@
     font-size: 0.875rem;
   }
 
+  /* One column no wider than the card: a long German option (UI review 4, finding 06) cuts its text, not the page. */
   .show {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.25rem;
     margin-top: 1rem;
     font-weight: 700;
@@ -1182,6 +1194,7 @@
 
   /* The page's size, not the browser's smaller one for selects: a phone zooms into a box under 16 px. */
   .show select {
+    max-width: 100%;
     min-height: 44px;
     font: inherit;
     font-size: 1rem;
@@ -1314,5 +1327,40 @@
   .picks .toggle.on {
     border-color: var(--accent);
     background: var(--accent-soft);
+  }
+
+  /*
+   * Phones (UI review 2, finding 17): Save DC and Attack go under the intro instead of squeezing it, the status line
+   * sits above the sources (see `phone`), and the bar is one row of two buttons.
+   */
+  @media (max-width: 699px) {
+    .head {
+      flex-wrap: wrap;
+    }
+
+    .head > div:first-child {
+      flex: 1 1 14rem;
+    }
+
+    .status {
+      margin: 0 0 0.75rem;
+    }
+
+    .bar {
+      padding-block: 0.5rem calc(0.5rem + env(safe-area-inset-bottom));
+    }
+
+    .acts {
+      flex: 1;
+      flex-wrap: nowrap;
+      margin-left: 0;
+    }
+
+    /* Both share the row; a long German word stays whole (window gotchas, #92 review). */
+    .acts button {
+      flex: 1 1 0;
+      min-width: auto;
+      padding-inline: 0.5rem;
+    }
   }
 </style>

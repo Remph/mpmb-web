@@ -89,8 +89,14 @@ test('on a phone, no Build step and no play tab is wider than the screen or zoom
   expect((await apply.boundingBox())?.width ?? 0).toBeGreaterThan(PHONE.width - 48);
   await checkPhoneView(page, 'Source selection');
   await apply.click();
-  const rail = page.getByRole('navigation', { name: 'Steps' });
-  await expect(rail).toBeVisible({ timeout: STARTUP });
+  // On a phone the ten steps fold into one picker above the step (M13 step 4); its middle opens them as a sheet.
+  const picker = page.getByRole('navigation', { name: 'Steps' });
+  await expect(picker).toBeVisible({ timeout: STARTUP });
+  const goTo = async (name: RegExp) => {
+    await picker.getByRole('button', { name: /of 10/ }).click();
+    await page.getByRole('dialog', { name: 'Steps' }).getByRole('button', { name }).click();
+    await expect(page.getByRole('dialog', { name: 'Steps' })).toHaveCount(0);
+  };
   // A class, so that the steps after it have something to show.
   await page.getByRole('button', { name: 'Choose a class' }).click();
   // The class list's button whose name starts with "Wizard": "Wizard (SRD 5.2.1)" yes, "Bard" no.
@@ -99,17 +105,40 @@ test('on a phone, no Build step and no play tab is wider than the screen or zoom
     .getByRole('dialog')
     .getByRole('button', { name: /^Wizard/ })
     .click();
-  await expect(rail.getByRole('button', { name: 'Class & level' })).toContainText('Wizard 1');
+  await picker.getByRole('button', { name: /of 10/ }).click();
+  const sheet = page.getByRole('dialog', { name: 'Steps' });
+  await expect(sheet.getByRole('button', { name: /^1 Class & level/ })).toContainText('Wizard 1');
+  await checkPhoneView(page, 'Steps sheet');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
 
-  await oneByOne(await rail.getByRole('button').all(), async (step) => {
-    const name = (await step.innerText()).split('\n')[1] ?? '';
-    await step.click();
-    await expect(step).toHaveAttribute('aria-current', 'step');
-    await checkPhoneView(page, `Build step ${name}`);
-  });
+  // Step by step with the picker's arrow; the picker names the step and stays on top while the step scrolls.
+  const next = picker.getByRole('button', { name: /^Next step/ });
+  let tall = 0;
+  for (let n = 1; n <= 10; n++) {
+    await expect(picker).toContainText(`${n} of 10`);
+    await checkPhoneView(page, `Build step ${n}`);
+    // A step taller than the screen scrolls past the top bar; the picker then sits at the top.
+    if (await page.evaluate('document.documentElement.scrollHeight > innerHeight + 100')) {
+      await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
+      await expect.poll(async () => (await picker.boundingBox())?.y).toBe(0);
+      tall++;
+    }
+    for (const button of await picker.getByRole('button').all()) {
+      const box = await button.boundingBox();
+      expect(
+        [box?.width ?? 0, box?.height ?? 0].every((side) => side >= 44),
+        `picker button, step ${n}`,
+      ).toBe(true);
+    }
+    if (n < 10) await next.click();
+  }
+  expect(tall, 'steps taller than the screen').toBeGreaterThan(2);
+  await expect(next).toBeDisabled();
+  await expect(page.getByRole('link', { name: 'Done: to the play view' })).toBeVisible();
 
   // MPMB's own dialogs have their own, smaller text (15 px): its Ability Scores dialog is full of text boxes.
-  await rail.getByRole('button', { name: /Ability scores/ }).click();
+  await goTo(/Ability scores/);
   await page.getByRole('button', { name: 'Open MPMB’s ability scores dialog' }).click();
   const scores = page.getByRole('dialog').last();
   await expect(scores.getByRole('textbox').first()).toBeVisible();
@@ -118,7 +147,7 @@ test('on a phone, no Build step and no play tab is wider than the screen or zoom
   await expect(scores.getByRole('textbox')).toHaveCount(0);
 
   // A weapon, for the attack's proficiency and ability window below (a text box in a window: where the zoom hurt).
-  await rail.getByRole('button', { name: /Armour & weapons/ }).click();
+  await goTo(/Armour & weapons/);
   await page
     .getByRole('button', { name: /Add a weapon/ })
     .first()
@@ -129,7 +158,7 @@ test('on a phone, no Build step and no play tab is wider than the screen or zoom
     .getByRole('button', { name: /^Dagger/ })
     .click();
 
-  await page.getByRole('link', { name: 'Done: to the play view' }).click();
+  await page.getByRole('link', { name: 'To the play view' }).click();
   // The phone layout (M13): the places sit in a bar at the bottom; More opens the rarer ones and the rests.
   const places = page.getByRole('navigation', { name: 'Parts of the sheet' });
   const more = places.getByRole('button', { name: 'More' });
@@ -201,4 +230,19 @@ test('on a phone, no Build step and no play tab is wider than the screen or zoom
 
   await page.getByRole('button', { name: /^Proficiency and ability of Dagger/ }).click();
   await checkPhoneView(page, 'attack setup window');
+  await page.keyboard.press('Escape');
+
+  // German has the longest step and class names: each step at 360 px, the picker's name and the class rows whole.
+  await page.evaluate("localStorage.setItem('mpmb-web.lang', 'de'); location.hash += '/build'");
+  await page.reload();
+  const schritte = page.getByRole('navigation', { name: 'Schritte' });
+  await expect(schritte).toBeVisible({ timeout: STARTUP });
+  const cut = `[...document.querySelectorAll('nav .lines b, .pick span:first-child')]
+    .filter((text) => text.scrollWidth > text.clientWidth + 1).map((text) => text.textContent)`;
+  for (let n = 1; n <= 10; n++) {
+    await expect(schritte).toContainText(`${n} von 10`);
+    await checkPhoneView(page, `German Build step ${n}`);
+    expect.soft(await page.evaluate(cut), `German Build step ${n}: names cut short`).toEqual([]);
+    if (n < 10) await schritte.getByRole('button', { name: /^Nächster Schritt/ }).click();
+  }
 });

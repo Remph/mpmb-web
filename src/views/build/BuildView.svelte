@@ -16,6 +16,7 @@
   import { unsentFor } from '../../build/spell-drafts.svelte.ts';
   import { readOnly } from '../../session.svelte.ts';
   import type { OpenCharacter, Session, Step } from '../../session.svelte.ts';
+  import Modal from '../../popups/Modal.svelte';
   import Notes from '../Notes.svelte';
   import AddOnsWindow from '../play/AddOnsWindow.svelte';
   import SheetMenu from '../play/SheetMenu.svelte';
@@ -59,6 +60,24 @@
     else if (at !== null) step = at;
   });
   let menuOpen = $state(false);
+  /**
+   * Phones (M13, mock-up pass 1 and 2, Nick approved): below this width the ten steps fold into one picker
+   * above the step, with the way on under the step. Matches the CSS's 699 px and the play view's PHONE_BELOW.
+   * 0 before the first measurement: the laptop layout, as before.
+   */
+  const PHONE_BELOW = 700;
+  let width = $state(0);
+  const phone = $derived(width > 0 && width < PHONE_BELOW);
+  let stepsOpen = $state(false);
+  const index = $derived(BUILD_STEPS.indexOf(step));
+  const prev = $derived(BUILD_STEPS[index - 1]);
+  const next = $derived(BUILD_STEPS[index + 1]);
+  /** A step picked on a phone starts at its top: the old step's scroll position would land mid-step. */
+  function go(key: BuildStep) {
+    step = key;
+    stepsOpen = false;
+    if (phone) window.scrollTo({ top: 0 });
+  }
   let scriptsOpen = $state(false);
   let levelUpOpen = $state(false);
   let info = $state<BuilderInfo | null>(null);
@@ -160,33 +179,87 @@
   });
 </script>
 
-<TopBar {open} back={{ href: playHref, label: t.buildBackToPlay }} {t}>
-  <button type="button" onclick={() => (menuOpen = true)}>☰ {t.sheetMenu}</button>
+<svelte:window bind:innerWidth={width} />
+
+<TopBar {open} back={{ href: playHref, label: t.buildBackToPlay }} {t} compact={phone}>
+  {#if phone}
+    <button type="button" class="menu-icon" aria-label={t.sheetMenu} onclick={() => (menuOpen = true)}>☰</button>
+  {:else}
+    <button type="button" onclick={() => (menuOpen = true)}>☰ {t.sheetMenu}</button>
+  {/if}
 </TopBar>
+
+{#snippet stepList()}
+  <ol>
+    {#each BUILD_STEPS as key, i (key)}
+      <li>
+        <button
+          type="button"
+          class="step"
+          class:on={step === key}
+          aria-current={step === key ? 'step' : undefined}
+          onclick={() => go(key)}
+        >
+          <span class="n">{i + 1}</span>
+          <span class="t"><b>{stepTitles[key]}</b><small>{summaries[key]}</small></span>
+          {#if badges[key]}<span class="badge" aria-hidden="true">{badges[key]}</span>{/if}
+        </button>
+      </li>
+    {/each}
+  </ol>
+{/snippet}
+
+{#if phone}
+  <!--
+    Phones: one line for the ten steps, sticky while the step scrolls by. The arrows go one step at a time; the
+    middle opens the whole list as a sheet. A step with open picks gets its red count here too.
+  -->
+  <nav class="picker" aria-label={t.buildSteps}>
+    <button
+      type="button"
+      class="arrow"
+      disabled={!prev}
+      aria-label={prev ? fill(t.buildStepPrev, { step: stepTitles[prev] }) : t.buildStepFirst}
+      onclick={() => prev && go(prev)}><span aria-hidden="true">‹</span></button
+    >
+    <button type="button" class="current" aria-haspopup="dialog" onclick={() => (stepsOpen = true)}>
+      <span class="lines">
+        <b>{stepTitles[step]}</b>
+        <small>
+          {fill(t.buildStepOf, { n: String(index + 1), total: String(BUILD_STEPS.length) })}
+          {#if badges[step]}
+            ·
+            <span class="open">{fill(t.buildStepOpen, { count: String(badges[step]) })}</span>
+          {/if}
+        </small>
+      </span>
+      <span class="caret" aria-hidden="true">▾</span>
+    </button>
+    <button
+      type="button"
+      class="arrow"
+      disabled={!next}
+      aria-label={next ? fill(t.buildStepNext, { step: stepTitles[next] }) : t.buildStepLast}
+      onclick={() => next && go(next)}><span aria-hidden="true">›</span></button
+    >
+    <!-- Where you are among the ten; a step with open picks shows red. -->
+    <ol class="progress" aria-hidden="true">
+      {#each BUILD_STEPS as key (key)}
+        <li class:on={step === key} class:open={!!badges[key]}></li>
+      {/each}
+    </ol>
+  </nav>
+{/if}
 
 <div class="notes"><Notes notes={session.notes} /></div>
 
-<div class="build">
-  <nav class="rail" aria-label={t.buildSteps}>
-    <ol>
-      {#each BUILD_STEPS as key, i (key)}
-        <li>
-          <button
-            type="button"
-            class="step"
-            class:on={step === key}
-            aria-current={step === key ? 'step' : undefined}
-            onclick={() => (step = key)}
-          >
-            <span class="n">{i + 1}</span>
-            <span class="t"><b>{stepTitles[key]}</b><small>{summaries[key]}</small></span>
-            {#if badges[key]}<span class="badge" aria-hidden="true">{badges[key]}</span>{/if}
-          </button>
-        </li>
-      {/each}
-    </ol>
-    <a class="done" href={playHref}>{t.buildDone}</a>
-  </nav>
+<div class="build" class:phone>
+  {#if !phone}
+    <nav class="rail" aria-label={t.buildSteps}>
+      {@render stepList()}
+      <a class="done" href={playHref}>{t.buildDone}</a>
+    </nav>
+  {/if}
 
   <div class="main">
     {#if !info && open.status === 'elsewhere'}
@@ -243,8 +316,28 @@
         {t}
       />
     {/if}
+    {#if phone}
+      <!-- The way on, at the end of the step: not sticky, so it never sits on top of the Spells step's own bar. -->
+      <div class="way">
+        {#if next}
+          <a class="quiet-link" href={playHref}>{t.buildToPlay}</a>
+          <button type="button" class="next" onclick={() => next && go(next)}
+            >{fill(t.buildNext, { step: stepTitles[next] })} ›</button
+          >
+        {:else}
+          <a class="done" href={playHref}>{t.buildDone}</a>
+        {/if}
+      </div>
+    {/if}
   </div>
 </div>
+
+{#if stepsOpen}
+  <Modal title={t.buildSteps} onescape={() => (stepsOpen = false)} closeLabel={t.close}>
+    <!-- No second "Steps" navigation: the window is titled so, and the picker is the page's one. -->
+    <div class="sheet-steps">{@render stepList()}</div>
+  </Modal>
+{/if}
 
 {#if levelUpOpen && info}
   <LevelUp {info} {fields} {change} onclose={() => (levelUpOpen = false)} {t} />
@@ -392,14 +485,161 @@
     }
   }
 
-  /* Phones come later (roadmap); until then the steps stack above the step. */
-  @media (max-width: 699px) {
-    .build {
-      grid-template-columns: minmax(0, 1fr);
-    }
+  /* Phones (M13): one column; the steps live in the picker above and its sheet. */
+  .build.phone {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.75rem 0.75rem 2rem;
+  }
 
-    .rail {
-      position: static;
-    }
+  /* Like the play view's ☰ on a phone: the bar's one button, quiet. */
+  .menu-icon {
+    width: 44px;
+    padding: 0;
+    border-color: transparent;
+    background: none;
+    color: var(--accent);
+    font-size: 1.375rem;
+  }
+
+  /*
+   * The step picker (mock-up pass 1, Build): it floats over the step while it scrolls by, so it gets its own
+   * surface. The top bar above it scrolls away, as in the play view.
+   */
+  .picker {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.375rem max(0.25rem, env(safe-area-inset-right)) 0 max(0.25rem, env(safe-area-inset-left));
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .arrow {
+    padding: 0;
+    border-color: transparent;
+    background: none;
+    color: var(--accent);
+    font-size: 1.75rem;
+    line-height: 1;
+  }
+
+  .arrow:disabled {
+    color: var(--line);
+  }
+
+  /*
+   * What you came for: the step's name, on a line of its own so German's long names ("Fertigkeiten & Sprachen")
+   * fit at 360 px; under it "5 of 10" and what still waits, in the badges' red. ▾ says the list opens.
+   */
+  .current {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    min-height: 48px;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.75rem;
+    background: var(--paper);
+    text-align: left;
+  }
+
+  .lines {
+    display: grid;
+    flex: 1;
+    min-width: 0;
+    line-height: 1.2;
+  }
+
+  /* One line from 360 px; at 320 German "Fertigkeiten & Sprachen" takes two rather than being cut. */
+  .lines b {
+    font-size: 1rem;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+  }
+
+  .lines small {
+    color: var(--ink-muted);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .lines .open {
+    color: var(--danger);
+    font-weight: 700;
+  }
+
+  .caret {
+    flex: none;
+    color: var(--ink-muted);
+  }
+
+  /* Ten short segments under the picker: the lit one is the step you are on, red ones still wait for picks. */
+  .progress {
+    display: flex;
+    grid-column: 1 / -1;
+    gap: 0.25rem;
+    margin: 0.375rem 0.5rem 0.375rem;
+  }
+
+  .progress li {
+    flex: 1;
+    height: 0.25rem;
+    border-radius: 0.125rem;
+    background: var(--line);
+  }
+
+  .progress li.open {
+    background: var(--danger);
+  }
+
+  .progress li.on {
+    height: 0.375rem;
+    margin-top: -0.0625rem;
+    background: var(--accent);
+  }
+
+  /* The steps as a sheet: the same rows as the laptop's list, tapped to go there. */
+  .sheet-steps ol {
+    gap: 0.25rem;
+  }
+
+  /* The way on: back to playing on the left, the next step on the right, both a full thumb wide. */
+  .way {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+  }
+
+  .way > * {
+    flex: 1 1 8rem;
+    min-width: auto;
+  }
+
+  .way .done {
+    margin-top: 0;
+  }
+
+  .quiet-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 0.75rem;
+    color: var(--accent);
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+  }
+
+  /* Outlined like the laptop's Done: the step's own main button (Choose, Update spell sheet) stays the filled one. */
+  .next {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 700;
   }
 </style>

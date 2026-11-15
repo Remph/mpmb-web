@@ -9,6 +9,7 @@
   import HomebrewWindow from './views/HomebrewWindow.svelte';
   import LookWindow from './views/LookWindow.svelte';
   import AboutWindow from './views/AboutWindow.svelte';
+  import SettingsWindow from './views/SettingsWindow.svelte';
   import { look } from './look.svelte.ts';
   import { sheetColor } from './look.ts';
   import { BUILD, SOURCE_URL, sourceUrl } from './version.ts';
@@ -70,6 +71,11 @@
   const CHARACTER_ROUTE = /^#\/character\/([^/]+)(\/build(?:\/choices\/([^/]*)|\/(gear|spells))?)?$/;
   let rules = $state(false);
   let looks = $state(false);
+  /** Phones: the one Settings window instead of the three buttons. */
+  let settings = $state(false);
+  /** The Settings button's gear (Feather's "settings" icon, MIT licence), drawn as a line like the tab bar's icons. */
+  const GEAR =
+    'M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z';
   /** The About window: thanks, credits and the source (playtest 2026-11-14, note 4). */
   let about = $state(false);
   let missing = $state(false);
@@ -131,6 +137,11 @@
 {:else}
   <header>
     <a class="brand" href="#/">{t.title}</a>
+    <!-- Phones (below 700 px): one Settings button; the three below need two rows at 360 px (review 3, finding 08). -->
+    <button type="button" class="settings" aria-haspopup="dialog" onclick={() => (settings = true)}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d={GEAR} /></svg>
+      {t.settingsTitle}
+    </button>
     <span class="end">
       <button type="button" onclick={() => (rules = true)}>{t.homebrewTitle}</button>
       <button type="button" onclick={() => (looks = true)}>{t.lookTitle}</button>
@@ -146,6 +157,9 @@
   </header>
   {#if rules}
     <HomebrewWindow onclose={() => (rules = false)} {t} />
+  {/if}
+  {#if settings}
+    <SettingsWindow {session} {toggleLanguage} onclose={() => (settings = false)} {t} />
   {/if}
   {#if looks}
     <LookWindow onclose={() => (looks = false)} {session} {t} />
@@ -201,6 +215,33 @@
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: 0.5rem;
+  }
+
+  .settings {
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+  }
+
+  .settings svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  @media (max-width: 699px) {
+    .settings {
+      display: inline-flex;
+    }
+
+    .end {
+      display: none;
+    }
   }
   .brand {
     display: inline-flex;
