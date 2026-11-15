@@ -221,7 +221,12 @@
 
   .compact .status {
     flex: none;
+    /* Two short lines rather than one long one: offline, "Auf diesem Gerät gespeichert" left the name three
+       letters on a 320 px phone. */
+    max-width: 6.75rem;
     font-size: 0.8125rem;
+    line-height: 1.2;
+    text-align: end;
   }
 
   .compact .actions {
