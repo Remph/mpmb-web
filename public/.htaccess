@@ -15,8 +15,10 @@
   # from a blob: URL and so takes this page's policy: hence worker-src blob: (and blob: in script-src,
   # which Safari before 15.5 reads for workers instead), and 'unsafe-eval'
   # because MPMB's scripts run through eval, as in Acrobat. Svelte sets style attributes, hence
-  # 'unsafe-inline' for styles only. vite.config.ts reads this line, so `pnpm preview` sends it too.
-  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
+  # 'unsafe-inline' for styles only. The page also talks to the sync service (M15, src/sync/api.ts), on
+  # its own subdomain; the worker can't, since lockdown.ts takes fetch away before a script runs.
+  # vite.config.ts reads this line, so `pnpm preview` sends it too.
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' https://sync.remph.de; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
 
   # The page itself is checked on every visit, so a new version shows up at once (so are the service
   # worker, which stores the app for offline use, the web app manifest, and look.js, which sets the

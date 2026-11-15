@@ -15,6 +15,7 @@ import { sheetColor, type SheetColor } from '../look.ts';
 import { textOf } from './field-text.ts';
 import { pointNeeded, surplus } from './restore-points.ts';
 import type { PointReason, RestorePoint } from './restore-points.ts';
+import type { SyncRecord } from '../sync/plan.ts';
 
 export interface CharacterMeta {
   id: string;
@@ -85,8 +86,8 @@ export interface PreviousVersion extends StoredCharacter {
 }
 
 const DB_NAME = 'mpmb-web';
-/** 2: the `previous` store (M11). 3: the `points` store (restore points). */
-const DB_VERSION = 3;
+/** 2: the `previous` store (M11). 3: the `points` store (restore points). 4: the `sync` store (M15). */
+const DB_VERSION = 4;
 const META = 'meta';
 const DATA = 'data';
 /** The copy each character had before its last sheet update, by id (see PreviousVersion). */
@@ -97,6 +98,8 @@ const PREVIOUS = 'previous';
  */
 const POINTS = 'points';
 const BY_CHARACTER = 'character';
+/** What this browser knows of each character at the sync service (src/sync/plan.ts), by id. */
+const SYNC = 'sync';
 
 /** A request as a promise. */
 const done = <T>(request: IDBRequest<T>): Promise<T> =>
@@ -149,6 +152,7 @@ export class CharacterStore {
       if (!db.objectStoreNames.contains(DATA)) db.createObjectStore(DATA);
       if (!db.objectStoreNames.contains(PREVIOUS)) db.createObjectStore(PREVIOUS);
       if (!db.objectStoreNames.contains(POINTS)) db.createObjectStore(POINTS).createIndex(BY_CHARACTER, 'meta.id');
+      if (!db.objectStoreNames.contains(SYNC)) db.createObjectStore(SYNC);
     });
     // The opening goes on by itself once the other tab closes its database (or is closed).
     request.addEventListener('blocked', () => events.blocked?.());
@@ -186,8 +190,14 @@ export class CharacterStore {
     await committed(tx);
   }
 
-  async delete(id: string): Promise<void> {
-    const tx = this.db.transaction([META, DATA, PREVIOUS, POINTS], 'readwrite');
+  /**
+   * Deletes a character with everything kept of it. `tombstone`: its sync record stays, marked deleted, until the
+   * sync service has heard of the delete (written in the same transaction, so the delete can't get lost).
+   */
+  async delete(id: string, tombstone?: SyncRecord): Promise<void> {
+    const tx = this.db.transaction([META, DATA, PREVIOUS, POINTS, SYNC], 'readwrite');
+    if (tombstone) tx.objectStore(SYNC).put({ ...tombstone, deleted: true }, id);
+    else tx.objectStore(SYNC).delete(id);
     tx.objectStore(META).delete(id);
     tx.objectStore(DATA).delete(id);
     tx.objectStore(PREVIOUS).delete(id);
@@ -272,6 +282,58 @@ export class CharacterStore {
     tx.objectStore(META).put(character.meta);
     tx.objectStore(DATA).put(character.data, character.meta.id);
     tx.objectStore(PREVIOUS).delete(character.meta.id);
+    await committed(tx);
+  }
+
+  /** Every sync record (src/sync/plan.ts), by character id. */
+  async syncRecords(): Promise<Map<string, SyncRecord>> {
+    const tx = this.db.transaction(SYNC, 'readonly');
+    const store = tx.objectStore(SYNC);
+    const [keys, values] = await Promise.all([
+      done(store.getAllKeys()),
+      done(store.getAll() as IDBRequest<SyncRecord[]>),
+    ]);
+    return new Map(keys.map((key, i) => [String(key), values[i] as SyncRecord]));
+  }
+
+  /**
+   * Notes what the service has of a character (null forgets it). Its `pushed` is the `updated` that was sent, so a
+   * save made while it was on its way has another `updated` and stays a change to send.
+   */
+  async setSync(id: string, record: SyncRecord | null): Promise<void> {
+    const tx = this.db.transaction(SYNC, 'readwrite');
+    if (record) tx.objectStore(SYNC).put(record, id);
+    else tx.objectStore(SYNC).delete(id);
+    await committed(tx);
+  }
+
+  /**
+   * A character from the sync service, all or none: the copy and its record together. `point`: this browser's
+   * copy first becomes a restore point (it lost a clash; decisions.md 2026-11-08), even when its `updated` matches
+   * the newest point's, since what it lost against is newer.
+   */
+  async putSynced(
+    character: StoredCharacter,
+    record: SyncRecord,
+    point?: PointReason,
+    now = new Date(),
+  ): Promise<void> {
+    const id = character.meta.id;
+    const tx = this.db.transaction([META, DATA, POINTS, SYNC], 'readwrite');
+    if (point) {
+      const meta = await done(tx.objectStore(META).get(id) as IDBRequest<CharacterMeta | undefined>);
+      const data = await done(tx.objectStore(DATA).get(id) as IDBRequest<CharacterData | undefined>);
+      if (meta && data) {
+        const points = tx.objectStore(POINTS);
+        const before = await pointsIn(points, id);
+        const kept: RestorePoint = { meta, data, at: now.toISOString(), reason: point };
+        points.put(kept, [id, kept.at]);
+        surplus([...before, kept]).forEach((old) => points.delete([id, old.at]));
+      }
+    }
+    tx.objectStore(META).put(character.meta);
+    tx.objectStore(DATA).put(character.data, id);
+    tx.objectStore(SYNC).put(record, id);
     await committed(tx);
   }
 

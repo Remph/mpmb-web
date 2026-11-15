@@ -30,6 +30,7 @@
     reset: 'pointReset',
     restore: 'pointRestore',
     rollback: 'pointRollback',
+    sync: 'pointSync',
   };
 
   /** The class line and hit points the character had then. */

@@ -2,7 +2,7 @@
 // (Remph, 2026-11-08). Every change saves the whole character at once, so "the last few saves" would be the
 // last few taps; a point is taken at the big moments instead (Remph's pick): when the character is opened,
 // and before the Build screen, "Start over", restoring a backup over it, or rolling back. Backup files don't
-// carry them. M15's sync can add the copy that lost a clash as one more point.
+// carry them. M15's sync adds the copy that lost a clash as one more point.
 import type { CharacterData } from '../engine/sheet-data.ts';
 import { textOf } from './field-text.ts';
 import type { CharacterMeta, StoredCharacter } from './characters.ts';
@@ -11,7 +11,8 @@ import type { CharacterMeta, StoredCharacter } from './characters.ts';
 export const KEEP_POINTS = 3;
 
 /** Why a point was taken; the window says it in the player's language. */
-export type PointReason = 'opened' | 'build' | 'reset' | 'restore' | 'rollback';
+/** `sync`: this browser's copy lost a clash with a newer one from another device (M15). */
+export type PointReason = 'opened' | 'build' | 'reset' | 'restore' | 'rollback' | 'sync';
 
 export interface RestorePoint extends StoredCharacter {
   /** ISO date when the point was taken. */
