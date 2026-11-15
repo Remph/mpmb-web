@@ -27,6 +27,8 @@ test('a skill marked with double advantage shows two arrows, also after a reload
   await page.getByRole('link', { name: 'Done: to the play view' }).click({ timeout: STARTUP });
 
   const stealth = page.locator('button.skill', { hasText: 'Stealth' });
+  // A skill with a number rolls (M14, e2e/dice.spec.ts); this character has no class yet, so its skills show no
+  // number and a tap opens the advantage window at once, as before.
   await stealth.click();
   const window = page.getByRole('dialog', { name: 'Stealth' });
   await expect(window.getByRole('button')).toHaveText([

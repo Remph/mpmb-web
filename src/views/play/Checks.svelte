@@ -1,8 +1,8 @@
 <!--
   Abilities, saving throws and skills: on screen all the time on a laptop (the right column), a tab of
-  its own on the iPad in portrait. A dot marks proficiency, a ring around it expertise. Tapping a skill
-  marks it with advantage or disadvantage (the owner chose this, 2026-10-31); a saving throw the same
-  way (M6.5 fix round).
+  its own on the iPad in portrait. A dot marks proficiency, a ring around it expertise. Tapping a skill or
+  a saving throw rolls it with its mark (M14); the roll card's Mark opens the advantage pop-up the tap used
+  to open (the owner chose marks on skills 2026-10-31, on saves in the M6.5 fix round).
 -->
 <script lang="ts">
   import { tick } from 'svelte';
@@ -12,6 +12,8 @@
   import { ARROW, arrowOf, edgeOf, edgeWord, isDouble } from '../../play/edge.ts';
   import type { DoubleMarks, Edge } from '../../play/edge.ts';
   import EdgePopUp from './EdgePopUp.svelte';
+  import { bonusOf, modeOf } from '../../dice/dice.ts';
+  import { dice } from '../../play/dice.svelte.ts';
   import { readAbilities, readSkills, readTool } from '../../play/read.ts';
   import type { AbilityKey, Advantage, SkillKey } from '../../play/read.ts';
   import type { Step } from '../../session.svelte.ts';
@@ -51,6 +53,14 @@
   function open(what: NonNullable<typeof marking>, row: HTMLButtonElement) {
     opener = row;
     marking = what;
+  }
+
+  /** Rolls a save or skill with its mark; a number that isn't one (never seen) opens the pop-up as before. */
+  function roll(what: NonNullable<typeof marking>, row: HTMLButtonElement, title: string, shown: string, e: Edge) {
+    const bonus = bonusOf(shown);
+    const boxes = what.kind === 'save' ? `${what.key} ST` : what.key;
+    if (bonus === null) return open(what, row);
+    dice.d20({ title, bonus, mode: modeOf(e, doubled(boxes, e)), mark: () => open(what, row) });
   }
 
   /** Focus can only move once the pop-up is gone: while it is open, the page behind it is inert. */
@@ -106,9 +116,15 @@
             <button
               type="button"
               class="save"
-              aria-haspopup="dialog"
               aria-label={`${fill(t.saveTitle, { ability: t[`ability${a.key}`] })} ${a.save}${e ? `, ${edgeWord(t, e, doubled(`${a.key} ST`, e))}` : ''}`}
-              onclick={(ev) => open({ kind: 'save', key: a.key }, ev.currentTarget)}
+              onclick={(ev) =>
+                roll(
+                  { kind: 'save', key: a.key },
+                  ev.currentTarget,
+                  fill(t.saveTitle, { ability: t[`ability${a.key}`] }),
+                  a.save,
+                  e,
+                )}
             >
               <span class="prof" class:no={!a.saveProficient} title={a.saveProficient ? t.proficient : undefined}
               ></span>{a.save}
@@ -135,8 +151,7 @@
         <button
           type="button"
           class="skill"
-          aria-haspopup="dialog"
-          onclick={(ev) => open({ kind: 'skill', key: s.key }, ev.currentTarget)}
+          onclick={(ev) => roll({ kind: 'skill', key: s.key }, ev.currentTarget, t[`skill${s.key}`], s.bonus, e)}
         >
           <span>
             <span class="prof" class:no={!s.proficient} class:exp={s.expertise}></span>{t[`skill${s.key}`]}

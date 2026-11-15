@@ -70,7 +70,9 @@
   import { readUlt } from '../homebrew/ult.ts';
   import { readEffects } from '../play/effects.ts';
   import { readHitPoints, readLimitedFeatures, readSpellSlots, valueOf } from '../play/read.ts';
-  import { flushSync, tick } from 'svelte';
+  import { flushSync, onDestroy, tick } from 'svelte';
+  import { dice, spokenOf } from '../play/dice.svelte.ts';
+  import DiceCard from './play/DiceCard.svelte';
   import PrintSheet from './print/PrintSheet.svelte';
   import { printableParts } from '../play/print.ts';
   import type { PrintPart } from '../play/print.ts';
@@ -135,6 +137,13 @@
   /** The Spells tab only for a character with spell sheet pages. */
   const hasSpells = $derived(readSpells(open.fields).length > 0);
   const shownTab = $derived((wide && tab === 'checks') || (tab === 'spells' && !hasSpells) ? 'combat' : tab);
+  // The roll card (M14) belongs to the place it was rolled from: another tab, page or character closes it, so its
+  // Mark never reaches a pop-up that is no longer there.
+  $effect(() => {
+    void [shownTab, open.meta.id, shownPrefix, shownFormKey];
+    dice.close();
+  });
+  onDestroy(() => dice.close());
   const phoneTabs = $derived(tabs.filter(([key]) => !MORE_TABS.includes(key)));
 
   // Companion pages (Remph picked B, 2026-11-04): the bar under the top bar switches all three columns to a
@@ -650,7 +659,7 @@
         {/if}
       </div>
     {:else}
-      <div class="play" class:phone>
+      <div class="play" class:phone class:rolling={!!dice.shown}>
         <div class="side left">
           {#if noClass}
             <section class="start" aria-labelledby="no-class-title">
@@ -772,6 +781,12 @@
             ><svg viewBox="0 0 24 24" aria-hidden="true">{@html TAB_ICONS.more}</svg>{t.more}</button
           >
         </nav>
+      {/if}
+      <p class="sr" aria-live="polite">
+        {#key dice.count}{spokenOf(dice.shown, t)}{/key}
+      </p>
+      {#if dice.shown}
+        <DiceCard shown={dice.shown} {t} />
       {/if}
     {/if}
   {/if}
@@ -1183,5 +1198,25 @@
   .places span {
     color: var(--ink-muted);
     font-size: 1.25rem;
+  }
+
+  /* Room under the page while the roll card is up, so the last rows can scroll out from behind it. */
+  .play.rolling {
+    padding-bottom: 13rem;
+  }
+
+  /* A phone's card sits on the tab bar and may wrap its buttons in German. */
+  .play.phone.rolling {
+    padding-bottom: calc(var(--tab-bar-height) + 16rem + env(safe-area-inset-bottom));
+  }
+
+  /* The roll card's spoken result (M14): read out, not shown. */
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 </style>
