@@ -93,8 +93,8 @@ How to take a new upstream version: `vendor/README.md`, "Updating".
 
 The live app is at <https://remph.de/mpmb/>. Every push to `main` (a merged pull request) runs
 `.github/workflows/deploy.yml`: install, unit tests, type check, browser tests, build, then `scripts/deploy.sh` uploads
-`dist/` into that folder over FTP with TLS. The folder then equals the build; characters are not on
-the server (they live in each player's browser), so a deploy never touches them.
+`dist/` into that folder over FTP with TLS. The folder then holds this build and the previous one; characters are
+not on the server (they live in each player's browser), so a deploy never touches them.
 
 - The folder needs Apache with `mod_headers`: `public/.htaccess` sends the two cross-origin isolation
   headers the pop-ups depend on, keeps `index.html` fresh and caches the hashed build files.
@@ -106,9 +106,14 @@ the server (they live in each player's browser), so a deploy never touches them.
 - Safety nets: no upload without `index.html`, `.htaccess` and `assets/` in the build, and none into
   a folder that has subfolders the app doesn't make (a wrong `DEPLOY_DIR` pointing at the site's root).
   The new build files go up before `index.html`, and the old ones are removed last, so the app keeps
-  working during an upload; a tab left open from before needs a reload afterwards.
+  working during an upload.
+- A tab left open from before keeps working too, also during a session: the previous build's files stay for one
+  more deploy (`deploy-files.txt` on the server lists the build that is up; each deploy spares those files and
+  deletes older ones). Without that list (the first deploy after an upload by hand) a deploy deletes nothing.
+  The tab gets the new version at its next reload.
 - By hand: `pnpm build`, then copy everything in `dist/` into the folder, including the hidden
-  `.htaccess`, and delete files from an older build.
+  `.htaccess`, and delete `deploy-files.txt` (it no longer names the build that is up). Old build files may stay;
+  the next deploy from Actions keeps them once more, then removes them.
 
 ## Credits and licence
 

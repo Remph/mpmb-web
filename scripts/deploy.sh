@@ -9,9 +9,9 @@
 #   DEPLOY_DIR       the app's folder as that user sees it ("/" for such a user)
 #   DRY_RUN=1        only list what would be uploaded or deleted
 #
-# The folder ends up equal to the build: new and changed files are uploaded, files that are no
-# longer in the build are deleted (old hashed scripts). Characters are not on the server; they live
-# in each player's browser, so a deploy never touches them.
+# The folder ends up holding this build and the one before it: new and changed files are uploaded,
+# and files that belong to neither build are deleted (older hashed scripts). Characters are not on the
+# server; they live in each player's browser, so a deploy never touches them.
 set -euo pipefail
 
 local_dir="${1:?usage: deploy.sh <built folder>}"
@@ -62,18 +62,62 @@ fi
 dry_run=""
 [ "${DRY_RUN:-0}" = "1" ] && dry_run="--dry-run"
 
-# .ftpquota and .well-known/ belong to the host; everything else is the build's.
-mirror="mirror -R --overwrite --verbose --parallel=4 $dry_run --exclude-glob .ftpquota --exclude-glob .well-known/"
+# The previous build's files stay for one more deploy. A tab opened before this upload still runs the
+# previous build: until its engine worker has started, or when it loads a file only on demand (an older
+# sheet version's scripts), it asks the server for the previous build's file names, and a 404 there
+# ends in "the engine could not load" in the middle of a session. The list of the build that is up
+# now is kept on the server in $files_list; each deploy reads it, spares those files, and replaces it.
+# (Anyone can fetch that list, like any file there; it names only the build's files, as sw.js does.)
+files_list=deploy-files.txt
+new_files="$(cd "$local_dir" && find . -type f | sed 's#^\./##' | LC_ALL=C sort)"
+# A missing list (the first deploy with it, or one done by hand) reads as empty, and `cat` failing
+# for any other reason does too, so its errors don't stop the deploy...
+previous="$({ connect; echo "set cmd:fail-exit no"; echo "cat $files_list"; } | lftp -f /dev/stdin 2>/dev/null || true)"
+# ...and without a list nothing is deleted this time: a deploy that can't tell the previous build's
+# files apart keeps all of them. The next deploy's list sorts them out.
+delete="--delete"
+if [ -z "$previous" ]; then
+  delete=""
+  echo "No $files_list on the server: keeping every file this time."
+fi
+# Only plain relative paths that can't read as an option: anything else in the list (it is a file on
+# the server, after all) is not a name this script made, and must not reach lftp's command line.
+spare="$(printf '%s\n' "$previous" | grep -xE '[A-Za-z0-9._][A-Za-z0-9._-]*(/[A-Za-z0-9._][A-Za-z0-9._-]*)*' | grep -vE '(^|/)\.\.?(/|$)' |
+  LC_ALL=C sort -u | LC_ALL=C comm -23 - <(printf '%s\n' "$new_files") || true)"
+keep=""
+for file in $spare; do keep="$keep --exclude-glob $file"; done
+if [ -n "$spare" ]; then
+  echo "Keeping the previous build's files:"
+  printf '  %s\n' $spare
+fi
+
+# .ftpquota and .well-known/ belong to the host; the list of files is this script's; everything else is
+# the build's.
+mirror="mirror -R --overwrite --verbose --parallel=4 $dry_run --exclude-glob .ftpquota --exclude-glob .well-known/ --exclude-glob $files_list"
+listed="$(mktemp)"
+both="$(mktemp)"
+trap 'rm -f "$listed" "$both"' EXIT
+printf '%s\n' "$new_files" >"$listed"
+printf '%s\n' "$new_files" $spare | LC_ALL=C sort -u >"$both"
+# The list has to name the build that is live at every moment, or a deploy after one that stopped
+# halfway deletes the live build's files under the tabs running it. index.html switches builds in the
+# second pass, so around it the list names both builds, and once it is up only this one. A deploy that
+# stops anywhere leaves a list holding the live build (at worst one build too many, which the next
+# deploy removes). Without a list at the start none is written before the switch: one that named only
+# this build would leave the unknown live build unprotected if the switch then failed.
 {
   connect
   # Three passes, so that someone opening the app during an upload never gets a page whose scripts
   # aren't there yet (lftp uploads the folder's own files before assets/): first the new build
   # files next to the old ones, then index.html, and only then sw.js (the service worker stores
   # the build's files and its index.html for offline use, so it comes after both; a parallel
-  # upload in one pass could put it first) together with removing the old build's files.
+  # upload in one pass could put it first) together with removing the files of the builds before the
+  # previous one (excluded files are never deleted).
   echo "$mirror --exclude-glob index.html --exclude-glob sw.js \"$local_dir\" ."
+  if [ -z "$dry_run" ] && [ -n "$previous" ]; then echo "put $(quote "$both") -o $files_list"; fi
   echo "$mirror --exclude-glob sw.js \"$local_dir\" ."
-  echo "$mirror --delete \"$local_dir\" ."
+  if [ -z "$dry_run" ]; then echo "put $(quote "$listed") -o $files_list"; fi
+  echo "$mirror $delete $keep \"$local_dir\" ."
 } | lftp -f /dev/stdin 2>&1 |
   # A dry run prints full URLs including user:password; cut that part out of the log.
   sed -E 's#://[^@/]*@#://#g'
