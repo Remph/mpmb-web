@@ -157,6 +157,8 @@ describe('theme colours in app.css', () => {
         expect(contrast(c('ink-muted'), c(background))).toBeGreaterThanOrEqual(READABLE);
         expect(contrast(c('accent'), c(background))).toBeGreaterThanOrEqual(READABLE);
         expect(contrast(c('danger'), c(background))).toBeGreaterThanOrEqual(READABLE);
+        // The roll card's natural 20 (M14): green letters on the card and on its dice.
+        expect(contrast(c('ok'), c(background)), `--ok on --${background}`).toBeGreaterThanOrEqual(READABLE);
       });
       expect(contrast(c('on-accent'), c('accent'))).toBeGreaterThanOrEqual(READABLE);
       expect(contrast(c('accent'), c('accent-soft'))).toBeGreaterThanOrEqual(READABLE);

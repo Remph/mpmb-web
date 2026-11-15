@@ -1,6 +1,7 @@
 <!--
-  The middle column's first tab: what a turn needs. Attacks (a to-hit number opens the advantage pop-up
-  for every attack roll, the PDF's "Att Adv"/"Att Dis"), ammunition, spell slots, limited features, actions.
+  The middle column's first tab: what a turn needs. Attacks (a tap on a to-hit number or a damage rolls it, M14;
+  the roll card's Mark opens the advantage pop-up for every attack roll, the PDF's "Att Adv"/"Att Dis"),
+  ammunition, spell slots, limited features, actions.
 -->
 <script lang="ts">
   import { tick } from 'svelte';
@@ -21,7 +22,7 @@
     readSpellSlotUse,
     textRuns,
   } from '../../play/read.ts';
-  import type { LimitedFeature } from '../../play/read.ts';
+  import type { Attack, LimitedFeature } from '../../play/read.ts';
   import { recoveryText } from '../../play/labels.ts';
   import { slotClicks, usedText } from '../../play/rules.ts';
   import type { FieldViews } from '../../worker/views.ts';
@@ -31,6 +32,9 @@
   import AmmoPanel from './AmmoPanel.svelte';
   import Dots from './Dots.svelte';
   import EdgePopUp from './EdgePopUp.svelte';
+  import { bonusOf, modeOf, parseFormula } from '../../dice/dice.ts';
+  import { dice } from '../../play/dice.svelte.ts';
+  import type { DamageAsk } from '../../play/dice.svelte.ts';
   import AttackSetup from './AttackSetup.svelte';
   import NumberPad from './NumberPad.svelte';
   import Stepper from './Stepper.svelte';
@@ -73,6 +77,28 @@
     markFrom = button;
     marking = true;
   }
+  /** An attack's damage as the dice card rolls it, or undefined when the field holds no formula ("Special"). */
+  function damageOf(attack: Attack): DamageAsk | undefined {
+    const formula = parseFormula(attack.damage);
+    return formula ? { name: attack.name, formula, type: attack.damageType } : undefined;
+  }
+
+  /** A tap on the to-hit rolls it with the attack mark; damage comes next from the card. */
+  function rollAttack(attack: Attack, button: HTMLButtonElement) {
+    const bonus = bonusOf(attack.toHit);
+    if (bonus === null) return openMark(button);
+    dice.d20(
+      {
+        title: fill(t.attackRollsOf, { name: attack.name }),
+        bonus,
+        mode: modeOf(attackEdge, attackDouble),
+        mark: () => openMark(button),
+        damage: damageOf(attack),
+      },
+      { from: button },
+    );
+  }
+
   async function closeMark() {
     marking = false;
     await tick();
@@ -173,9 +199,8 @@
           <button
             type="button"
             class="badge"
-            aria-haspopup="dialog"
             aria-label={`${fill(t.attackRollsOf, { name: attack.name })} ${attack.toHit}${attackEdge ? `, ${edgeLabel(attackEdge)}` : ''}`}
-            onclick={(ev) => openMark(ev.currentTarget)}
+            onclick={(ev) => rollAttack(attack, ev.currentTarget)}
             >{attack.toHit}
             {#if attackEdge}<small class="edge {attackEdge}" aria-hidden="true"
                 >{arrowOf(attackEdge, attackDouble)} {edgeLabel(attackEdge)}</small
@@ -186,7 +211,18 @@
           <span class="badge">{attack.toHit}</span>
         {/if}
         {#if attack.damage}
-          <span class="badge damage">{attack.damage} <small>{attack.damageType}</small></span>
+          {@const damage = damageOf(attack)}
+          {#if damage}
+            <button
+              type="button"
+              class="badge damage"
+              aria-label={`${fill(t.diceDamageTitle, { name: attack.name })} ${attack.damage} ${attack.damageType}`}
+              onclick={(ev) => dice.damage(damage, { from: ev.currentTarget })}
+              >{attack.damage} <small>{attack.damageType}</small></button
+            >
+          {:else}
+            <span class="badge damage">{attack.damage} <small>{attack.damageType}</small></span>
+          {/if}
         {/if}
       </span>
       <span class="muted">{[attack.range, attack.description].filter(Boolean).join(', ')}</span>
@@ -477,7 +513,7 @@
     text-align: center;
   }
 
-  /* The to-hit number is a button (the advantage pop-up) that keeps the badge's look. */
+  /* The to-hit number and the damage are buttons (they roll, M14) that keep the badge's look. */
   button.badge {
     border: 0;
     font: inherit;

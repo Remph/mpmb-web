@@ -31,6 +31,8 @@
   import NumberPad from './NumberPad.svelte';
   import Stepper from './Stepper.svelte';
   import EdgePopUp from './EdgePopUp.svelte';
+  import { bonusOf, modeOf } from '../../dice/dice.ts';
+  import { dice } from '../../play/dice.svelte.ts';
   import UltCharges from './UltCharges.svelte';
   import SpeedWindow from './SpeedWindow.svelte';
   import type { UltCharges as Ult } from '../../homebrew/ult.ts';
@@ -147,6 +149,16 @@
     speedTile?.focus();
   }
   let initiativeTile: HTMLButtonElement | undefined = $state();
+  /** A tap rolls initiative with its mark (M14); a value that is no number opens the pop-up as before. */
+  function rollInitiative(value: string) {
+    const bonus = bonusOf(value);
+    if (bonus === null) return (marking = true);
+    const mark = () => (marking = true);
+    dice.d20(
+      { title: t.initiative, bonus, mode: modeOf(initiativeEdge, initiativeDouble), mark },
+      { from: initiativeTile },
+    );
+  }
   /** Focus goes back to the tile once the pop-up is gone (while it is open the page is inert). */
   async function closeMark() {
     marking = false;
@@ -427,16 +439,15 @@
     <div class="tiles">
       {#each shownStatTiles as tile, i (i)}
         {#if tile.initiative}
-          <!-- Tapping initiative marks it with advantage or disadvantage, like a skill. -->
+          <!-- Tapping initiative rolls it with its mark, like a skill (M14); the card's Mark opens the pop-up. -->
           <button
             type="button"
             class="tile"
             style:--stat={statColor(tile.kind)}
             style:--stat-soft={statSoft(tile.kind)}
-            aria-haspopup="dialog"
             aria-label={`${tile.label} ${tile.value}${initiativeEdge ? `, ${wordOf(t, initiativeEdge, initiativeDouble)}` : ''}`}
             bind:this={initiativeTile}
-            onclick={() => (marking = true)}
+            onclick={() => rollInitiative(tile.value)}
             ><span class="k">{tile.label}</span><span class="v"
               >{tile.value}{#if initiativeEdge}<span class="edge {initiativeEdge}" aria-hidden="true"
                   >{arrowOf(initiativeEdge, initiativeDouble)}</span

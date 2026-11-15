@@ -109,7 +109,12 @@ test('a new character gets a class, a species, armour and a weapon, and the play
   await page.getByRole('dialog').getByRole('button', { name: 'Half: 1' }).click();
   await expect(arrows).toContainText('19');
   await expect(page.getByText('2 used')).toHaveCount(0);
+  // A tap on the to-hit rolls it (M14); the roll card offers the damage and the advantage window.
   await page.getByRole('button', { name: /^Longsword attack roll/ }).click();
+  const roll = page.getByRole('region', { name: 'Dice roll' });
+  await expect(roll.getByRole('heading', { name: 'Longsword attack roll' })).toBeVisible();
+  await expect(roll.getByRole('button', { name: /^(Critical damage|Damage) \dd8/ })).toBeVisible();
+  await roll.getByRole('button', { name: /^Mark/ }).click();
   await page
     .getByRole('dialog', { name: 'Attack rolls' })
     .getByRole('button', { name: /Advantage/ })

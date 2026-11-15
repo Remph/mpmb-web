@@ -486,6 +486,13 @@ summary:focus-visible {
   outline-offset: 2px;
 }
 
+/* The number the dice card's roll came from (M14, mock B): ringed while the card shows it. DiceCard sets it on
+ * another component's button, so the rule lives here and not in a component's scoped style. */
+[data-rolled] {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* Paper (M10): the print sheet alone, on A4 with room for a printer's edge. */
 @page {
   size: A4;
