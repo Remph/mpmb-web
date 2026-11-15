@@ -1,0 +1,13 @@
+{
+  "name": "mpmb-web-sync",
+  "private": true,
+  "description": "MPMB Web's sync service (M15): runs on the remph.de webspace under Plesk's Node.js",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node dist/app.js"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  // The sync service (M15). Plain Node, no framework: `tsc -p server` turns it into server/dist/*.js, which is
+  // what the webspace runs (Plesk's Node.js, startup file dist/app.js). Erasable syntax only, so a Node with
+  // type stripping could also run the .ts files as they are.
+  "compilerOptions": {
+    "tsBuildInfoFile": "../node_modules/.tmp/tsconfig.server.tsbuildinfo",
+    "target": "es2022",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "module": "nodenext",
+    "rewriteRelativeImportExtensions": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "include": ["*.ts"],
+  "exclude": ["*.test.ts", "dist"]
+}

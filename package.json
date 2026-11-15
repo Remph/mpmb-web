@@ -12,11 +12,12 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json && tsc -p tsconfig.test.json && tsc -p tsconfig.sw.json",
+    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json && tsc -p tsconfig.test.json && tsc -p tsconfig.sw.json && tsc -p server/tsconfig.json --noEmit",
     "test": "vitest run",
     "e2e": "playwright test",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "build:server": "tsc -p server/tsconfig.json"
   },
   "dependencies": {
     "@cantoo/pdf-lib": "2.11.1",
