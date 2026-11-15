@@ -18,7 +18,6 @@ const TEXT = {
     add: 'Add player',
     newCode: 'New code',
     newCodeNote: 'A new code signs out all of this player’s devices.',
-    player: 'Player',
     devices: 'Devices',
     characters: 'Characters',
     lastSeen: 'Last seen',
@@ -41,7 +40,6 @@ const TEXT = {
     add: 'Spieler hinzufügen',
     newCode: 'Neuer Code',
     newCodeNote: 'Ein neuer Code meldet alle Geräte dieses Spielers ab.',
-    player: 'Spieler',
     devices: 'Geräte',
     characters: 'Charaktere',
     lastSeen: 'Zuletzt gesehen',
@@ -108,24 +106,29 @@ const STYLE = `
   .code { font-size: 1.5rem; font-weight: 700; padding: 1rem; border: 2px solid; border-radius: 0.5rem;
     overflow-wrap: anywhere; }
   .message { font-weight: 600; }
-  table { width: 100%; border-collapse: collapse; margin-top: 1.5rem; }
-  th, td { text-align: left; padding: 0.5rem 0.25rem; border-bottom: 1px solid; vertical-align: middle; }
-  td.number { text-align: right; font-variant-numeric: tabular-nums; }
+  .players { list-style: none; padding: 0; margin-top: 1.5rem; }
+  .players li { display: flex; gap: 0.75rem; align-items: center; justify-content: space-between;
+    padding: 0.5rem 0; border-bottom: 1px solid; }
+  .players li div { min-width: 0; overflow-wrap: anywhere; }
+  .players button { margin-top: 0; flex: none; }
+  .facts { font-variant-numeric: tabular-nums; }
 `;
 
 const when = (time: number | null, lang: Lang, t: Texts) =>
   time === null ? t.never : new Date(time).toLocaleString(lang === 'de' ? 'de-DE' : 'en-GB', { timeZone: 'UTC' });
 
+// A list, not a table: four columns don't fit a phone. Name first, the numbers on a line below, the button beside.
 function playerRow(player: PlayerRow, lang: Lang, t: Texts): string {
-  return `<tr><td>${escapeHtml(player.name)}</td><td class="number">${player.devices}</td>
-    <td class="number">${player.characters}</td><td>${when(player.last_seen, lang, t)} UTC</td>
-    <td><button name="newCode" value="${player.id}" title="${t.newCodeNote}">${t.newCode}</button></td></tr>`;
+  const seen = player.last_seen === null ? t.never : `${when(player.last_seen, lang, t)} UTC`;
+  return `<li><div><strong>${escapeHtml(player.name)}</strong><br>
+    <span class="facts">${t.devices}: ${player.devices} · ${t.characters}: ${player.characters} ·
+    ${t.lastSeen}: ${seen}</span></div>
+    <button name="newCode" value="${player.id}">${t.newCode}</button></li>`;
 }
 
 function playerTable(list: PlayerRow[], lang: Lang, t: Texts): string {
   if (!list.length) return `<p>${t.none}</p>`;
-  return `<table><thead><tr><th>${t.player}</th><th>${t.devices}</th><th>${t.characters}</th><th>${t.lastSeen}</th>
-    <th></th></tr></thead><tbody>${list.map((player) => playerRow(player, lang, t)).join('')}</tbody></table>
+  return `<ul class="players">${list.map((player) => playerRow(player, lang, t)).join('')}</ul>
     <p>${t.newCodeNote}</p>`;
 }
 
