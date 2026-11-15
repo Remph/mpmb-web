@@ -1,34 +1,120 @@
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
-import { health } from './health.ts';
+import { adminPage, langOf } from './admin.ts';
+import { errorCode, partsOf, service } from './app.ts';
+import { databaseDebug, health } from './health.ts';
+import { allowedOrigins, corsHeaders } from './http.ts';
 
 const NOW = new Date('2026-11-15T10:00:00.000Z');
-const VERSION = 'v22.12.0';
 const UPTIME = 12.4;
 const ROUNDED = 12;
-const DATABASE = { DB_HOST: 'localhost', DB_NAME: 'mpmb', DB_USER: 'mpmb', DB_PASSWORD: 'secret' };
+const BAD_REQUEST = 400;
 
 describe('health', () => {
-  it('names the Node version and how it runs', () => {
-    expect(health({}, VERSION, UPTIME, NOW)).toEqual({
+  it('says how it runs and whether it reaches the database', () => {
+    expect(health({}, UPTIME, NOW, 'not configured')).toEqual({
       ok: true,
       service: 'mpmb-web-sync',
-      node: VERSION,
       runner: 'plain',
       uptime: ROUNDED,
       database: 'not configured',
       time: NOW.toISOString(),
     });
+    expect(health({}, UPTIME, NOW, 'connected').database).toBe('connected');
+  });
+
+  it('names why the database is unreachable by its code only', () => {
+    const answer = health({}, UPTIME, NOW, 'unreachable', 'ECONNREFUSED');
+    expect(answer).toMatchObject({ database: 'unreachable', databaseError: 'ECONNREFUSED' });
+    expect(health({}, UPTIME, NOW, 'connected')).not.toHaveProperty('databaseError');
+    const denied = Object.assign(new Error("Access denied for user 'mpmb'@'localhost'"), {
+      code: 'ER_ACCESS_DENIED_ERROR',
+    });
+    expect(errorCode(denied)).toBe('ER_ACCESS_DENIED_ERROR');
+    expect(errorCode(new Error('no code'))).toBe('unknown');
+    expect(errorCode('text')).toBe('unknown');
   });
 
   it('sees Passenger, Plesk’s way of running Node', () => {
-    expect(health({ PASSENGER_APP_ENV: 'production' }, VERSION, UPTIME, NOW).runner).toBe('passenger');
-    expect(health({ IN_PASSENGER: '1' }, VERSION, UPTIME, NOW).runner).toBe('passenger');
+    expect(health({ PASSENGER_APP_ENV: 'production' }, UPTIME, NOW, 'connected').runner).toBe('passenger');
+    expect(health({ IN_PASSENGER: '1' }, UPTIME, NOW, 'connected').runner).toBe('passenger');
+  });
+});
+
+describe('database debugging (DB_DEBUG=1)', () => {
+  it('shows MySQL’s message and the settings, but only the password’s length', () => {
+    const env = { DB_HOST: '127.0.0.1', DB_NAME: 'k1_mpmb', DB_USER: 'k1_mpmb', DB_PASSWORD: ' secret-pw' };
+    const denied = new Error("Access denied for user 'k1_mpmb'@'10.0.0.5' (using password: YES)");
+    const debug = databaseDebug(env, denied);
+    expect(debug).toEqual({
+      message: denied.message,
+      host: '127.0.0.1',
+      name: 'k1_mpmb',
+      user: 'k1_mpmb',
+      passwordLength: env.DB_PASSWORD.length,
+      passwordHasOuterSpaces: true,
+    });
+    expect(JSON.stringify(health(env, UPTIME, NOW, 'unreachable', 'ER_ACCESS_DENIED_ERROR', debug))).not.toContain(
+      'secret',
+    );
+    expect(health(env, UPTIME, NOW, 'unreachable', 'ER_ACCESS_DENIED_ERROR')).not.toHaveProperty('databaseDebug');
+  });
+});
+
+describe('requests', () => {
+  it.each([
+    ['/health', ['health']],
+    ['/api/health', ['health']],
+    ['/api', []],
+    ['/apis/x', ['apis', 'x']],
+    ['/characters/abc/lease?x=1', ['characters', 'abc', 'lease']],
+    ['/characters/a%20b', ['characters', 'a b']],
+  ])('splits %j into %j', (url, parts) => {
+    expect(partsOf(url)).toEqual(parts);
   });
 
-  it('says whether the database settings are there, never their values', () => {
-    const answer = health(DATABASE, VERSION, UPTIME, NOW);
-    expect(answer.database).toBe('configured');
-    expect(JSON.stringify(answer)).not.toContain('secret');
-    expect(health({ ...DATABASE, DB_PASSWORD: '' }, VERSION, UPTIME, NOW).database).toBe('not configured');
+  it('turns down a path it can’t read, without stopping the service', async () => {
+    expect(() => partsOf('/characters/%E0')).toThrow('bad path');
+    // An error thrown before the handler's try would reject handle(): Node then ends the whole process.
+    const { handle } = service({}, null);
+    const server = createServer((req, res) => {
+      handle(req, res).catch((error: unknown) => res.destroy(error as Error));
+    });
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    try {
+      const res = await fetch(`http://localhost:${(server.address() as AddressInfo).port}/characters/%`);
+      expect(res.status).toBe(BAD_REQUEST);
+      expect(await res.json()).toEqual({ error: 'bad path' });
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it('allow the app’s origin and the extra ones, nothing else', () => {
+    const allowed = allowedOrigins({ ALLOWED_ORIGINS: 'http://localhost:5173, ' });
+    expect(corsHeaders('https://remph.de', allowed)['Access-Control-Allow-Origin']).toBe('https://remph.de');
+    expect(corsHeaders('http://localhost:5173', allowed)['Access-Control-Allow-Origin']).toBe('http://localhost:5173');
+    expect(corsHeaders('https://example.com', allowed)).toEqual({ Vary: 'Origin' });
+    expect(corsHeaders(undefined, allowed)).toEqual({ Vary: 'Origin' });
+  });
+});
+
+describe('the admin page', () => {
+  it('speaks German to a German browser', () => {
+    expect(langOf('de-DE,de;q=0.9,en;q=0.8')).toBe('de');
+    expect(langOf('en-GB,de;q=0.5')).toBe('en');
+    expect(langOf(undefined)).toBe('en');
+    expect(adminPage('de')).toContain('Spieler hinzufügen');
+  });
+
+  it('shows names as text, never as markup', () => {
+    const page = adminPage('en', {
+      players: [{ id: 1, name: '<b>Bob</b>', devices: 0, characters: 0, last_seen: null }],
+      password: '"><script>',
+    });
+    expect(page).toContain('&lt;b&gt;Bob&lt;/b&gt;');
+    expect(page).not.toContain('<b>Bob');
+    expect(page).not.toContain('"><script>');
   });
 });

@@ -1,23 +1,22 @@
 {
-  // The sync service (M15). Plain Node, no framework: `tsc -p server` turns it into server/dist/*.js, which is
-  // what the webspace runs (Plesk's Node.js, startup file dist/app.js). Erasable syntax only, so a Node with
-  // type stripping could also run the .ts files as they are.
+  // The sync service (M15). Type checks only (`pnpm check`), tests included (not in tsconfig.test.json): esbuild bundles it for the webspace
+  // (`pnpm build:server`, server/README.md). Erasable syntax only, so esbuild's plain type stripping is all it needs.
   "compilerOptions": {
     "tsBuildInfoFile": "../node_modules/.tmp/tsconfig.server.tsbuildinfo",
     "target": "es2022",
     "lib": ["ES2022"],
     "types": ["node"],
     "module": "nodenext",
-    "rewriteRelativeImportExtensions": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,
     "strict": true,
+    "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "skipLibCheck": true,
-    "rootDir": ".",
-    "outDir": "dist"
+    "skipLibCheck": true
   },
   "include": ["*.ts"],
-  "exclude": ["*.test.ts", "dist"]
+  "exclude": ["dist"]
 }
