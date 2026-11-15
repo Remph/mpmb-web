@@ -48,8 +48,17 @@ Nick set up the subdomain, Node.js and the database for the hosting test (#101).
    and `dist/app.cjs` (from `pnpm build:server`, or the zip in the project folder). Delete the old `dist/app.js`,
    `dist/health.js` and `httpdocs/health.php`: the hosting test needed them, the service doesn't.
 3. **Restart App**, then open `https://sync.remph.de/health`: `database` should say `connected` (the service built
-   its tables). `unreachable` means the `DB_*` settings or the database's access don't fit; the Node.js page shows
-   the app's log.
+   its tables). What the setup on 2026-11-15 taught:
+   - **The database runs on another server**, not on the webspace: `DB_HOST` is the name phpMyAdmin shows in its
+     top line ("Server: …:3306", without the port). `localhost` or `127.0.0.1` reach a different MySQL, where the
+     user doesn't exist (`ER_ACCESS_DENIED_ERROR`).
+   - Plesk puts the customer number in front of the names: `DB_NAME` and `DB_USER` are like `k123456_mpmb`.
+   - With the database on another server, Plesk offers no "local connections only": allow the webspace's address
+     (the one after the `@` in an "Access denied" message).
+   - Changes on the Environment tab count only after **OK**, then Restart App. Passenger starts the app at the next
+     request, which sometimes took a visit to another page of the webspace before `/health` showed the new values.
+   - `databaseError` on `/health` names the kind of failure. While setting up, the variable `DB_DEBUG=1` adds MySQL's
+     own message and the settings (only the password's length); remove it again afterwards.
 4. **HTTPS only:** in the subdomain's Hosting settings, turn on the permanent 301 redirect from HTTP to HTTPS (if it
    isn't on yet). The admin password and the device tokens must never travel over plain `http://`; check that
    `http://sync.remph.de/health` ends up on `https://`.
