@@ -548,7 +548,7 @@ export class Session {
           device: lease.device,
           time: this.clock(lease.since),
         }),
-        lines: [fill(this.t.syncOpenOnHint, { device: lease.device })],
+        hint: fill(this.t.syncOpenOnHint, { device: lease.device }),
         buttons: [
           { value: 'read', label: this.t.syncReadOnly },
           { value: 'take', label: this.t.takeOver, primary: true },

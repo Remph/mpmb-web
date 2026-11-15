@@ -15,6 +15,8 @@ export interface Choice<T extends string> {
   message: string;
   /** Extra lines under the message, e.g. what a restore would replace. */
   lines?: string[];
+  /** A quieter paragraph under the message: what the answer leads to (sync's "Take over"). */
+  hint?: string;
   buttons: { value: T; label: string; primary?: boolean; danger?: boolean }[];
   /** What Escape answers. */
   cancel: T;

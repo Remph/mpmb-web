@@ -52,9 +52,10 @@
   }
 </script>
 
-<section class="sync" class:on={sync.on} data-state={sync.state} aria-labelledby="sync-title">
+<section class="sync" data-state={sync.state} aria-labelledby="sync-title">
   <div class="text">
-    <h2 id="sync-title"><span class="dot" aria-hidden="true"></span>{title}</h2>
+    <!-- Without a code there is no state to show, only the offer. -->
+    <h2 id="sync-title">{#if sync.on}<span class="dot" aria-hidden="true"></span>{/if}{title}</h2>
     <p aria-live="polite">{sync.on ? line : t.syncOffLine}</p>
   </div>
   <div class="row">
@@ -119,10 +120,6 @@
     width: 0.625rem;
     height: 0.625rem;
     border-radius: 50%;
-    background: var(--ink-muted);
-  }
-
-  .on .dot {
     background: var(--ok);
   }
 
