@@ -807,7 +807,8 @@ export const ui = {
     lagerLoading: 'Das Lager wird geladen …',
     lagerOffline: 'Keine Verbindung: Das ist der letzte Stand, nur zum Lesen.',
     lagerError: 'Der Sync-Dienst hat nicht wie erwartet geantwortet. Versuch es später noch einmal.',
-    lagerFailed: 'Die letzte Änderung kam nicht an (keine Verbindung). Versuch es noch einmal.',
+    lagerFailed:
+      'Die letzte Änderung kam vielleicht nicht an (keine Verbindung). Schau nach, bevor du sie wiederholst.',
     lagerGold: 'Gold im Lager',
     lagerGoldNote: 'Notiz zum Gold',
     lagerSearch: 'Im Lager suchen …',
@@ -2343,7 +2344,7 @@ export const ui = {
     lagerLoading: 'Loading the Lager …',
     lagerOffline: 'No connection: this is the last copy, read only.',
     lagerError: 'The sync service didn’t answer as expected. Try again later.',
-    lagerFailed: 'The last change didn’t get through (no connection). Try again.',
+    lagerFailed: 'The last change may not have got through (no connection). Check before you do it again.',
     lagerGold: 'Gold in the Lager',
     lagerGoldNote: 'Note on the gold',
     lagerSearch: 'Search the Lager …',

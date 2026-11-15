@@ -20,6 +20,8 @@ export class LagerStore {
   sending = $state(0);
   /** The last change didn't reach the service (it was dropped again): the panel says so until the next one does. */
   failed = $state(false);
+  /** An import is reading the Lager before it sends: a second one waits for it (it would double the list). */
+  importing = $state(false);
 
   /** The places that want fresh numbers (the open panel, the Inventory tab's line). */
   private watchers = 0;
@@ -28,6 +30,8 @@ export class LagerStore {
   private queue: Promise<void> = Promise.resolve();
   /** The Lager as the service last sent it, without changes still on their way. */
   private confirmed: Lager | null = null;
+  /** Changes made so far: a read that started before the newest one may answer with the Lager from before it. */
+  private changes = 0;
 
   constructor(
     private readonly api: SyncApi,
@@ -48,9 +52,12 @@ export class LagerStore {
     }
     // A change on its way answers with the newest Lager anyway; a read now could show the state before it.
     if (this.sending) return;
+    const changes = this.changes;
     try {
       const answer = await this.api.lager(this.lager?.version ?? null);
-      if (this.sending) return;
+      // A change made meanwhile may have been answered already: this older read would undo it on screen until the
+      // next one, and a player who sees their "+1" vanish taps it again. The next read brings the news anyway.
+      if (this.sending || this.changes !== changes) return;
       if (isLager(answer)) {
         this.confirmed = answer;
         this.lager = answer;
@@ -88,11 +95,29 @@ export class LagerStore {
     const player = this.player();
     if (!this.lager || player === null || !ops.length) return Promise.resolve(false);
     this.lager = applyOps(this.lager, ops, player, this.clock());
+    this.changes += 1;
     this.sending += 1;
     const before = this.queue;
     const sent = this.send(before, ops);
     this.queue = this.settle(sent);
     return sent;
+  }
+
+  /**
+   * Puts a list file's ops into the Lager, only while it is empty: it reads first, so a list someone imported
+   * meanwhile (or a second tap here while the first import reads) isn't added a second time. The service doesn't
+   * guard this; two devices importing in the same second would still double it. Resolves true when it was sent.
+   */
+  async importList(ops: readonly Op[]): Promise<boolean> {
+    if (this.importing) return false;
+    this.importing = true;
+    try {
+      await this.refresh();
+      if (this.status !== 'ready' || this.sending || !this.lager || this.lager.groups.length) return false;
+      return await this.change(ops);
+    } finally {
+      this.importing = false;
+    }
   }
 
   /** Sends once the changes before have gone out. */

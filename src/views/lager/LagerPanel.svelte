@@ -108,7 +108,7 @@
       ops = null;
     }
     importBad = ops === null;
-    if (ops) send(ops);
+    if (ops) void store.importList(ops);
   }
 
   /** The note's first line under the name, so an item with a text shows that it has one. */
@@ -225,7 +225,7 @@
       {/each}
     {:else if store.status === 'ready'}
       <p class="empty">{t.lagerEmpty}</p>
-      <button type="button" onclick={() => importInput?.click()}>{t.lagerImport}</button>
+      <button type="button" disabled={store.importing} onclick={() => importInput?.click()}>{t.lagerImport}</button>
       <input
         bind:this={importInput}
         type="file"

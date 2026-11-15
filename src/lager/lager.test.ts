@@ -1,7 +1,7 @@
 /* eslint-disable ts-patterns/no-magic-numbers -- counts, gold and times are the test data */
 // The Lager as the app sees it (lager.ts) and keeps it (lager.svelte.ts), on the stand-in service
 // (test/fake-sync.ts). Made-up items only: the group's real list stays in the private repo.
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { FakeSync } from '../../test/fake-sync.ts';
 import { SyncApi } from '../sync/api.ts';
 import { changedWhen } from '../views/lager/when.ts';
@@ -289,6 +289,67 @@ describe('the store', () => {
     expect(await store.change([{ op: 'count', id: 'i', by: 1 }])).toBe(true);
     expect(service.lager.items[0]?.count).toBe(2);
     expect(store.lager?.items[0]?.count).toBe(2);
+  });
+
+  test('a read that started before a change and answers after it does not undo the change on screen', async () => {
+    const service = serviceWithPlayer();
+    const ipad = await device(service, 'iPad');
+    await ipad.refresh();
+    await ipad.change([
+      { op: 'addGroup', id: 'g', name: 'Materials', kind: 'count' },
+      { op: 'add', id: 'i', group: 'g', name: 'Iron Ore', count: 1, place: '', note: '' },
+    ]);
+    // A laptop whose polls the service answers at once, but whose answers arrive only when `late` lets them.
+    const fetcher = service.fetcher;
+    let late: Promise<void> | null = null;
+    let arrive = () => {};
+    const api = new SyncApi(
+      () => service.devices[0]?.token ?? null,
+      'https://sync.test',
+      async (url, init) => {
+        const response = await fetcher(url, init);
+        if (init.method === 'GET' && late) await late;
+        return response;
+      },
+    );
+    const laptop = new LagerStore(api, () => 'Anna');
+    await laptop.refresh();
+    // The iPad changes the gold, so the laptop's next poll brings a whole Lager: the one before its own +1.
+    await ipad.change([{ op: 'gold', to: 100 }]);
+    late = new Promise<void>((resolve) => (arrive = resolve));
+    const poll = laptop.refresh();
+    await vi.waitFor(() => expect(service.log.at(-1)).toMatch(/GET \/lager/));
+    expect(await laptop.change([{ op: 'count', id: 'i', by: 1 }])).toBe(true);
+    expect(laptop.lager?.items[0]?.count).toBe(2);
+    arrive();
+    await poll;
+    expect(laptop.lager?.items[0]?.count).toBe(2);
+    expect(laptop.lager?.copper).toBe(100);
+  });
+
+  test('an import goes only into an empty Lager, and only once', async () => {
+    const service = serviceWithPlayer();
+    const laptop = await device(service, 'Laptop');
+    const ipad = await device(service, 'iPad');
+    await laptop.refresh();
+    await ipad.refresh();
+    const list: Op[] = [
+      { op: 'addGroup', id: 'g', name: 'Materials', kind: 'count' },
+      { op: 'add', id: 'i', group: 'g', name: 'Iron Ore', count: 3, place: '', note: '' },
+    ];
+    const relist = (suffix: string): Op[] => [
+      { op: 'addGroup', id: `g${suffix}`, name: 'Materials', kind: 'count' },
+      { op: 'add', id: `i${suffix}`, group: `g${suffix}`, name: 'Iron Ore', count: 3, place: '', note: '' },
+    ];
+    // Two taps on this device: the second finds the first still reading and does nothing.
+    const twice = await Promise.all([laptop.importList(list), laptop.importList(relist('2'))]);
+    expect(twice).toEqual([true, false]);
+    // The iPad still shows the empty Lager from before, but reads before it sends.
+    expect(ipad.lager?.groups).toEqual([]);
+    expect(await ipad.importList(relist('3'))).toBe(false);
+    expect(service.lager.groups).toHaveLength(1);
+    expect(service.lager.items).toHaveLength(1);
+    expect(ipad.importing).toBe(false);
   });
 
   test('a change that does not get through is dropped again, and the store says so', async () => {

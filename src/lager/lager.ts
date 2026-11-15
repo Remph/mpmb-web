@@ -132,7 +132,7 @@ export function placesUsed(lager: Lager): string[] {
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([place]) => place);
 }
 
-/** An item of the group with this name, whatever its case and spaces ("essence of fire " is "Essence of Fire"). */
+/** An item of the group with this name, whatever its case and spaces ("iron ore " is "Iron Ore"). */
 export function sameItem(lager: Lager, group: string, name: string): LagerItem | null {
   const key = name.trim().toLowerCase();
   return lager.items.find((item) => item.group === group && item.name.trim().toLowerCase() === key) ?? null;
