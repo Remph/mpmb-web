@@ -4,8 +4,8 @@ The service behind M15: a player's characters follow them to every device, with 
 pick, 2026-11-15). It runs on the same webspace as the app, at `https://sync.remph.de`, under Plesk's Node.js
 (Phusion Passenger), with a MySQL database. The app's deploy never uploads this folder.
 
-**Today (PR 2) it is the service side only.** The app doesn't call it yet; that comes in the next PR, with the
-screens Nick picked in the mock-ups.
+The app's side lives in `src/sync/` (the code window and the start page line in `src/views/sync/`): it keeps
+IndexedDB as the copy it works on and sends changes here at most every 5 seconds.
 
 ## What it does
 
@@ -75,7 +75,8 @@ DB_HOST=localhost DB_NAME=mpmb DB_USER=mpmb DB_PASSWORD=… ADMIN_PASSWORD=… n
 ```
 
 Then `http://localhost:3000/health` and `/admin`. `ALLOWED_ORIGINS=http://localhost:5173` lets the app's dev
-server call it too.
+server call it too, and `VITE_SYNC_URL=http://localhost:3000 pnpm dev` points the app at it (the app's own
+Content-Security-Policy only applies on the webspace, through `public/.htaccess`).
 
 ## Tests
 
@@ -88,6 +89,16 @@ apt-get update && apt-get install -y mariadb-server && service mariadb start
 mariadb -e "CREATE DATABASE mpmb_test; CREATE USER 'mpmb'@'localhost' IDENTIFIED BY 'mpmb-test';
   GRANT ALL ON mpmb_test.* TO 'mpmb'@'localhost';"
 TEST_DB_HOST=localhost TEST_DB_NAME=mpmb_test TEST_DB_USER=mpmb TEST_DB_PASSWORD=mpmb-test pnpm test server
+```
+
+`test/sync-real.test.ts` runs the app's sync (`src/sync/`) against this service on the same database server, so
+the two can't drift apart while each passes its own tests against a stand-in. It needs a second empty database in
+`TEST_APP_DB_NAME`, because test files run side by side and each wipes its tables:
+
+```sh
+mariadb -e "CREATE DATABASE mpmb_app_test; GRANT ALL ON mpmb_app_test.* TO 'mpmb'@'localhost';"
+TEST_DB_HOST=localhost TEST_DB_NAME=mpmb_test TEST_APP_DB_NAME=mpmb_app_test TEST_DB_USER=mpmb \
+  TEST_DB_PASSWORD=mpmb-test pnpm test server test/sync-real
 ```
 
 ## Why it's built this way
@@ -103,11 +114,12 @@ TEST_DB_HOST=localhost TEST_DB_NAME=mpmb_test TEST_DB_USER=mpmb TEST_DB_PASSWORD
   hand in Plesk.
 - **The admin page posts a plain form**, without scripts, under a strict Content-Security-Policy.
 
-## Before the app calls it (next PR)
+## What the app does with it
 
-- The app's Content-Security-Policy (`public/.htaccess`) has `connect-src 'self'`, which blocks every fetch to
-  `https://sync.remph.de`. Add the service's origin there in the PR that first calls it. (Checked in Firefox in the
-  #101 review: with the app's COOP/COEP the health check is read across origins; with that CSP it is refused.)
-- A character is half a megabyte or more and is saved on every change: the app should send saves at most every few
-  seconds, and may compress `data` (CompressionStream) since the service never reads it. Bodies are limited to
-  12 MB.
+- The app's Content-Security-Policy (`public/.htaccess`) allows `connect-src https://sync.remph.de`. Its worker,
+  which runs MPMB's and the players' add-on scripts, has no `fetch` (`src/worker/lockdown.ts`), so an add-on script
+  can't reach the service.
+- Saves go out at most every 5 seconds, with `data` gzipped (CompressionStream, as `gz:` plus base64). Bodies are
+  limited to 12 MB.
+- A character open for editing holds a lease, renewed every 45 seconds. Another device asks "Read only or Take
+  over?"; a device that loses its lease turns read only.
