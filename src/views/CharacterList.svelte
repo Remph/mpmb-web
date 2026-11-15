@@ -138,7 +138,7 @@
             {:else if mark === 'synced'}
               · <span class="synced">☁ {t.syncCardSynced}</span>
             {:else if mark === 'waiting'}
-              · {t.syncCardWaiting}
+              · {session.sync.auto ? t.syncCardWaiting : t.syncCardHereOnly}
             {/if}
           </span>
           {#if character.sheetUpdate && !character.sheetUpdate.seen}

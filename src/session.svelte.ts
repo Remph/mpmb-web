@@ -539,7 +539,8 @@ export class Session {
    */
   private async holdOnDevices(meta: CharacterMeta, takeOver: boolean): Promise<Lease | null> {
     this.watching = null;
-    if (!this.sync.on) return null;
+    // Auto sync off: nothing to hold or fetch; the player syncs by hand from the start page.
+    if (!this.sync.on || !this.sync.auto) return null;
     let hold = await this.sync.hold(meta.id, takeOver);
     if (!hold.held && 'lease' in hold) {
       const lease = hold.lease;
@@ -674,11 +675,12 @@ export class Session {
 
   /**
    * How the top bar says the open character's state at the service: `synced` (sent), `waiting` (goes out in a
-   * moment), `offline` (waits here until the service answers); null without sync.
+   * moment), `offline` (waits on this device: the service didn't answer, or auto sync is off); null without sync.
    */
   syncMark(open: OpenCharacter): 'synced' | 'waiting' | 'offline' | null {
     const mark = this.sync.mark(open.meta);
-    return mark === 'waiting' && this.sync.state === 'offline' ? 'offline' : mark;
+    // Offline, or auto sync off: the change stays on this device for now ("Saved on this device").
+    return mark === 'waiting' && (this.sync.state === 'offline' || !this.sync.auto) ? 'offline' : mark;
   }
 
   // ---- Restore points (store/restore-points.ts) ----
@@ -1381,7 +1383,10 @@ export class Session {
     this.clearNotes();
     const result = await this.sync.forgetThisDevice();
     if (result === 'ok') this.note('ok', this.t.syncForgotten);
-    else this.note('error', result === 'offline' ? this.t.syncForgetOffline : this.t.syncForgetWaiting);
+    else {
+      const why = { offline: this.t.syncForgetOffline, waiting: this.t.syncForgetWaiting, kept: this.t.syncForgetKept };
+      this.note('error', why[result]);
+    }
   }
 
   // ---- Delete, back up, restore ----
