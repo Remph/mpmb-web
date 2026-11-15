@@ -225,6 +225,59 @@ describe('open on another device', () => {
     expect(laptop.lost).toMatchObject([{ device: 'iPad' }]);
   });
 
+  test('taken over elsewhere: the next push already tells the first device, before its renewal', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const laptop = await Device.on(service);
+    const ipad = await Device.on(service);
+    await laptop.store.put(character('a', '20'));
+    await laptop.sync.connect(CODE, 'Laptop');
+    await ipad.sync.connect(CODE, 'iPad');
+    await laptop.sync.hold('a');
+    await ipad.sync.hold('a', true);
+    // Typed on the laptop a moment after the iPad took over: the push is refused (423) and says by whom.
+    await laptop.store.put(character('a', '12', (await laptop.store.get('a'))!));
+    await laptop.sync.round(false);
+    expect(laptop.lost).toMatchObject([{ device: 'iPad' }]);
+    // The laptop renews no more (it would only be refused again): the one hold after 45 s is the iPad's.
+    const holds = (): number => service.log.filter((line) => line === 'POST /characters/a/lease').length;
+    const before = holds();
+    await vi.advanceTimersByTimeAsync(45_000);
+    expect(holds()).toBe(before + 1);
+    expect(laptop.lost).toHaveLength(1);
+  });
+
+  test('closing sends the last change before it lets go, so the next device opens the newest copy', async () => {
+    const laptop = await Device.on(service);
+    const ipad = await Device.on(service);
+    await laptop.store.put(character('a', '20'));
+    await laptop.sync.connect(CODE, 'Laptop');
+    await ipad.sync.connect(CODE, 'iPad');
+    await laptop.sync.hold('a');
+    await laptop.store.put(character('a', '4', (await laptop.store.get('a'))!));
+    // As Session.close(): the round first, then the release.
+    void laptop.sync.now(true);
+    laptop.sync.release('a');
+    await vi.waitFor(() => expect(service.log).toContain('DELETE /characters/a/lease'));
+    const log = service.log.join('\n');
+    expect(log.lastIndexOf('PUT /characters/a')).toBeLessThan(log.lastIndexOf('DELETE /characters/a/lease'));
+    expect(await ipad.sync.hold('a')).toEqual({ held: true });
+    await ipad.sync.round(true);
+    expect(await ipad.hp('a')).toBe('4');
+  });
+
+  test("opened again here before the release went out: the lease stays this device's", async () => {
+    const laptop = await Device.on(service);
+    await laptop.store.put(character('a', '20'));
+    await laptop.sync.connect(CODE, 'Laptop');
+    await laptop.sync.hold('a');
+    void laptop.sync.now(true);
+    laptop.sync.release('a');
+    await laptop.sync.hold('a');
+    await laptop.sync.round(false);
+    expect(service.log).not.toContain('DELETE /characters/a/lease');
+    laptop.sync.release('a');
+  });
+
   test('closing lets go at once, so the next device opens it without asking', async () => {
     const laptop = await Device.on(service);
     const ipad = await Device.on(service);

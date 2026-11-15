@@ -88,6 +88,8 @@ export class Sync {
   private fullSoon = false;
   /** The character this device holds a lease on, and the timer that renews it. */
   private held: { id: string; timer: ReturnType<typeof setInterval> } | null = null;
+  /** The character this device means to hold, set as soon as hold() starts (before the service answers). */
+  private wanted: string | null = null;
   private roundTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -267,8 +269,15 @@ export class Sync {
       if (!(err instanceof SyncRefused)) throw err;
       // Saved meanwhile from another copy: the next full round keeps this one as a restore point.
       if (err.status === NEWER_VERSION) this.fullSoon = true;
-      // Open on another device: it goes out once that device lets go.
-      else if (err.status !== OPEN_ELSEWHERE) console.warn('Sync refused a save:', err);
+      else if (err.status === OPEN_ELSEWHERE) {
+        // The character open here was taken over on another device: say so now rather than at the next renewal
+        // (up to 45 s of typing that would only end up as a restore point). Otherwise it goes out once that
+        // device lets go.
+        if (this.held?.id === id && err.lease) {
+          this.letGo();
+          this.host.lost(id, err.lease);
+        }
+      } else console.warn('Sync refused a save:', err);
     }
     return false;
   }
@@ -299,7 +308,8 @@ export class Sync {
       // on another device: try again later.
       if (err.status !== OPEN_ELSEWHERE) {
         await store.setSync(id, null);
-        this.fullSoon = err.status === NEWER_VERSION;
+        // Only ever set here: a 409 from a push earlier in the round must not be forgotten.
+        if (err.status === NEWER_VERSION) this.fullSoon = true;
       }
     }
     return false;
@@ -334,6 +344,7 @@ export class Sync {
    */
   async hold(id: string, takeOver = false): Promise<Hold> {
     this.letGo();
+    this.wanted = id;
     if (!this.account) return { held: true };
     try {
       await this.api.hold(id, takeOver);
@@ -380,11 +391,21 @@ export class Sync {
     this.held = null;
   }
 
-  /** The character is closed here: the lease goes at once, so another device can open it without asking. */
+  /**
+   * The character is closed here: the lease goes, so another device can open it without asking. Renewing stops at
+   * once, but the service hears of it only after the round already queued (close() sends the last changes first):
+   * let go earlier and the next device could open the older copy and hold it, refusing the last changes from here.
+   */
   release(id: string): void {
     if (this.held?.id !== id) return;
     this.letGo();
-    if (this.account) void this.quietly(() => this.api.release(id));
+    this.wanted = null;
+    if (!this.account) return;
+    void this.running.then(() => {
+      // Opened again here meanwhile: the lease is this device's again.
+      if (this.wanted === id || !this.account) return;
+      return this.quietly(() => this.api.release(id));
+    });
   }
 
   /** A call whose failure doesn't matter (the lease lapses by itself). */

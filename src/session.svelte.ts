@@ -939,9 +939,10 @@ export class Session {
     await this.running;
     this.client.close();
     this.tabLock.free();
+    // The last changes go out before the lease (release() waits for this round).
+    void this.sync.now(true);
     if (this.current) this.sync.release(this.current.meta.id);
     this.watching = null;
-    void this.sync.now(true);
     this.current = null;
     this.clearNotes();
   }
