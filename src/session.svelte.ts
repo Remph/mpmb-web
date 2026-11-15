@@ -579,9 +579,10 @@ export class Session {
     return this.popUps.choose<'here' | 'there' | 'later'>({
       title: fill(t.syncClashTitle, { name }),
       message: fill(t.syncClashMessage, { name, device }),
+      // Two saves in the same minute look alike: the newer one says so.
       lines: [
-        fill(t.syncClashHere, { when: when(Date.parse(clash.here)) }),
-        fill(t.syncClashThere, { device, when: when(clash.there) }),
+        fill(t.syncClashHere, { when: when(Date.parse(clash.here)) }) + (hereNewer ? ` · ${t.syncClashNewer}` : ''),
+        fill(t.syncClashThere, { device, when: when(clash.there) }) + (hereNewer ? '' : ` · ${t.syncClashNewer}`),
       ],
       hint: t.syncClashHint,
       buttons: [

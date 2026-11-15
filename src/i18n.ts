@@ -137,7 +137,8 @@ export const ui = {
     syncClashThere: '{device}: geändert {when}',
     syncClashHint:
       'Der andere bleibt auf diesem Gerät als früherer Stand (Bogen-Menü, „Zu einem früheren Stand zurück“).',
-    syncClashKeepHere: 'Den von diesem Gerät',
+    syncClashKeepHere: 'Den von hier',
+    syncClashNewer: 'neuer',
     syncClashTakeThere: 'Den von {device}',
     syncClashLater: 'Später',
     syncAnotherDevice: 'einem anderen Gerät',
@@ -1602,7 +1603,8 @@ export const ui = {
     syncClashHint:
       'The other one is kept on this device as a restore point (Sheet menu, “Roll back to an earlier save”).',
     syncClashKeepHere: 'This device’s',
-    syncClashTakeThere: 'The one from {device}',
+    syncClashNewer: 'newer',
+    syncClashTakeThere: '{device}’s',
     syncClashLater: 'Later',
     syncAnotherDevice: 'another device',
     noCharacters: 'No characters yet.',

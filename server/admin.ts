@@ -123,12 +123,14 @@ const STYLE = `
     overflow-wrap: anywhere; }
   .message { font-weight: 600; }
   .players { list-style: none; padding: 0; margin-top: 1.5rem; }
-  .players li { display: flex; gap: 0.75rem; align-items: center; justify-content: space-between;
-    padding: 0.5rem 0; border-bottom: 1px solid; }
-  .players li div { min-width: 0; overflow-wrap: anywhere; }
-  .players li > span { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; flex: none; }
+  .players li { display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem; align-items: center;
+    justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid; }
+  /* On a phone the buttons go under the facts instead of squeezing them into a narrow column. */
+  .players li div { flex: 1 1 16rem; min-width: 0; overflow-wrap: anywhere; }
+  .players li > span { display: flex; gap: 0.5rem; flex: none; }
   .players button { margin-top: 0; }
   .ask { padding: 1rem; border: 2px solid; border-radius: 0.5rem; }
+  .ask h2 { margin-top: 0; }
   .ask button { margin-right: 0.5rem; }
   .facts { font-variant-numeric: tabular-nums; }
 `;
@@ -172,9 +174,9 @@ export function adminPage(lang: Lang, view: AdminView = {}): string {
     <title>${t.title}</title><style>${STYLE}</style></head><body><h1>${t.title}</h1>
     ${view.message ? `<p class="message" role="alert">${escapeHtml(view.message)}</p>` : ''}${code}
     <form method="post" action="/admin">
+      ${ask}
       <label>${t.password}<input type="password" name="password" value="${password}" required
         autocomplete="current-password"></label>
-      ${ask}
       <button name="action" value="list">${t.show}</button>
       <label>${t.name}<input name="name" maxlength="80" autocomplete="off"></label>
       <button name="action" value="add">${t.add}</button>
