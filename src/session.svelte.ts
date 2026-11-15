@@ -37,6 +37,9 @@ import {
 import { CharacterStore, copyHomebrew, describeCharacter, keepStorage } from './store/characters.ts';
 import { TabLock, browserLocks } from './store/tab-lock.ts';
 import type { Locks } from './store/tab-lock.ts';
+import { Sync } from './sync/sync.svelte.ts';
+import type { Fetch, Lease } from './sync/api.ts';
+import type { KeyValues } from './sync/account.ts';
 import type { UltCharges } from './homebrew/ult.ts';
 import type { CharacterHomebrew, CharacterMeta, PreviousVersion, StoredCharacter } from './store/characters.ts';
 import type { PointReason, RestorePoint } from './store/restore-points.ts';
@@ -70,18 +73,19 @@ export interface Note {
 }
 
 /**
- * Whether the open character takes no changes: still opening, failed (until reopened), or open in another
- * tab that took it over (`elsewhere`; see store/tab-lock.ts).
+ * Whether the open character takes no changes: still opening, failed (until reopened), open in another
+ * tab that took it over (`elsewhere`; see store/tab-lock.ts), or open on another of the player's devices
+ * (`readonly`: shown, but that device saves it; see sync/sync.svelte.ts).
  */
 export const readOnly = (status: OpenCharacter['status']): boolean =>
-  status === 'opening' || status === 'error' || status === 'elsewhere';
+  status === 'opening' || status === 'error' || status === 'elsewhere' || status === 'readonly';
 
 export interface OpenCharacter {
   meta: CharacterMeta;
   /** The fields as the engine shows them (value and Format text). */
   fields: FieldViews;
   menu: MenuNode[];
-  status: 'opening' | 'working' | 'saving' | 'saved' | 'error' | 'elsewhere';
+  status: 'opening' | 'working' | 'saving' | 'saved' | 'error' | 'elsewhere' | 'readonly';
   /** The portrait and organisation symbol (M8). */
   images: SheetImages;
 }
@@ -184,6 +188,10 @@ export class Session {
   private menuInLine = false;
   /** This tab's hold on the open character, so another tab can't overwrite it (finding 2). */
   private readonly tabLock: TabLock;
+  /** The sync with the player's other devices (M15); off until the player types their code. */
+  readonly sync: Sync;
+  /** The device that has the open character open, while this one only shows it (`readonly`). */
+  private watching: Lease | null = null;
 
   constructor(
     private readonly texts: () => Texts,
@@ -191,8 +199,29 @@ export class Session {
     private readonly newWorker: () => WorkerLike = newEngineWorker,
     /** The browser's locks across tabs; a stand-in in tests. */
     locks: Locks | undefined = browserLocks(),
+    /** The sync service and where the device's account is kept: stand-ins in tests. */
+    syncWith: { fetcher?: Fetch; storage?: KeyValues | null; base?: string } = {},
   ) {
     this.tabLock = new TabLock(locks, (id) => this.lostToOtherTab(id));
+    this.sync = new Sync(
+      {
+        store: () => this.store,
+        open: () => {
+          const open = this.current;
+          if (!open) return null;
+          return { id: open.meta.id, editing: !['readonly', 'elsewhere', 'error'].includes(open.status) };
+        },
+        changed: () => this.refresh(),
+        replaced: (id) => this.showNewer(id),
+        removed: (id) => this.removedElsewhere(id),
+        lost: (id, lease) => this.lostToOtherDevice(id, lease),
+        note: (kind, text) => void this.note(kind, text),
+      },
+      texts,
+      syncWith.fetcher,
+      syncWith.storage,
+      syncWith.base,
+    );
     this.client = new EngineClient(this.popUps, newWorker);
     this.client.onFields = () => {
       this.dirty = true;
@@ -237,6 +266,7 @@ export class Session {
       });
       if (waiting) this.notes = this.notes.filter((n) => n.id !== waiting);
       await this.refresh();
+      this.sync.start();
     } catch (err) {
       this.storageError = errorText(err);
     }
@@ -248,6 +278,7 @@ export class Session {
    */
   private replacedByNewerTab(): void {
     this.store = null;
+    this.sync.stop();
     if (this.current) this.current.status = 'elsewhere';
     this.note('error', this.t.dbReplaced, undefined, {
       keep: true,
@@ -421,6 +452,7 @@ export class Session {
   private async save(...characters: StoredCharacter[]): Promise<void> {
     if (!this.store) throw new Error(this.storageError || 'no storage');
     await this.store.put(...characters);
+    this.sync.changed();
     // Once per visit, after the first save, ask the browser to keep the data. Firefox asks the player;
     // asking on every save would bring its question back after each action when it was dismissed.
     if (!this.askedToKeep) {
@@ -460,6 +492,21 @@ export class Session {
    * offering to take it over (`steal`: take it from that tab, which stops saving).
    */
   async open(id: string, steal = false): Promise<boolean> {
+    this.openingId = id;
+    try {
+      return await this.openNow(id, steal);
+    } finally {
+      if (this.openingId === id) this.openingId = null;
+    }
+  }
+
+  /**
+   * The character an open() is busy with: the sync's round before it opens may bring a newer copy, which that
+   * opening shows anyway (showNewer stays out of its way).
+   */
+  private openingId: string | null = null;
+
+  private async openNow(id: string, steal: boolean): Promise<boolean> {
     this.clearNotes();
     const found = await this.store?.get(id);
     if (!found) return false;
@@ -471,33 +518,136 @@ export class Session {
       });
       return true;
     }
-    // Taken from another tab: read it again, the other tab may have saved while the lock changed hands.
-    const stored = steal ? ((await this.store?.get(id)) ?? found) : found;
+    const watching = await this.holdOnDevices(found.meta, steal);
+    // Read again: another tab may have saved while the lock changed hands, and the sync may have brought a
+    // newer copy from another device.
+    const stored = (await this.store?.get(id)) ?? found;
     // Opened again right after a rollback: the rollback kept the way back already, and a point of the sheet
     // just rolled back to would only push out an older one.
     if (this.rolledBack === id) this.rolledBack = null;
-    else await this.keepPoint(stored, 'opened');
+    else if (!watching) await this.keepPoint(stored, 'opened');
+    await this.openSheet(stored, watching);
+    return true;
+  }
+
+  /**
+   * With sync on: holds the character for this device (`takeOver`: from the device that has it open), asking
+   * "Read only or Take over" when another device has it, then fetches the newest copy. Returns that other device
+   * when the player chose to only read it here, otherwise null.
+   */
+  private async holdOnDevices(meta: CharacterMeta, takeOver: boolean): Promise<Lease | null> {
+    this.watching = null;
+    if (!this.sync.on) return null;
+    let hold = await this.sync.hold(meta.id, takeOver);
+    if (!hold.held && 'lease' in hold) {
+      const lease = hold.lease;
+      const answer = await this.popUps.choose({
+        title: fill(this.t.syncOpenOnTitle, { device: lease.device }),
+        message: fill(this.t.syncOpenOn, {
+          name: meta.name || this.t.unnamed,
+          device: lease.device,
+          time: this.clock(lease.since),
+        }),
+        hint: fill(this.t.syncOpenOnHint, { device: lease.device }),
+        buttons: [
+          { value: 'read', label: this.t.syncReadOnly },
+          { value: 'take', label: this.t.takeOver, primary: true },
+        ],
+        cancel: 'read',
+      });
+      if (answer === 'take') hold = await this.sync.hold(meta.id, true);
+      if (!hold.held && 'lease' in hold) this.watching = hold.lease;
+    }
+    // The newest copy before it opens; offline it opens as saved here.
+    if (hold.held || 'lease' in hold) await this.sync.round(true);
+    return this.watching;
+  }
+
+  /** A time of day as the player's language writes it ("19:42"). */
+  private clock(at: number): string {
+    return new Date(at).toLocaleTimeString(this.t.locale, { hour: '2-digit', minute: '2-digit' });
+  }
+
+  /**
+   * Opens a character's sheet in the engine. `watching`: another device has it open, so it is shown read-only
+   * with a line offering to take it over.
+   */
+  private async openSheet(stored: StoredCharacter, watching: Lease | null): Promise<void> {
+    const id = stored.meta.id;
     this.current = { meta: stored.meta, fields: {}, menu: [], status: 'opening', images: { ...stored.data.images } };
     // This opening, not a later one of the same character (read back: Svelte's state wraps the object).
     const shown = this.current;
     try {
       const from = stored.data.info.SheetVersion;
       const pack = from && from !== SHEET_ID.version ? await loadSheetPack(from) : null;
-      if (pack) await this.openOlder(stored, pack, () => this.current === shown);
-      else await this.client.open(stored.data);
+      // Read only: no update onto the new sheet either (it saves), the device that has it does that.
+      if (pack && !watching) await this.openOlder(stored, pack, () => this.current === shown);
+      else await this.client.open(stored.data, pack ?? undefined);
       this.dirty = false;
       if (this.current?.meta.id === id) {
         this.current.fields = { ...this.client.fields };
         this.current.menu = this.client.menu;
-        this.current.status = 'saved';
+        this.current.status = watching ? 'readonly' : 'saved';
       }
+      if (watching) this.sayReadOnly(watching, this.t.syncReadOnlyLine);
     } catch (err) {
       // Left during an update: nothing to say, the next opening tries again.
-      if (err instanceof UpdateLeft) return true;
+      if (err instanceof UpdateLeft) return;
       if (this.current?.meta.id === id) this.current.status = 'error';
       this.failed(err);
     }
-    return true;
+  }
+
+  /** The line under the top bar while another device has the open character, with the way to take it over. */
+  private sayReadOnly(lease: Lease, text: string): void {
+    this.note('info', fill(text, { device: lease.device, time: this.clock(lease.since) }), undefined, {
+      action: { label: this.t.takeOver, run: () => void this.takeOver() },
+    });
+  }
+
+  /** The sync brought a newer copy of the character shown read-only here: show that one. */
+  private async showNewer(id: string): Promise<void> {
+    const open = this.current;
+    if (open?.meta.id !== id || !readOnly(open.status) || this.openingId === id) return;
+    await this.running;
+    const stored = await this.store?.get(id);
+    if (!stored || this.current !== open) return;
+    this.client.close();
+    const notes = this.notes;
+    await this.openSheet(stored, this.watching);
+    // The same read-only line as before, not a second one.
+    if (this.watching) this.notes = notes;
+  }
+
+  /** Another device deleted the character open here: back to the list, saying so. */
+  private removedElsewhere(id: string): void {
+    const open = this.current;
+    if (open?.meta.id !== id) return;
+    open.status = 'elsewhere';
+    this.waiting.clear();
+    location.hash = '#/';
+    this.note('info', fill(this.t.syncDeletedElsewhere, { name: open.meta.name || this.t.unnamed }), undefined, {
+      keep: true,
+    });
+  }
+
+  /** Another device took over the open character: this one stops saving it and shows it read-only. */
+  private lostToOtherDevice(id: string, lease: Lease): void {
+    const open = this.current;
+    if (open?.meta.id !== id) return;
+    this.watching = lease;
+    open.status = 'readonly';
+    this.waiting.clear();
+    this.sayReadOnly(lease, this.t.syncTakenOn);
+  }
+
+  /**
+   * How the top bar says the open character's state at the service: `synced` (sent), `waiting` (goes out in a
+   * moment), `offline` (waits here until the service answers); null without sync.
+   */
+  syncMark(open: OpenCharacter): 'synced' | 'waiting' | 'offline' | null {
+    const mark = this.sync.mark(open.meta);
+    return mark === 'waiting' && this.sync.state === 'offline' ? 'offline' : mark;
   }
 
   // ---- Restore points (store/restore-points.ts) ----
@@ -569,6 +719,7 @@ export class Session {
     if (!current) return;
     try {
       await this.store.rollBack(current, $state.snapshot(point));
+      this.sync.changed();
     } catch (err) {
       this.note('error', this.explain(err));
       return;
@@ -618,7 +769,7 @@ export class Session {
    */
   private failed(err: unknown): void {
     const open = this.current;
-    if (open?.status === 'elsewhere') return;
+    if (open?.status === 'elsewhere' || open?.status === 'readonly') return;
     if (!open) {
       this.note('error', this.explain(err));
       return;
@@ -661,6 +812,7 @@ export class Session {
       };
       const meta = describeCharacter(data, migrated.result.addOns, { ...stored.meta, sheetUpdate });
       await store.putUpdated({ meta, data }, { ...stored, summary: migrated.result.summary ?? '', changes });
+      this.sync.changed();
       if (this.current?.meta.id === meta.id) this.current.meta = meta;
       await this.refresh();
       // The line under the top bar says the rest (CharacterView).
@@ -731,6 +883,7 @@ export class Session {
     const homebrew = copyHomebrew({ ...open.meta.homebrew, ...values });
     open.meta = { ...open.meta, updated, homebrew };
     await this.store.putMeta($state.snapshot(open.meta));
+    this.sync.changed();
     await this.refresh();
   }
 
@@ -765,6 +918,7 @@ export class Session {
     if (!previous) return;
     const meta = { ...previous.meta, sheetUpdate: { ...update, seen: true, undone: true } };
     await this.store.putBack({ meta, data: previous.data });
+    this.sync.changed();
     await this.refresh();
     await this.open(meta.id);
   }
@@ -785,6 +939,10 @@ export class Session {
     await this.running;
     this.client.close();
     this.tabLock.free();
+    // The last changes go out before the lease (release() waits for this round).
+    void this.sync.now(true);
+    if (this.current) this.sync.release(this.current.meta.id);
+    this.watching = null;
     this.current = null;
     this.clearNotes();
   }
@@ -795,7 +953,10 @@ export class Session {
    */
   flush(): void {
     const open = this.current;
-    if (!open || !this.dirty || this.queued > 0 || readOnly(open.status)) return;
+    if (!open || !this.dirty || this.queued > 0 || readOnly(open.status)) {
+      void this.sync.now();
+      return;
+    }
     const before = this.running;
     const save = async (): Promise<void> => {
       await before;
@@ -804,6 +965,8 @@ export class Session {
       } catch (err) {
         this.failed(err);
       }
+      // The sync's pacing would wait a few seconds more; the page may be gone by then.
+      void this.sync.now();
     };
     this.running = save();
   }
@@ -1158,6 +1321,38 @@ export class Session {
     await this.refresh();
   }
 
+  // ---- Sync with the player's other devices (M15) ----
+
+  /** Signs this device in with the player's code; on success a line says so and the first round runs. */
+  async connectSync(code: string, name: string): Promise<'ok' | 'wrong' | 'wait' | 'offline'> {
+    await this.started;
+    this.clearNotes();
+    const result = await this.sync.connect(code, name);
+    if (result === 'ok') this.note('ok', fill(this.t.syncConnected, { player: this.sync.account?.player ?? '' }));
+    return result;
+  }
+
+  /**
+   * "Forget this device", after asking: the device stops syncing and the synced characters leave this browser
+   * (they stay on the player's other devices). Nothing happens while changes here haven't reached the service.
+   */
+  async forgetThisDevice(): Promise<void> {
+    const answer = await this.popUps.choose({
+      title: this.t.syncForgetTitle,
+      message: this.t.syncForgetMessage,
+      buttons: [
+        { value: 'cancel', label: this.t.cancel },
+        { value: 'forget', label: this.t.syncForgetButton, danger: true },
+      ],
+      cancel: 'cancel',
+    });
+    if (answer !== 'forget') return;
+    this.clearNotes();
+    const result = await this.sync.forgetThisDevice();
+    if (result === 'ok') this.note('ok', this.t.syncForgotten);
+    else this.note('error', result === 'offline' ? this.t.syncForgetOffline : this.t.syncForgetWaiting);
+  }
+
   // ---- Delete, back up, restore ----
 
   async remove(meta: CharacterMeta): Promise<void> {
@@ -1176,7 +1371,18 @@ export class Session {
       this.note('error', fill(this.t.deleteOpenElsewhere, { name: meta.name || this.t.unnamed }));
       return;
     }
-    await this.store?.delete(meta.id);
+    // Another device would save it again with its next change, and bring it back.
+    const lease = this.sync.heldElsewhere(meta.id);
+    if (lease) {
+      this.note('error', fill(this.t.syncDeleteOpenOn, { name: meta.name || this.t.unnamed, device: lease.device }));
+      return;
+    }
+    const store = this.store;
+    if (!store) return;
+    // Synced: the record stays as a mark until the service has heard of the delete (the other devices then too).
+    const record = this.sync.on ? (await store.syncRecords()).get(meta.id) : undefined;
+    await store.delete(meta.id, record);
+    this.sync.changed();
     await this.refresh();
   }
 

@@ -181,7 +181,7 @@
 
 <svelte:window bind:innerWidth={width} />
 
-<TopBar {open} back={{ href: playHref, label: t.buildBackToPlay }} {t} compact={phone}>
+<TopBar {open} back={{ href: playHref, label: t.buildBackToPlay }} {t} compact={phone} sync={session.syncMark(open)}>
   {#if phone}
     <button type="button" class="menu-icon" aria-label={t.sheetMenu} onclick={() => (menuOpen = true)}>☰</button>
   {:else}

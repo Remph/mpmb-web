@@ -18,12 +18,23 @@
     compact?: boolean;
     /** Right after the name (phones: the companions' "+1 ▾" switcher). */
     afterName?: Snippet;
+    /** With sync on (M15): whether the last change reached the service; "Synced" instead of "Saved" then. */
+    sync?: 'synced' | 'waiting' | 'offline' | null;
   }
 
-  let { open, back, t, children, onfold, compact = false, afterName }: Props = $props();
+  let { open, back, t, children, onfold, compact = false, afterName, sync = null }: Props = $props();
 
+  const savedText = $derived(sync === 'synced' ? `✓ ${t.synced}` : sync === 'offline' ? t.savedHere : t.saved);
   const statusText = $derived(
-    { opening: t.opening, working: t.saving, saving: t.saving, saved: t.saved, error: '', elsewhere: '' }[open.status],
+    {
+      opening: t.opening,
+      working: t.saving,
+      saving: t.saving,
+      saved: savedText,
+      error: '',
+      elsewhere: '',
+      readonly: t.syncReadOnlyBar,
+    }[open.status],
   );
 </script>
 
@@ -44,7 +55,14 @@
     {/if}
     <p>{[open.meta.classes, open.meta.species].filter(Boolean).join(' · ')}</p>
   </div>
-  {#if statusText}<span class="status" class:busy={open.status !== 'saved'} aria-live="polite">{statusText}</span>{/if}
+  {#if statusText}
+    <span
+      class="status"
+      class:busy={open.status !== 'saved' && open.status !== 'readonly'}
+      class:synced={open.status === 'saved' && sync === 'synced'}
+      aria-live="polite">{statusText}</span
+    >
+  {/if}
   <div class="actions">
     {@render children()}
     {#if onfold}
@@ -104,6 +122,12 @@
   .status {
     color: var(--on-bar-muted, var(--ink-muted));
     font-size: 0.875rem;
+  }
+
+  .status.synced {
+    /* A painted bar (Campfire) keeps its own letter colour: green on its sky would be hard to read. */
+    color: var(--on-bar, var(--ok));
+    font-weight: 700;
   }
 
   .status.busy::before {
@@ -197,7 +221,12 @@
 
   .compact .status {
     flex: none;
+    /* Two short lines rather than one long one: offline, "Auf diesem Gerät gespeichert" left the name three
+       letters on a 320 px phone. */
+    max-width: 6.75rem;
     font-size: 0.8125rem;
+    line-height: 1.2;
+    text-align: end;
   }
 
   .compact .actions {

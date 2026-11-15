@@ -9,6 +9,7 @@
   import { look } from '../look.svelte.ts';
   import { dueForBackup, isSafari } from '../store/backup-reminder.ts';
   import Notes from './Notes.svelte';
+  import SyncLine from './sync/SyncLine.svelte';
 
   interface Props {
     session: Session;
@@ -24,7 +25,8 @@
   /** More names than this, and the reminder gives a count instead. */
   const MAX_NAMES = 3;
   /** The characters with changes no backup holds yet (finding 1 of the tech review; Remph's pick A). */
-  const due = $derived(dueForBackup(session.characters));
+  // Synced characters are safe from a cleared browser, the reminder's reason (M15): only the others count.
+  const due = $derived(dueForBackup(session.characters.filter((c) => session.sync.mark(c) !== 'synced')));
   const dueText = $derived.by(() => {
     if (due.length > MAX_NAMES) return fill(t.backupDueCount, { count: due.length });
     const names = new Intl.ListFormat(t.locale, { type: 'conjunction' }).format(
@@ -106,6 +108,10 @@
   </div>
 {/if}
 
+{#if !session.storageError}
+  <SyncLine {session} {t} />
+{/if}
+
 {#if session.storageError}
   <Notes notes={[{ id: 0, kind: 'error', text: fill(t.storageFailed, { reason: session.storageError }) }]} />
 {/if}
@@ -115,6 +121,8 @@
     {#each session.characters as character (character.id)}
       {@const addOns = character.addOns.files.length + Number(character.addOns.manual)}
       {@const portrait = character.portrait && SAFE_PICTURE.test(character.portrait) ? character.portrait : ''}
+      {@const mark = session.sync.mark(character)}
+      {@const lease = session.sync.heldElsewhere(character.id)}
       <!-- With sheet colours on, the card in the character's colour from its sheet (app.css, [data-sheet]). -->
       <li data-sheet={look.current.sheetColors ? character.color : undefined}>
         <a class="card" class:pictured={portrait} href={`#/character/${character.id}`}>
@@ -125,6 +133,13 @@
             {fill(t.changedOn, { date: changed(character.updated) })}{addOns
               ? ` · ${counted(t.addOnCountOne, t.addOnCount, addOns)}`
               : ''}
+            {#if lease}
+              · <span class="held">{fill(t.syncCardOpenOn, { device: lease.device })}</span>
+            {:else if mark === 'synced'}
+              · <span class="synced">☁ {t.syncCardSynced}</span>
+            {:else if mark === 'waiting'}
+              · {t.syncCardWaiting}
+            {/if}
           </span>
           {#if character.sheetUpdate && !character.sheetUpdate.seen}
             <span class="line updated">↻ {fill(t.updListMark, { to: character.sheetUpdate.to })}</span>
@@ -142,7 +157,7 @@
 {/if}
 
 <section class="backups">
-  <p class="hint">{t.storedHere}</p>
+  <p class="hint">{session.sync.on ? t.storedSynced : t.storedHere}</p>
   <div class="row">
     <button type="button" disabled={!session.characters.length} onclick={() => session.backUp()}>
       {t.backUpAll}
@@ -193,6 +208,16 @@
   .updated {
     color: var(--accent);
     font-weight: 500;
+  }
+
+  .synced {
+    color: var(--ok);
+    font-weight: 600;
+  }
+
+  .held {
+    color: var(--accent);
+    font-weight: 600;
   }
 
   .head {

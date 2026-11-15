@@ -15,6 +15,7 @@
 
 <Modal title={choice.title} onescape={() => answer(choice.cancel)} closeLabel={t.close}>
   <p class="message">{choice.message}</p>
+  {#if choice.hint}<p class="hint">{choice.hint}</p>{/if}
   {#if choice.lines?.length}
     <ul>
       {#each choice.lines as line, i (i)}
@@ -39,6 +40,11 @@
 <style>
   .message {
     margin: 0;
+  }
+
+  .hint {
+    margin: 0.75rem 0 0;
+    color: var(--ink-muted);
   }
 
   ul {

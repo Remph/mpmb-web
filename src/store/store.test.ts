@@ -190,7 +190,7 @@ describe('CharacterStore', () => {
     const old = await CharacterStore.open(browser, 'mpmb-web', { replaced: () => replaced++ });
     await old.put(character('Anna', '2026-10-01T00:00:00Z'));
     // The next release's tab, one database version up: before the fix its opening never finished.
-    const newer = await CharacterStore.open(browser, 'mpmb-web', {}, 4);
+    const newer = await CharacterStore.open(browser, 'mpmb-web', {}, 5);
     expect(replaced).toBe(1);
     expect((await newer.list()).map((m) => m.name)).toEqual(['Anna']);
   });
@@ -302,6 +302,69 @@ describe('restore points', () => {
     expect(await store.points('anna')).toEqual([]);
     expect(await store.addPoint(saved, 'opened')).toBe(true);
     expect(await store.points('anna')).toHaveLength(1);
+  });
+});
+
+describe('sync records (M15)', () => {
+  const anna = (day: string, hp = '20'): StoredCharacter => {
+    const data = sheetOf({ 'PC Name': 'Anna', 'HP Current': hp });
+    return { meta: describeCharacter(data, NO_ADD_ONS, { id: 'anna', created: day }, new Date(day)), data };
+  };
+
+  test('a character from the service comes in with its record; a clash keeps the copy here as a point', async () => {
+    const store = await CharacterStore.open(new IDBFactory());
+    const here = anna('2026-11-15T18:00:00Z', '5');
+    await store.put(here);
+    // The newest point already has this `updated`: a clash keeps the copy anyway.
+    await store.addPoint(here, 'opened', new Date('2026-11-15T18:01:00Z'));
+    const there = anna('2026-11-15T18:05:00Z', '15');
+    await store.putSynced(there, { version: 4, pushed: there.meta.updated }, 'sync', new Date('2026-11-15T18:06:00Z'));
+    expect(await store.get('anna')).toEqual(there);
+    expect((await store.syncRecords()).get('anna')).toEqual({ version: 4, pushed: there.meta.updated });
+    expect((await store.points('anna')).map((p) => [p.reason, p.data.fields['HP Current']])).toEqual([
+      ['sync', { value: '5' }],
+      ['opened', { value: '5' }],
+    ]);
+  });
+
+  test('a delete keeps the record as a mark until the service has heard of it', async () => {
+    const store = await CharacterStore.open(new IDBFactory());
+    const here = anna('2026-11-15T18:00:00Z');
+    await store.put(here);
+    await store.setSync('anna', { version: 2, pushed: here.meta.updated });
+    await store.delete('anna', { version: 2, pushed: here.meta.updated });
+    expect(await store.get('anna')).toBeUndefined();
+    expect((await store.syncRecords()).get('anna')).toEqual({ version: 2, pushed: here.meta.updated, deleted: true });
+    await store.delete('anna');
+    expect((await store.syncRecords()).size).toBe(0);
+  });
+
+  test('a database of version 3 (before sync) opens with its characters and points and gets the new store', async () => {
+    const browser = new IDBFactory();
+    const request = browser.open('mpmb-web', 3);
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore('meta', { keyPath: 'id' });
+      request.result.createObjectStore('data');
+      request.result.createObjectStore('previous');
+      request.result.createObjectStore('points').createIndex('character', 'meta.id');
+    };
+    const old = await new Promise<IDBDatabase>((resolve) => (request.onsuccess = () => resolve(request.result)));
+    // What version 3 already holds, written the way it wrote it: the upgrade must leave all of it as it was.
+    const saved = anna('2026-11-01T00:00:00Z');
+    const point = { ...anna('2026-10-20T00:00:00Z', '7'), at: '2026-10-20T00:00:00.000Z', reason: 'opened' };
+    const tx = old.transaction(['meta', 'data', 'points'], 'readwrite');
+    tx.objectStore('meta').put(saved.meta);
+    tx.objectStore('data').put(saved.data, 'anna');
+    tx.objectStore('points').put(point, ['anna', point.at]);
+    await new Promise((resolve) => (tx.oncomplete = resolve));
+    old.close();
+
+    const store = await CharacterStore.open(browser);
+    expect(await store.get('anna')).toEqual(saved);
+    expect(await store.points('anna')).toEqual([point]);
+    expect((await store.syncRecords()).size).toBe(0);
+    await store.setSync('anna', { version: 1, pushed: saved.meta.updated });
+    expect((await store.syncRecords()).get('anna')?.version).toBe(1);
   });
 });
 

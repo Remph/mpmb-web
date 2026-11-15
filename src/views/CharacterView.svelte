@@ -494,6 +494,7 @@
       back={{ href: '#/', label: t.backToList }}
       {t}
       compact={phone}
+      sync={session.syncMark(open)}
       onfold={canFold && !phone ? () => setFolded(true) : undefined}
       afterName={phone && (listed.length || hasWildShape) && !elsewhereOnly ? switcher : undefined}
     >
