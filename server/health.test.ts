@@ -117,4 +117,20 @@ describe('the admin page', () => {
     expect(page).not.toContain('<b>Bob');
     expect(page).not.toContain('"><script>');
   });
+
+  it('asks "Remove?" in a form of its own, so Enter in the name box never removes a player', () => {
+    const cato = { id: 1, name: 'Cato', devices: 1, characters: 1, last_seen: null };
+    const page = adminPage('en', {
+      players: [cato],
+      removing: { id: cato.id, name: cato.name },
+      password: 'pw"',
+    });
+    const forms = page.split('<form').slice(1);
+    const ask = forms.find((f) => f.includes('removeConfirmed'));
+    const main = forms.find((f) => f.includes('name="name"'));
+    expect(ask).toBeDefined();
+    expect(ask).toContain('type="hidden" name="password" value="pw&quot;"');
+    // Enter in a text box presses its form's first button: in the main form that must not be the removal.
+    expect(main).not.toContain('removeConfirmed');
+  });
 });

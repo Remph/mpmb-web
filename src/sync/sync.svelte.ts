@@ -339,6 +339,10 @@ export class Sync {
     const meta = localMeta(full.meta, id, mine.meta);
     if (!meta) return false;
     await store.addPoint({ meta, data: await unpackData(full.data) }, 'sync');
+    // The answer stands: this copy now counts as a change over the service's version (`pushed` matches no copy),
+    // so a refused push (open on the other device, 423) goes out with a later round instead of asking again and
+    // keeping another restore point each time. Saved there meanwhile (409): a real new clash, asked then.
+    await store.setSync(id, { version: full.version, pushed: '' });
     await this.push(store, id, full.version);
     const device = full.device ?? t.syncAnotherDevice;
     this.host.note('info', fill(t.syncKeptTheirs, { name: mine.meta.name || t.unnamed, device }));

@@ -163,18 +163,20 @@ export function adminPage(lang: Lang, view: AdminView = {}): string {
     : '';
   const table = view.players ? playerTable(view.players, lang, t) : '';
   const removing = view.removing;
-  // Inside the form, so both buttons send the password along.
+  // A form of its own, with the password hidden in it: Enter in a text box presses its form's first button, and in
+  // the main form that would be "Yes, remove" (typing the next name to add would remove this player).
   const ask = removing
-    ? `<div class="ask" role="alert"><h2>${escapeHtml(t.removeTitle(removing.name))}</h2><p>${t.removeNote}</p>
+    ? `<form method="post" action="/admin" class="ask" role="alert">
+      <h2>${escapeHtml(t.removeTitle(removing.name))}</h2><p>${t.removeNote}</p>
+      <input type="hidden" name="password" value="${password}">
       <button name="removeConfirmed" value="${removing.id}">${escapeHtml(t.removeYes(removing.name))}</button>
-      <button name="action" value="list">${t.cancel}</button></div>`
+      <button name="action" value="list">${t.cancel}</button></form>`
     : '';
   return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
     <title>${t.title}</title><style>${STYLE}</style></head><body><h1>${t.title}</h1>
-    ${view.message ? `<p class="message" role="alert">${escapeHtml(view.message)}</p>` : ''}${code}
+    ${view.message ? `<p class="message" role="alert">${escapeHtml(view.message)}</p>` : ''}${code}${ask}
     <form method="post" action="/admin">
-      ${ask}
       <label>${t.password}<input type="password" name="password" value="${password}" required
         autocomplete="current-password"></label>
       <button name="action" value="list">${t.show}</button>

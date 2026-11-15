@@ -139,8 +139,8 @@ describe('two devices', () => {
   test('both had it before syncing (a backup): the player picks, and keeping this one sends it everywhere', async () => {
     const pc = await Device.on(service);
     const surface = await Device.on(service);
-    const older = character('elrith', '20');
-    const newer = character('elrith', '7', older);
+    const older = character('rowan', '20');
+    const newer = character('rowan', '7', older);
     await pc.store.put(older);
     await surface.store.put(newer);
 
@@ -149,17 +149,17 @@ describe('two devices', () => {
     surface.answer = 'here';
     await surface.sync.connect(CODE, 'Surface');
     expect(surface.asked).toEqual([
-      { id: 'elrith', name: 'Anna', here: newer.meta.updated, there: Date.parse(older.meta.updated), device: 'PC' },
+      { id: 'rowan', name: 'Anna', here: newer.meta.updated, there: Date.parse(older.meta.updated), device: 'PC' },
     ]);
-    expect(await surface.hp('elrith')).toBe('7');
-    const kept = await surface.store.points('elrith');
+    expect(await surface.hp('rowan')).toBe('7');
+    const kept = await surface.store.points('rowan');
     expect(kept.map((p) => [p.reason, p.data.fields['HP Current']?.value])).toEqual([['sync', '20']]);
     expect(surface.notes).toContain(ui.en.syncKeptTheirs.replace('{name}', 'Anna').replace('{device}', 'PC'));
 
     // The PC's copy hadn't changed since it went out: it takes the Surface's without asking.
     await pc.sync.round(true);
     expect(pc.asked).toEqual([]);
-    expect(await pc.hp('elrith')).toBe('7');
+    expect(await pc.hp('rowan')).toBe('7');
     expect(pc.sync.mark((await pc.store.list())[0]!)).toBe('synced');
     expect(surface.sync.mark((await surface.store.list())[0]!)).toBe('synced');
   });
@@ -167,34 +167,60 @@ describe('two devices', () => {
   test('both had it before syncing: taking the synced copy keeps this one as a restore point', async () => {
     const pc = await Device.on(service);
     const surface = await Device.on(service);
-    const older = character('elrith', '20');
-    const newer = character('elrith', '7', older);
+    const older = character('rowan', '20');
+    const newer = character('rowan', '7', older);
     await pc.store.put(older);
     await surface.store.put(newer);
 
     await surface.sync.connect(CODE, 'Surface');
     pc.answer = 'there';
     await pc.sync.connect(CODE, 'PC');
-    expect(await pc.hp('elrith')).toBe('7');
-    expect((await pc.store.points('elrith')).map((p) => p.data.fields['HP Current']?.value)).toEqual(['20']);
-    expect(await surface.store.points('elrith')).toEqual([]);
+    expect(await pc.hp('rowan')).toBe('7');
+    expect((await pc.store.points('rowan')).map((p) => p.data.fields['HP Current']?.value)).toEqual(['20']);
+    expect(await surface.store.points('rowan')).toEqual([]);
+  });
+
+  test('keeping this one while the other device has it open: asked once, it goes out when that device lets go', async () => {
+    const pc = await Device.on(service);
+    const surface = await Device.on(service);
+    const older = character('rowan', '20');
+    await pc.store.put(older);
+    await surface.store.put(character('rowan', '7', older));
+    await pc.sync.connect(CODE, 'PC');
+    await pc.sync.hold('rowan');
+    surface.answer = 'here';
+    await surface.sync.connect(CODE, 'Surface');
+    // Refused (open on the PC): the answer stands, so the next rounds send it instead of asking again.
+    await surface.sync.round(true);
+    await surface.sync.round(true);
+    expect(surface.asked).toHaveLength(1);
+    expect(await surface.store.points('rowan')).toHaveLength(1);
+    expect(surface.sync.mark((await surface.store.list())[0]!)).toBe('waiting');
+
+    pc.sync.release('rowan');
+    await pc.sync.now();
+    await surface.sync.round(true);
+    expect(surface.asked).toHaveLength(1);
+    expect(surface.sync.mark((await surface.store.list())[0]!)).toBe('synced');
+    await pc.sync.round(true);
+    expect(await pc.hp('rowan')).toBe('7');
   });
 
   test('"Later" leaves both copies as they are, and doesn’t ask again until the page loads', async () => {
     const pc = await Device.on(service);
     const surface = await Device.on(service);
-    const older = character('elrith', '20');
+    const older = character('rowan', '20');
     await pc.store.put(older);
-    await surface.store.put(character('elrith', '7', older));
+    await surface.store.put(character('rowan', '7', older));
     await pc.sync.connect(CODE, 'PC');
     surface.answer = 'later';
     await surface.sync.connect(CODE, 'Surface');
     await surface.sync.round(true);
     expect(surface.asked).toHaveLength(1);
-    expect(await surface.hp('elrith')).toBe('7');
-    expect(await surface.store.points('elrith')).toEqual([]);
+    expect(await surface.hp('rowan')).toBe('7');
+    expect(await surface.store.points('rowan')).toEqual([]);
     await pc.sync.round(true);
-    expect(await pc.hp('elrith')).toBe('20');
+    expect(await pc.hp('rowan')).toBe('20');
   });
 
   test('changed on both while apart: the newer one at the service wins, the other stays as a restore point', async () => {
