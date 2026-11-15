@@ -157,6 +157,9 @@ test('on a phone, no Build step and no play tab is wider than the screen or zoom
     .getByRole('dialog')
     .getByRole('button', { name: /^Dagger/ })
     .click();
+  // MPMB's numbers in the row first: when the engine answers, they make the row taller and move the link below
+  // (a tap aimed before that focused the link without following it, so the play view never came).
+  await expect(page.locator('li.weapon').filter({ hasText: 'Dagger' }).locator('.hit')).toHaveText(/^[+-]\d+$/);
 
   await page.getByRole('link', { name: 'To the play view' }).click();
   // The phone layout (M13): the places sit in a bar at the bottom; More opens the rarer ones and the rests.

@@ -35,6 +35,17 @@ const oneByOne = <T>(items: T[], run: (item: T) => Promise<void>): Promise<void>
 const TO_PLAY = "location.hash = location.hash.split('/build')[0]";
 const TO_GEAR = "location.hash = location.hash.split('/build')[0] + '/build/gear'";
 
+/**
+ * Waits for MPMB's to hit in the weapon's row. The list closes and the row shows the weapon at once, but its to
+ * hit and damage come when the engine answers, and they make the row about 45 px taller: a tap aimed before
+ * that lands where the next button was, opening nothing (the deploy of #100 waited 3 minutes for a list that
+ * never opened). The row's "Change <weapon>" button shows before the engine answers, so it is no sign.
+ */
+async function engineAnswered(page: Page, weapon: string): Promise<void> {
+  const row = page.locator('li.weapon').filter({ has: page.getByRole('button', { name: `Change ${weapon}` }) });
+  await expect(row.locator('.hit')).toHaveText(/^[+-]\d+$/);
+}
+
 async function closeChangesAlerts(page: Page): Promise<void> {
   const changesAlert = page.getByRole('dialog', { name: 'Changes alert' });
   await page.addLocatorHandler(changesAlert, async () => {
@@ -93,10 +104,7 @@ test('on a phone, weapon rows keep their buttons clear and the companions switch
     await page.getByRole('button', { name: 'Add a weapon' }).first().click();
     await page.getByRole('dialog').getByRole('button', { name: weapon }).first().click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    // Wait for the weapon in its row before the next tap: the list closes at once, but the row fills only
-    // when the engine answers. A tap on "Add a weapon" in between can land on the weapon's name as the row
-    // turns into it, opening nothing (the deploy of #100 waited 3 minutes for a list that never opened).
-    await expect(page.getByRole('button', { name: `Change ${weapon}` })).toBeVisible();
+    await engineAnswered(page, weapon);
   });
   const rows = page.locator('li.weapon:not(.empty)');
   await expect(rows).toHaveCount(WEAPONS.length);
