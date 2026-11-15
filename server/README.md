@@ -1,83 +1,101 @@
 # MPMB Web sync service
 
-The service behind M15 (sync between devices, one code per player). It lives on the same webspace as the app,
-but not in the app's folder: the deploy uploads only the app's `dist/`, never this folder.
+The service behind M15: a player's characters follow them to every device, with one code per player (Nick's
+pick, 2026-11-15). It runs on the same webspace as the app, at `https://sync.remph.de`, under Plesk's Node.js
+(Phusion Passenger), with a MySQL database. The app's deploy never uploads this folder.
 
-**Today (PR 1) it is only a hosting spike:** a health check that tells us whether the webspace can run Node,
-and a PHP page that tells us what the fallback would have. No codes, no characters, no database login yet.
+**Today (PR 2) it is the service side only.** The app doesn't call it yet; that comes in the next PR, with the
+screens Nick picked in the mock-ups.
 
-## What the health check says
+## What it does
 
-`GET /health` (also `/api/health`) answers with JSON:
+- **Codes.** Nick adds a player on the admin page and hands them a four-word code ("orbit-hazard-melt-ripple").
+  The database keeps only a slow hash of it (scrypt). A device types the code once and gets a token back; the
+  token is what every later request carries. After 10 wrong codes from one address, it waits a quarter of an hour.
+- **Characters.** The app saves a character as two parts the service never reads: `meta` (what the character list
+  shows) and `data` (the sheet). Every save names the version it started from; a save from an older copy gets
+  `409` and the app keeps that copy as a restore point instead of losing it. A deleted character stays as a mark,
+  so the other devices learn of it.
+- **"Open on another device".** A device that has a character open holds a lease on it and renews it (every 45 s or
+  so); a lease lapses 2 minutes after its last renewal, for example when a laptop goes to sleep. Another device gets
+  `423` with who holds it and since when, and can read the character or take it over. The first device learns
+  this at its next renewal.
 
-| Field      | Meaning                                                                      |
-| ---------- | ---------------------------------------------------------------------------- |
-| `node`     | The Node version Plesk picked.                                               |
-| `runner`   | `passenger` when Plesk started it (Phusion Passenger), `plain` when by hand. |
-| `uptime`   | Seconds since start. Open the page twice a minute apart: does it keep going? |
-| `database` | Whether the `DB_*` settings are set. Their values never leave the server.    |
+| Route                          | Body                    | Answer                                                     |
+| ------------------------------ | ----------------------- | ---------------------------------------------------------- |
+| `GET /health`                  |                         | `runner`, `uptime`, `database`: no login needed            |
+| `POST /login`                  | `{code, device}`        | `{token, player, device}`; `401` wrong code, `429` waiting |
+| `GET /devices`                 |                         | `{player, devices: [{id, name, lastSeen, current}]}`       |
+| `DELETE /devices/:id`          |                         | `204`: that device is signed out ("Forget this device")    |
+| `GET /characters`              |                         | `{characters: [{id, version, deleted, meta, lease, …}]}`   |
+| `GET /characters/:id`          |                         | the same, plus `data`                                      |
+| `PUT /characters/:id`          | `{version, meta, data}` | `{version, updated}`; `409` newer version, `423` held      |
+| `DELETE /characters/:id`       | `{version}`             | `{version, updated}`                                       |
+| `POST /characters/:id/lease`   | `{takeOver?}`           | `{since, until}`; `423` with `lease` when held elsewhere   |
+| `DELETE /characters/:id/lease` |                         | `204`                                                      |
+| `GET`, `POST /admin`           | the form                | the admin page                                             |
 
-The PHP page (`php/health.php`) answers with the PHP version and whether `mysqli`, `pdo_mysql` and `sodium`
-are there.
+All but `/health`, `/login` and `/admin` need `Authorization: Bearer <token>`. Errors are `{error: "…"}`. Paths may
+also start with `/api`.
+
+## Updating it in Plesk
+
+Nick set up the subdomain, Node.js and the database for the hosting test (#101). For this version:
+
+1. **Admin password:** on the subdomain's Node.js page, Environment, Secrets: add `ADMIN_PASSWORD` with a long
+   password of your own (a password manager can make one). Like `DB_PASSWORD`, Plesk never shows it again.
+2. **Upload** into `/sync.remph.de` (the application root), replacing what's there: `start.cjs`, `package.json`
+   and `dist/app.cjs` (from `pnpm build:server`, or the zip in the project folder). Delete the old `dist/app.js`,
+   `dist/health.js` and `httpdocs/health.php`: the hosting test needed them, the service doesn't.
+3. **Restart App**, then open `https://sync.remph.de/health`: `database` should say `connected` (the service built
+   its tables). `unreachable` means the `DB_*` settings or the database's access don't fit; the Node.js page shows
+   the app's log.
+4. **Open `https://sync.remph.de/admin`**, type the admin password and a player's name, Add player: the page shows
+   their code once. "New code" gives a player a new one and signs out all their devices (for a code that got out).
+
+No npm install: `pnpm build:server` bundles the service with its two libraries into `dist/app.cjs`.
 
 ## Try it locally
 
 ```sh
-pnpm build:server              # compiles server/*.ts into server/dist/
-node server/dist/app.js        # then open http://localhost:3000/health
-php -S localhost:8000 -t server/php   # then open http://localhost:8000/health.php
+pnpm build:server                        # bundles server/*.ts into server/dist/app.cjs
+DB_HOST=localhost DB_NAME=mpmb DB_USER=mpmb DB_PASSWORD=… ADMIN_PASSWORD=… node server/start.cjs
 ```
 
-## Setting it up in Plesk (once, by hand)
+Then `http://localhost:3000/health` and `/admin`. `ALLOWED_ORIGINS=http://localhost:5173` lets the app's dev
+server call it too.
 
-The steps for the spike. Write down what each step showed (or a screenshot), especially where it differs.
+## Tests
 
-1. **A subdomain for the service.** Plesk, Websites & Domains, Add Subdomain: `sync.remph.de` (any name works).
-   Let Plesk issue its SSL certificate (Let's Encrypt), so the address is `https://`.
-2. **Turn on Node.js for it.** On the subdomain's page, Node.js. If there is no Node.js entry, the webspace
-   can't run Node: skip to step 6.
-3. **Upload four files** into the subdomain's folder (for example `sync.remph.de/`), with the same FTP login as
-   the deploy:
-   - `server/package.json`
-   - `server/start.cjs`
-   - `server/dist/app.js`
-   - `server/dist/health.js` (both from `pnpm build:server`; they go into a `dist/` folder there too)
-4. **Node.js settings:** Application Root the subdomain's folder, Document Root its `public` folder (Plesk's
-   default; create it empty if it's missing), Application Startup File `start.cjs`, the newest Node version
-   offered. Enable Node.js, then Restart App. No NPM install is needed: the service has no dependencies.
-   - Document Root: the web server hands out every file in it as it is, so it must not be the app's own folder.
-   - `start.cjs`: Plesk starts the app with `require()`, which older Node versions can't use on the service's
-     ES modules; `start.cjs` loads them another way. If Plesk shows an error page instead of the JSON, send it.
-5. **Open `https://sync.remph.de/health`** and send the JSON it shows. Open it again a minute later: does `uptime`
-   go up (Passenger keeps it running) or start again from 0?
-6. **The fallback, either way:** upload `php/health.php` into the subdomain's `public` folder and open
-   `https://sync.remph.de/health.php`. If that shows the file's text or an error instead of JSON, put it into a
-   folder of another domain with PHP instead (never into remph.de's `mpmb/`: the deploy deletes what isn't in
-   the build). Send that JSON too.
-7. **Only if Node worked:** Databases, Add Database (MySQL; the webspace offers no PostgreSQL), name `mpmb`,
-   a new user with a long random password, access control "local connections only". Then on the Node.js page,
-   Environment: `DB_HOST` (`localhost`), `DB_NAME` and `DB_USER` as variables, and `DB_PASSWORD` under Secrets
-   (passed to the app the same way, but stored encrypted and never shown again). No port: MySQL's 3306 is the
-   default. Restart App, open `/health` again: `database` should say `configured`. The password stays in Plesk;
-   never send it in a chat.
+`pnpm test` runs the pure tests (`codes.test.ts`, `health.test.ts`) everywhere. `sync.test.ts` drives the whole
+service against a real MySQL or MariaDB and runs only when `TEST_DB_HOST`, `TEST_DB_NAME`, `TEST_DB_USER` and
+`TEST_DB_PASSWORD` name an empty database it may wipe; otherwise it is skipped. In a cloud session:
 
-What happens next depends on the answers: Node with a database, PHP with a database, or a rethink.
+```sh
+apt-get update && apt-get install -y mariadb-server && service mariadb start
+mariadb -e "CREATE DATABASE mpmb_test; CREATE USER 'mpmb'@'localhost' IDENTIFIED BY 'mpmb-test';
+  GRANT ALL ON mpmb_test.* TO 'mpmb'@'localhost';"
+TEST_DB_HOST=localhost TEST_DB_NAME=mpmb_test TEST_DB_USER=mpmb TEST_DB_PASSWORD=mpmb-test pnpm test server
+```
 
 ## Why it's built this way
 
-- **No framework, no dependencies:** Plesk runs Node through Passenger, and an upload of a few files is the
-  smallest thing that can show whether that works. A later PR may add a database driver.
-- **Its own subdomain:** Plesk's Node.js runs per domain or subdomain, not in a subfolder of remph.de. So the
-  app (on `https://remph.de/mpmb/`) calls it from another origin. Every answer allows that one origin (CORS) and
-  says it may be read across origins (`Cross-Origin-Resource-Policy`), which the app's
-  `Cross-Origin-Embedder-Policy` needs.
-- **`/api/health` too:** in case Plesk mounts the app under a path.
+- **No framework:** a handful of routes on `node:http`. Two libraries: `mysql2` (the database) and
+  `@scure/bip39` (its 2048-word list for the codes); esbuild bundles both, so the upload is three files.
+- **Its own subdomain:** Plesk's Node.js runs per domain or subdomain, so the app (on `https://remph.de/mpmb/`)
+  calls it from another origin. Answers allow `https://remph.de` (CORS, with the methods and headers a JSON
+  request with a token needs) and say they may be read across origins (`Cross-Origin-Resource-Policy`), which the
+  app's `Cross-Origin-Embedder-Policy` needs.
+- **Times as milliseconds** in BIGINT columns: no time zone between the service, MySQL and the devices.
+- **Tables built by the service** on its first request (`db.ts`, one step per schema version): nothing to run by
+  hand in Plesk.
+- **The admin page posts a plain form**, without scripts, under a strict Content-Security-Policy.
 
-## Before the app calls it (PR 2)
+## Before the app calls it (next PR)
 
 - The app's Content-Security-Policy (`public/.htaccess`) has `connect-src 'self'`, which blocks every fetch to
-  `https://sync.remph.de`. Add the service's origin there in the PR that first calls it. (Checked in Firefox:
-  with the app's COOP/COEP the health check is read across origins; with that CSP it is refused.)
-- A `POST` with a JSON body is preflighted: the `OPTIONS` answer then also needs `Access-Control-Allow-Methods`
-  and `Access-Control-Allow-Headers: Content-Type`.
-- `/health` names the Node version for the spike; drop that once the hosting question is settled.
+  `https://sync.remph.de`. Add the service's origin there in the PR that first calls it. (Checked in Firefox in the
+  #101 review: with the app's COOP/COEP the health check is read across origins; with that CSP it is refused.)
+- A character is half a megabyte or more and is saved on every change: the app should send saves at most every few
+  seconds, and may compress `data` (CompressionStream) since the service never reads it. Bodies are limited to
+  12 MB.

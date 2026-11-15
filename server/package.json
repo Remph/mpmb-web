@@ -8,6 +8,6 @@
     "node": ">=18"
   },
   "scripts": {
-    "start": "node dist/app.js"
+    "start": "node start.cjs"
   }
 }
