@@ -75,6 +75,12 @@ export interface Service {
  * The path's parts without the optional /api: "/api/characters/abc/lease" -> ["characters", "abc", "lease"]. A path
  * it can't read ("/characters/%", an absolute URL with a broken host) is a bad request, not an error that escapes.
  */
+/** A driver error's code ("ECONNREFUSED", "ER_ACCESS_DENIED_ERROR"), or "unknown": never its message. */
+export function errorCode(error: unknown): string {
+  const code = typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
+  return typeof code === 'string' ? code : 'unknown';
+}
+
 export function partsOf(url: string | undefined): string[] {
   try {
     const path = new URL(url ?? '/', 'http://localhost').pathname;
@@ -130,14 +136,16 @@ export function service(env: Env, db: Db | null, clock: () => number = Date.now)
     return migrated;
   };
 
-  async function databaseState(): Promise<DatabaseState> {
-    if (!db) return 'not configured';
+  /** The database's state, and the error code when it can't be reached (logged in full for Plesk's log). */
+  async function databaseState(): Promise<{ state: DatabaseState; error?: string }> {
+    if (!db) return { state: 'not configured' };
     try {
       await ready();
       await db.rows('SELECT 1');
-      return 'connected';
-    } catch {
-      return 'unreachable';
+      return { state: 'connected' };
+    } catch (error) {
+      console.error(error);
+      return { state: 'unreachable', error: errorCode(error) };
     }
   }
 
@@ -159,8 +167,8 @@ export function service(env: Env, db: Db | null, clock: () => number = Date.now)
       const parts = partsOf(req.url);
       if (req.method === 'OPTIONS') return sendJson(res, NO_CONTENT, undefined, cors);
       if (parts[0] === 'health' && parts.length === 1) {
-        const state = await databaseState();
-        return sendJson(res, OK, health(env, process.uptime(), new Date(clock()), state), cors);
+        const { state, error } = await databaseState();
+        return sendJson(res, OK, health(env, process.uptime(), new Date(clock()), state, error), cors);
       }
       if (parts[0] === 'admin' && parts.length === 1) return await admin(req, res);
       await ready();

@@ -12,6 +12,11 @@ export interface Health {
   uptime: number;
   /** Whether the database settings are there and the service reaches it (the settings never leave the server). */
   database: DatabaseState;
+  /**
+   * Why the database is unreachable: the driver's error code ("ECONNREFUSED", "ER_ACCESS_DENIED_ERROR"), which names
+   * the kind of failure without any of the settings. Only while `database` is "unreachable".
+   */
+  databaseError?: string;
   time: string;
 }
 
@@ -20,7 +25,7 @@ export type DatabaseState = 'not configured' | 'connected' | 'unreachable';
 
 type Env = Readonly<Record<string, string | undefined>>;
 
-export function health(env: Env, uptime: number, now: Date, database: DatabaseState): Health {
+export function health(env: Env, uptime: number, now: Date, database: DatabaseState, databaseError?: string): Health {
   return {
     ok: true,
     service: 'mpmb-web-sync',
@@ -28,6 +33,7 @@ export function health(env: Env, uptime: number, now: Date, database: DatabaseSt
     runner: env.PASSENGER_APP_ENV || env.IN_PASSENGER ? 'passenger' : 'plain',
     uptime: Math.round(uptime),
     database,
+    ...(databaseError ? { databaseError } : {}),
     time: now.toISOString(),
   };
 }

@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import { adminPage, langOf } from './admin.ts';
-import { partsOf, service } from './app.ts';
+import { errorCode, partsOf, service } from './app.ts';
 import { health } from './health.ts';
 import { allowedOrigins, corsHeaders } from './http.ts';
 
@@ -22,6 +22,18 @@ describe('health', () => {
       time: NOW.toISOString(),
     });
     expect(health({}, UPTIME, NOW, 'connected').database).toBe('connected');
+  });
+
+  it('names why the database is unreachable by its code only', () => {
+    const answer = health({}, UPTIME, NOW, 'unreachable', 'ECONNREFUSED');
+    expect(answer).toMatchObject({ database: 'unreachable', databaseError: 'ECONNREFUSED' });
+    expect(health({}, UPTIME, NOW, 'connected')).not.toHaveProperty('databaseError');
+    const denied = Object.assign(new Error("Access denied for user 'mpmb'@'localhost'"), {
+      code: 'ER_ACCESS_DENIED_ERROR',
+    });
+    expect(errorCode(denied)).toBe('ER_ACCESS_DENIED_ERROR');
+    expect(errorCode(new Error('no code'))).toBe('unknown');
+    expect(errorCode('text')).toBe('unknown');
   });
 
   it('sees Passenger, Plesk’s way of running Node', () => {
