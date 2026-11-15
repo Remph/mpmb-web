@@ -1307,6 +1307,8 @@ export const ui = {
       'Jeder Charakter in der Farbe, die auf seinem MPMB-Bogen eingestellt ist („Set Color Theme“). Lila, MPMBs Standard, behält die Farbe des Farbschemas.',
     lookSheetNow: 'Dieser Charakter: {color}',
     lookMenuLine: '{theme}, {mode}',
+    // Phones (M13): the start page's one button for house rules, look and language.
+    settingsTitle: 'Einstellungen',
     sheetColorAqua: 'Aquablau',
     sheetColorBlue: 'Blau',
     sheetColorBrown: 'Braun',
@@ -2656,6 +2658,8 @@ export const ui = {
       'Each character in the colour set on its MPMB sheet (“Set Color Theme”). Purple, MPMB’s default, keeps the theme’s colour.',
     lookSheetNow: 'This character: {color}',
     lookMenuLine: '{theme}, {mode}',
+    // Phones (M13): the start page's one button for house rules, look and language.
+    settingsTitle: 'Settings',
     sheetColorAqua: 'Aqua',
     sheetColorBlue: 'Blue',
     sheetColorBrown: 'Brown',
