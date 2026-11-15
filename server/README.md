@@ -54,10 +54,12 @@ The steps for the spike. Write down what each step showed (or a screenshot), esp
    `https://sync.remph.de/health.php`. If that shows the file's text or an error instead of JSON, put it into a
    folder of another domain with PHP instead (never into remph.de's `mpmb/`: the deploy deletes what isn't in
    the build). Send that JSON too.
-7. **Only if Node worked:** Databases, Add Database (MySQL or MariaDB, whatever Plesk offers), name `mpmb`,
-   a new user with a long random password. Then in the Node.js page, Custom environment variables:
-   `DB_HOST` (Plesk shows it, often `localhost`), `DB_NAME`, `DB_USER`, `DB_PASSWORD`. Restart App, open
-   `/health` again: `database` should say `configured`. The password stays in Plesk; never send it in a chat.
+7. **Only if Node worked:** Databases, Add Database (MySQL; the webspace offers no PostgreSQL), name `mpmb`,
+   a new user with a long random password, access control "local connections only". Then on the Node.js page,
+   Environment: `DB_HOST` (`localhost`), `DB_NAME` and `DB_USER` as variables, and `DB_PASSWORD` under Secrets
+   (passed to the app the same way, but stored encrypted and never shown again). No port: MySQL's 3306 is the
+   default. Restart App, open `/health` again: `database` should say `configured`. The password stays in Plesk;
+   never send it in a chat.
 
 What happens next depends on the answers: Node with a database, PHP with a database, or a rethink.
 
