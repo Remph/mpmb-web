@@ -4,7 +4,7 @@
 // Times are kept as milliseconds since 1970 (BIGINT), not DATETIME: the service, the database and the players'
 // devices may sit in different time zones, and a plain number means the same everywhere.
 import { createPool } from 'mysql2/promise';
-import type { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
+import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -19,8 +19,16 @@ export interface Db {
    * so an update that writes the same values again still counts its row.
    */
   change(sql: string, params?: readonly Param[]): Promise<{ affected: number; insertId: number }>;
+  /**
+   * Runs `work` in one transaction on one connection: all of its changes count, or none (an error rolls them back).
+   * Only for data tables: MySQL commits a CREATE TABLE at once, whatever the transaction says.
+   */
+  transaction<T>(work: (db: Queries) => Promise<T>): Promise<T>;
   close(): Promise<void>;
 }
+
+/** What a transaction's work may do: queries on its own connection, no nesting. */
+export type Queries = Pick<Db, 'rows' | 'change'>;
 
 /** A webspace has few connections to spare; the group is a handful of players. */
 const CONNECTIONS = 4;
@@ -44,16 +52,48 @@ export function connect(env: Env): Db | null {
   return fromPool(pool);
 }
 
-function fromPool(pool: Pool): Db {
+/** A pool hands each query to any free connection; a transaction needs all of them on the same one. */
+function queriesOn(on: Pool | PoolConnection): Queries {
   return {
     async rows<T>(sql: string, params: readonly Param[] = []) {
-      const [rows] = await pool.query<RowDataPacket[]>(sql, [...params]);
+      const [rows] = await on.query<RowDataPacket[]>(sql, [...params]);
       return rows as T[];
     },
     async change(sql: string, params: readonly Param[] = []) {
-      const [result] = await pool.query<ResultSetHeader>(sql, [...params]);
+      const [result] = await on.query<ResultSetHeader>(sql, [...params]);
       return { affected: result.affectedRows, insertId: result.insertId };
     },
+  };
+}
+
+/** Tries of a transaction that MySQL ended as a deadlock: it rolled it back, so running it again is safe. */
+const DEADLOCK_TRIES = 3;
+const ER_LOCK_DEADLOCK = 1213;
+
+const isDeadlock = (error: unknown) => (error as { errno?: unknown } | null)?.errno === ER_LOCK_DEADLOCK;
+
+async function inTransaction<T>(pool: Pool, work: (db: Queries) => Promise<T>): Promise<T> {
+  for (let tries = 1; ; tries++) {
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const result = await work(queriesOn(connection));
+      await connection.commit();
+      return result;
+    } catch (error) {
+      // A rollback that fails too (the connection broke) must not hide the first error.
+      await connection.rollback().catch(() => undefined);
+      if (!isDeadlock(error) || tries >= DEADLOCK_TRIES) throw error;
+    } finally {
+      connection.release();
+    }
+  }
+}
+
+function fromPool(pool: Pool): Db {
+  return {
+    ...queriesOn(pool),
+    transaction: (work) => inTransaction(pool, work),
     close: () => pool.end(),
   };
 }
@@ -142,6 +182,12 @@ const STEPS: readonly (readonly string[])[] = [
       updated_by INT UNSIGNED NULL,
       FOREIGN KEY (group_id) REFERENCES lager_groups (id) ON DELETE CASCADE,
       FOREIGN KEY (updated_by) REFERENCES players (id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    // The ids of the requests applied lately, so one sent again (a retry) changes nothing the second time.
+    `CREATE TABLE IF NOT EXISTS lager_requests (
+      id VARCHAR(64) NOT NULL PRIMARY KEY,
+      at BIGINT NOT NULL,
+      KEY (at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   ],
 ];

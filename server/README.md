@@ -26,8 +26,10 @@ IndexedDB as the copy it works on and sends changes here at most every 5 seconds
   1,234.5 gp is exact). Changes come as small steps (`ops`): `addGroup`, `renameGroup`, `removeGroup`, `add`,
   `count` (by a difference), `set` (name, place, note, group), `remove`, `gold` (`by` or `to`, in copper),
   `goldNote`. Counts and gold move by differences, so two players' "+1" at the same moment both count; for a
-  name, place or note the last change wins. Every change moves the Lager's `version` on; the app asks with
-  `?since=` every few seconds while the Lager is open, and an unchanged Lager answers with its version only.
+  name, place or note the last change wins. A request counts whole or not at all. With `request` (an id the app
+  makes once per request and sends again with a retry) the service applies it once, however often it arrives (it
+  remembers the ids for 30 days). Every change moves the Lager's `version` on; the app asks with `?since=` every
+  few seconds while the Lager is open, and an unchanged Lager answers with its version only.
 
 | Route                          | Body                    | Answer                                                     |
 | ------------------------------ | ----------------------- | ---------------------------------------------------------- |
@@ -42,7 +44,7 @@ IndexedDB as the copy it works on and sends changes here at most every 5 seconds
 | `POST /characters/:id/lease`   | `{takeOver?}`           | `{since, until}`; `423` with `lease` when held elsewhere   |
 | `DELETE /characters/:id/lease` |                         | `204`                                                      |
 | `GET /lager?since=n`           |                         | the group's Lager; only `{version}` while it is still at n |
-| `POST /lager`                  | `{ops: [...]}`          | the Lager after the ops; `400` with the bad op's `index`   |
+| `POST /lager`                  | `{ops: [...], request}` | the Lager after the ops; `400` with the bad op's `index`   |
 | `GET`, `POST /admin`           | the form                | the admin page                                             |
 
 All but `/health`, `/login` and `/admin` need `Authorization: Bearer <token>`. Errors are `{error: "…"}`. Paths may

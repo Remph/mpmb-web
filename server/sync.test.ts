@@ -26,6 +26,7 @@ const SECOND = 2;
 const LATEST = 2;
 const ID = '1b4e28ba-2fa1-11d2-883f-0016d3cca427';
 const TABLES = [
+  'lager_requests',
   'lager_items',
   'lager_groups',
   'lager',

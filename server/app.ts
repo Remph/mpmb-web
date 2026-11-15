@@ -13,7 +13,7 @@
 //   POST   /characters/:id/lease      {takeOver?} -> {since, until}; 423 when another device holds it
 //   DELETE /characters/:id/lease      let go
 //   GET    /lager?since=n             the group's Lager (M16); only {version} when it is still at n
-//   POST   /lager                     {ops: [...]} -> the Lager after them
+//   POST   /lager                     {ops: [...], request?} -> the Lager after them (a request id counts once)
 //   GET    /admin, POST /admin        the admin page (players and their codes)
 // Everything but /health, /login and /admin needs "Authorization: Bearer <token>".
 import { createServer } from 'node:http';

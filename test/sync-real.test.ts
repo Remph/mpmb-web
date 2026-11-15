@@ -26,6 +26,7 @@ const settings = {
 };
 const ADMIN = 'admin secret';
 const TABLES = [
+  'lager_requests',
   'lager_items',
   'lager_groups',
   'lager',

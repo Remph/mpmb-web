@@ -6,7 +6,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { service } from './app.ts';
-import { connect, type Db } from './db.ts';
+import { connect, migrate, type Db } from './db.ts';
 import { LIMITS, parseOp, parseOps, sinceOf } from './lager.ts';
 
 const OK = 200;
@@ -14,7 +14,7 @@ const BAD_REQUEST = 400;
 const UNAUTHORIZED = 401;
 const G1 = 'g-magic';
 const G2 = 'g-materials';
-const I1 = 'i-ring';
+const I1 = 'i-rope';
 const I2 = 'i-ore';
 /** 1,234.5 gp in copper. */
 const GOLD = 123_450;
@@ -29,11 +29,11 @@ describe('what a Lager request may say', () => {
       name: 'Magic items',
       kind: 'place',
     });
-    expect(parseOp({ op: 'add', id: I1, group: G1, name: 'Ring of Jumping' }, 0)).toEqual({
+    expect(parseOp({ op: 'add', id: I1, group: G1, name: 'Rope of Climbing' }, 0)).toEqual({
       op: 'add',
       id: I1,
       group: G1,
-      name: 'Ring of Jumping',
+      name: 'Rope of Climbing',
       count: 1,
       place: '',
       note: '',
@@ -94,6 +94,7 @@ const settings = {
 };
 const ADMIN = 'admin secret';
 const TABLES = [
+  'lager_requests',
   'lager_items',
   'lager_groups',
   'lager',
@@ -187,7 +188,7 @@ describe.skipIf(!settings.DB_HOST || !settings.DB_NAME)('the Lager on a real dat
     const { body } = await change(
       aria,
       { op: 'addGroup', id: G1, name: 'Magic items', kind: 'place' },
-      { op: 'add', id: I1, group: G1, name: 'Ring of Jumping', place: 'Lager', note: 'from the crypt' },
+      { op: 'add', id: I1, group: G1, name: 'Rope of Climbing', place: 'Lager', note: 'from the crypt' },
       { op: 'gold', to: GOLD },
       { op: 'goldNote', note: 'some of it is Bram’s' },
     );
@@ -232,11 +233,11 @@ describe.skipIf(!settings.DB_HOST || !settings.DB_NAME)('the Lager on a real dat
 
   it('does nothing twice: a repeated add, and changes to what someone removed meanwhile', async () => {
     const token = await player('Aria');
-    const add = { op: 'add', id: I1, group: G1, name: 'Ring of Jumping' };
+    const add = { op: 'add', id: I1, group: G1, name: 'Rope of Climbing' };
     await change(token, { op: 'addGroup', id: G1, name: 'Magic items', kind: 'place' }, add);
     expect(items((await change(token, add)).body)).toHaveLength(1);
     await change(token, { op: 'remove', id: I1 });
-    const { status, body } = await change(token, { op: 'count', id: I1, by: 1 }, { op: 'set', id: I1, name: 'Ring' });
+    const { status, body } = await change(token, { op: 'count', id: I1, by: 1 }, { op: 'set', id: I1, name: 'Rope' });
     expect(status).toBe(OK);
     expect(items(body)).toEqual([]);
     // Into a group that is gone: nothing is added.
@@ -250,7 +251,7 @@ describe.skipIf(!settings.DB_HOST || !settings.DB_NAME)('the Lager on a real dat
       token,
       { op: 'addGroup', id: G1, name: 'Magic items', kind: 'place' },
       { op: 'addGroup', id: G2, name: 'Materials', kind: 'count' },
-      { op: 'add', id: I1, group: G1, name: 'Ring of Jumping' },
+      { op: 'add', id: I1, group: G1, name: 'Rope of Climbing' },
       { op: 'add', id: I2, group: G1, name: 'Iron Ore' },
     );
     expect(item((await change(token, { op: 'set', id: I2, group: G2 })).body, I2)?.group).toBe(G2);
@@ -278,13 +279,132 @@ describe.skipIf(!settings.DB_HOST || !settings.DB_NAME)('the Lager on a real dat
     await change(
       token,
       { op: 'addGroup', id: G1, name: 'Magic items', kind: 'place' },
-      { op: 'add', id: I1, group: G1, name: 'Ring' },
+      { op: 'add', id: I1, group: G1, name: 'Rope' },
     );
     await db.change("DELETE FROM players WHERE name = 'Aria'");
     const other = await player('Bram');
     const { body } = await call('GET', '/lager', undefined, other);
-    expect(item(body, I1)).toMatchObject({ name: 'Ring', by: '' });
+    expect(item(body, I1)).toMatchObject({ name: 'Rope', by: '' });
     expect(body.by).toBe('');
+  });
+
+  it('applies a request whole or not at all, also when an op fails while it is applied', async () => {
+    const token = await player('Aria');
+    // The limit on groups is only found while applying: the gold set before it must not stay behind.
+    const groups = Array.from({ length: LIMITS.groups + 1 }, (_, index) => ({
+      op: 'addGroup',
+      id: `g-${index}`,
+      name: `Group ${index}`,
+      kind: 'count',
+    }));
+    const { status, body } = await change(token, { op: 'gold', to: GOLD }, ...groups);
+    expect(status).toBe(BAD_REQUEST);
+    expect(body.error).toBe('too many groups');
+    expect((await call('GET', '/lager', undefined, token)).body).toMatchObject({ version: 0, copper: 0, groups: [] });
+  });
+
+  it('applies a request sent again (a retry after a lost answer) only once', async () => {
+    const token = await player('Aria');
+    await change(
+      token,
+      { op: 'addGroup', id: G2, name: 'Materials', kind: 'count' },
+      { op: 'add', id: I2, group: G2, name: 'Iron Ore', count: 5 },
+    );
+    const plusOne = {
+      request: 'r-1',
+      ops: [
+        { op: 'count', id: I2, by: 1 },
+        { op: 'gold', by: 100 },
+      ],
+    };
+    const first = await call('POST', '/lager', plusOne, token);
+    const again = await call('POST', '/lager', plusOne, token);
+    expect(again.status).toBe(OK);
+    expect(again.body).toEqual(first.body);
+    expect(item(again.body, I2)?.count).toBe(6);
+    expect(again.body.copper).toBe(100);
+    // Another request with the same ops counts again.
+    const next = await call('POST', '/lager', { ...plusOne, request: 'r-2' }, token);
+    expect(item(next.body, I2)?.count).toBe(7);
+    expect((await call('POST', '/lager', { ...plusOne, request: 'not an id' }, token)).status).toBe(BAD_REQUEST);
+  });
+
+  it('takes many players’ requests at once, in any order of items, without losing one', async () => {
+    const tokens = await Promise.all(['Aria', 'Bram', 'Cora'].map((name) => player(name)));
+    const [aria] = tokens as [string];
+    await change(
+      aria,
+      { op: 'addGroup', id: G2, name: 'Materials', kind: 'count' },
+      { op: 'add', id: I1, group: G2, name: 'Rope', count: 0 },
+      { op: 'add', id: I2, group: G2, name: 'Iron Ore', count: 0 },
+    );
+    const ROUNDS = 8;
+    const answers = await Promise.all(
+      Array.from({ length: ROUNDS }, (_, round) =>
+        tokens.map((token, index) =>
+          (round + index) % 2
+            ? change(token, { op: 'count', id: I1, by: 1 }, { op: 'count', id: I2, by: 1 }, { op: 'gold', by: 1 })
+            : change(token, { op: 'gold', by: 1 }, { op: 'count', id: I2, by: 1 }, { op: 'count', id: I1, by: 1 }),
+        ),
+      ).flat(),
+    );
+    expect(answers.map((answer) => answer.status)).toEqual(answers.map(() => OK));
+    const { body } = await call('GET', '/lager', undefined, aria);
+    const total = ROUNDS * tokens.length;
+    expect([item(body, I1)?.count, item(body, I2)?.count, body.copper]).toEqual([total, total, total]);
+    expect(body.version).toBe(total + 1);
+  });
+
+  it('runs a transaction again that MySQL ended as a deadlock, and rolls back one that failed', async () => {
+    const token = await player('Aria');
+    await change(
+      token,
+      { op: 'addGroup', id: G1, name: 'A', kind: 'place' },
+      { op: 'addGroup', id: G2, name: 'B', kind: 'place' },
+    );
+    // Two transactions lock the two groups in opposite order, each waiting until the other holds its first lock:
+    // MySQL ends one of them as a deadlock, and it runs again after the other commits.
+    let runs = 0;
+    let release = () => {};
+    const bothHold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const lockBoth = (first: string, second: string, name: string) =>
+      db.transaction(async (tx) => {
+        runs += 1;
+        await tx.change('UPDATE lager_groups SET name = ? WHERE id = ?', [name, first]);
+        if (runs <= 2) {
+          if (runs === 2) release();
+          await bothHold;
+        }
+        await tx.change('UPDATE lager_groups SET name = ? WHERE id = ?', [name, second]);
+      });
+    await Promise.all([lockBoth(G1, G2, 'one'), lockBoth(G2, G1, 'two')]);
+    expect(runs).toBe(3);
+    const names = await db.rows<{ name: string }>('SELECT name FROM lager_groups ORDER BY id');
+    expect(new Set(names.map((row) => row.name)).size).toBe(1);
+    await expect(
+      db.transaction(async (tx) => {
+        await tx.change("UPDATE lager_groups SET name = 'gone' WHERE id = ?", [G1]);
+        throw new Error('stop');
+      }),
+    ).rejects.toThrow('stop');
+    expect(await db.rows('SELECT id FROM lager_groups WHERE name = ?', ['gone'])).toEqual([]);
+  });
+
+  it('adds the Lager to a database the live service made before it, and keeps its players', async () => {
+    const token = await player('Aria');
+    // The live database as M15 left it: schema version 1, no Lager tables.
+    await db.change('DROP TABLE lager_requests, lager_items, lager_groups, lager');
+    await db.change('UPDATE schema_version SET version = 1');
+    expect(await migrate(db)).toBe(2);
+    expect(await db.rows('SELECT name FROM players')).toEqual([{ name: 'Aria' }]);
+    expect((await call('GET', '/lager', undefined, token)).body).toMatchObject({ version: 0, copper: 0, items: [] });
+    // Run again (a second process starting): nothing changes.
+    await change(token, { op: 'gold', to: GOLD });
+    await db.change('UPDATE schema_version SET version = 1');
+    await migrate(db);
+    expect((await call('GET', '/lager', undefined, token)).body).toMatchObject({ version: 1, copper: GOLD });
   });
 
   it('refuses a request with one bad op without applying any of it', async () => {
