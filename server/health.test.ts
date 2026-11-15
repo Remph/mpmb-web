@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import { adminPage, langOf } from './admin.ts';
 import { errorCode, partsOf, service } from './app.ts';
-import { health } from './health.ts';
+import { databaseDebug, health } from './health.ts';
 import { allowedOrigins, corsHeaders } from './http.ts';
 
 const NOW = new Date('2026-11-15T10:00:00.000Z');
@@ -39,6 +39,26 @@ describe('health', () => {
   it('sees Passenger, Plesk’s way of running Node', () => {
     expect(health({ PASSENGER_APP_ENV: 'production' }, UPTIME, NOW, 'connected').runner).toBe('passenger');
     expect(health({ IN_PASSENGER: '1' }, UPTIME, NOW, 'connected').runner).toBe('passenger');
+  });
+});
+
+describe('database debugging (DB_DEBUG=1)', () => {
+  it('shows MySQL’s message and the settings, but only the password’s length', () => {
+    const env = { DB_HOST: '127.0.0.1', DB_NAME: 'k1_mpmb', DB_USER: 'k1_mpmb', DB_PASSWORD: ' secret-pw' };
+    const denied = new Error("Access denied for user 'k1_mpmb'@'10.0.0.5' (using password: YES)");
+    const debug = databaseDebug(env, denied);
+    expect(debug).toEqual({
+      message: denied.message,
+      host: '127.0.0.1',
+      name: 'k1_mpmb',
+      user: 'k1_mpmb',
+      passwordLength: env.DB_PASSWORD.length,
+      passwordHasOuterSpaces: true,
+    });
+    expect(JSON.stringify(health(env, UPTIME, NOW, 'unreachable', 'ER_ACCESS_DENIED_ERROR', debug))).not.toContain(
+      'secret',
+    );
+    expect(health(env, UPTIME, NOW, 'unreachable', 'ER_ACCESS_DENIED_ERROR')).not.toHaveProperty('databaseDebug');
   });
 });
 

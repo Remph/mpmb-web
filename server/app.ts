@@ -18,7 +18,7 @@ import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ADMIN_HEADERS, adminPage, adminPost, langOf, noDatabaseView } from './admin.ts';
 import { connect, migrate, type Db } from './db.ts';
-import { health, type DatabaseState } from './health.ts';
+import { databaseDebug, health, type DatabaseDebug, type DatabaseState } from './health.ts';
 import {
   addressOf,
   allowedOrigins,
@@ -137,7 +137,7 @@ export function service(env: Env, db: Db | null, clock: () => number = Date.now)
   };
 
   /** The database's state, and the error code when it can't be reached (logged in full for Plesk's log). */
-  async function databaseState(): Promise<{ state: DatabaseState; error?: string }> {
+  async function databaseState(): Promise<{ state: DatabaseState; error?: string; debug?: DatabaseDebug }> {
     if (!db) return { state: 'not configured' };
     try {
       await ready();
@@ -145,7 +145,8 @@ export function service(env: Env, db: Db | null, clock: () => number = Date.now)
       return { state: 'connected' };
     } catch (error) {
       console.error(error);
-      return { state: 'unreachable', error: errorCode(error) };
+      const debug = env.DB_DEBUG === '1' ? databaseDebug(env, error) : undefined;
+      return { state: 'unreachable', error: errorCode(error), debug };
     }
   }
 
@@ -167,8 +168,8 @@ export function service(env: Env, db: Db | null, clock: () => number = Date.now)
       const parts = partsOf(req.url);
       if (req.method === 'OPTIONS') return sendJson(res, NO_CONTENT, undefined, cors);
       if (parts[0] === 'health' && parts.length === 1) {
-        const { state, error } = await databaseState();
-        return sendJson(res, OK, health(env, process.uptime(), new Date(clock()), state, error), cors);
+        const { state, error, debug } = await databaseState();
+        return sendJson(res, OK, health(env, process.uptime(), new Date(clock()), state, error, debug), cors);
       }
       if (parts[0] === 'admin' && parts.length === 1) return await admin(req, res);
       await ready();

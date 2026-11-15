@@ -17,15 +17,51 @@ export interface Health {
    * the kind of failure without any of the settings. Only while `database` is "unreachable".
    */
   databaseError?: string;
+  /** Only with DB_DEBUG=1, while setting the database up: see DatabaseDebug. */
+  databaseDebug?: DatabaseDebug;
   time: string;
 }
 
 /** No DB_* settings; settings, and the tables are up to date; settings, but no answer (wrong login, or down). */
 export type DatabaseState = 'not configured' | 'connected' | 'unreachable';
 
+/**
+ * What /health adds with DB_DEBUG=1 while the database is unreachable, to find a wrong setting from the browser:
+ * MySQL's own message (it names the user and the address it saw, and whether a password came), the settings but the
+ * password, and the password's length and whether it has spaces at either end. Never the password itself.
+ */
+export interface DatabaseDebug {
+  message: string;
+  host: string;
+  name: string;
+  user: string;
+  passwordLength: number;
+  passwordHasOuterSpaces: boolean;
+}
+
+/** The debug details for an error, from the DB_* settings. */
+export function databaseDebug(env: Env, error: unknown): DatabaseDebug {
+  const password = env.DB_PASSWORD ?? '';
+  return {
+    message: error instanceof Error ? error.message : String(error),
+    host: env.DB_HOST ?? '',
+    name: env.DB_NAME ?? '',
+    user: env.DB_USER ?? '',
+    passwordLength: password.length,
+    passwordHasOuterSpaces: password !== password.trim(),
+  };
+}
+
 type Env = Readonly<Record<string, string | undefined>>;
 
-export function health(env: Env, uptime: number, now: Date, database: DatabaseState, databaseError?: string): Health {
+export function health(
+  env: Env,
+  uptime: number,
+  now: Date,
+  database: DatabaseState,
+  databaseError?: string,
+  debug?: DatabaseDebug,
+): Health {
   return {
     ok: true,
     service: 'mpmb-web-sync',
@@ -34,6 +70,7 @@ export function health(env: Env, uptime: number, now: Date, database: DatabaseSt
     uptime: Math.round(uptime),
     database,
     ...(databaseError ? { databaseError } : {}),
+    ...(debug ? { databaseDebug: debug } : {}),
     time: now.toISOString(),
   };
 }
