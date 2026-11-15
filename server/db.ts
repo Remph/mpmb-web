@@ -107,6 +107,43 @@ const STEPS: readonly (readonly string[])[] = [
       since BIGINT NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   ],
+  // M16: the group's Lager (lager.ts). One row in `lager` (id 1) for the gold and the version every change moves
+  // on; groups and items by the ids the app makes. `updated_by` names the player; it stays when they are removed
+  // (SET NULL), so the Lager never loses items with a player.
+  [
+    `CREATE TABLE IF NOT EXISTS lager (
+      id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+      version INT UNSIGNED NOT NULL,
+      copper BIGINT NOT NULL,
+      gold_note VARCHAR(200) NOT NULL,
+      updated BIGINT NOT NULL,
+      updated_by INT UNSIGNED NULL,
+      FOREIGN KEY (updated_by) REFERENCES players (id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    "INSERT IGNORE INTO lager (id, version, copper, gold_note, updated) VALUES (1, 0, 0, '', 0)",
+    `CREATE TABLE IF NOT EXISTS lager_groups (
+      id VARCHAR(64) NOT NULL PRIMARY KEY,
+      name VARCHAR(80) NOT NULL,
+      kind VARCHAR(8) NOT NULL,
+      position INT UNSIGNED NOT NULL,
+      updated BIGINT NOT NULL,
+      updated_by INT UNSIGNED NULL,
+      FOREIGN KEY (updated_by) REFERENCES players (id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS lager_items (
+      id VARCHAR(64) NOT NULL PRIMARY KEY,
+      group_id VARCHAR(64) NOT NULL,
+      name VARCHAR(200) NOT NULL,
+      count INT UNSIGNED NOT NULL,
+      place VARCHAR(80) NOT NULL,
+      note MEDIUMTEXT NOT NULL,
+      position INT UNSIGNED NOT NULL,
+      updated BIGINT NOT NULL,
+      updated_by INT UNSIGNED NULL,
+      FOREIGN KEY (group_id) REFERENCES lager_groups (id) ON DELETE CASCADE,
+      FOREIGN KEY (updated_by) REFERENCES players (id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  ],
 ];
 
 /** Brings the tables up to the newest schema; safe to run on every start. Returns the version it ended at. */

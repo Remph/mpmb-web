@@ -22,8 +22,19 @@ const START = Date.parse('2026-11-15T12:00:00Z');
 const ONE_MS = 1;
 const FIRST = 1;
 const SECOND = 2;
+/** The schema's newest version (db.ts STEPS): M15's tables, then M16's Lager. */
+const LATEST = 2;
 const ID = '1b4e28ba-2fa1-11d2-883f-0016d3cca427';
-const TABLES = ['characters', 'devices', 'attempts', 'players', 'schema_version'];
+const TABLES = [
+  'lager_items',
+  'lager_groups',
+  'lager',
+  'characters',
+  'devices',
+  'attempts',
+  'players',
+  'schema_version',
+];
 
 const OK = 200;
 const NO_CONTENT = 204;
@@ -129,8 +140,8 @@ describe.skipIf(!settings.DB_HOST)('the sync service on a real database', () => 
     await Promise.all([migrate(db), migrate(db)]);
     await db.change('DROP TABLE attempts');
     await db.change('UPDATE schema_version SET version = 0');
-    expect(await migrate(db)).toBe(FIRST);
-    expect(await db.rows('SELECT id, version FROM schema_version')).toEqual([{ id: FIRST, version: FIRST }]);
+    expect(await migrate(db)).toBe(LATEST);
+    expect(await db.rows('SELECT id, version FROM schema_version')).toEqual([{ id: FIRST, version: LATEST }]);
     expect(await db.rows('SELECT * FROM attempts')).toEqual([]);
   });
 
