@@ -19,7 +19,9 @@ export interface Account {
   lastSync: number | null;
 }
 
-const KEY = 'mpmb-web.sync';
+/** Where the account is kept in localStorage (another tab's change to it arrives as a `storage` event). */
+export const ACCOUNT_KEY = 'mpmb-web.sync';
+const KEY = ACCOUNT_KEY;
 
 /** What a stand-in for localStorage needs (tests). */
 export type KeyValues = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;

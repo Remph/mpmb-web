@@ -1383,7 +1383,10 @@ export class Session {
     this.clearNotes();
     const result = await this.sync.forgetThisDevice();
     if (result === 'ok') this.note('ok', this.t.syncForgotten);
-    else this.note('error', result === 'offline' ? this.t.syncForgetOffline : this.t.syncForgetWaiting);
+    else {
+      const why = { offline: this.t.syncForgetOffline, waiting: this.t.syncForgetWaiting, kept: this.t.syncForgetKept };
+      this.note('error', why[result]);
+    }
   }
 
   // ---- Delete, back up, restore ----

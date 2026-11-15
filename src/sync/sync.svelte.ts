@@ -15,7 +15,7 @@
 import type { Texts } from '../i18n.ts';
 import { fill } from '../i18n.ts';
 import type { CharacterStore } from '../store/characters.ts';
-import { readAccount, writeAccount } from './account.ts';
+import { ACCOUNT_KEY, readAccount, writeAccount } from './account.ts';
 import type { Account, KeyValues } from './account.ts';
 import {
   NEWER_VERSION,
@@ -146,6 +146,13 @@ export class Sync {
     // With an account the page starts with a round (start()), unless auto sync is off.
     this.state = !this.account ? 'off' : this.account.auto ? 'syncing' : 'manual';
     this.api = new SyncApi(() => this.account?.token ?? null, base, fetcher);
+    // The switch turned in another tab of this browser: follow it, or a tab left open would go on sending the
+    // try-outs (both tabs share the characters) after the player turned auto sync off.
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', (event) => {
+        if (event.key === null || event.key === ACCOUNT_KEY) this.followStoredAccount();
+      });
+    }
   }
 
   get on(): boolean {
@@ -170,6 +177,9 @@ export class Sync {
 
   /** Another device that has the character open, from the service's last list. */
   heldElsewhere(id: string): Lease | null {
+    // Auto sync off: the list is only as new as the last "Sync now", and leases last two minutes; an old "open on …"
+    // would stay on the card (and block deleting) until the next one.
+    if (!this.auto) return null;
     const lease = this.server[id]?.lease ?? null;
     return lease && lease.deviceId !== this.account?.device ? lease : null;
   }
@@ -275,12 +285,16 @@ export class Sync {
       }
       // "Take the synced copy": the service's copy comes in first (this one becomes a restore point), so the plan
       // below sees it unchanged.
-      const takes = Object.keys(choices).filter((id) => choices[id] === 'take' && this.server[id]?.deleted === false);
-      const took = (await inTurn(takes, (id) => this.download(store, id, true))).some(Boolean);
+      const takes = Object.keys(choices).filter((id) => choices[id] === 'take');
+      // No synced copy left to take (deleted on another device, or removed): this one stays here as it is. Sent, it
+      // would bring back the character (a change wins over a delete) with the very changes the player gave up.
+      const gone = takes.filter((id) => this.server[id]?.deleted !== false);
+      const available = takes.filter((id) => !gone.includes(id));
+      const took = (await inTurn(available, (id) => this.download(store, id, true))).some(Boolean);
       const records = await store.syncRecords();
       const local = await store.list();
       const open = this.host.open();
-      const leave = new Set(Object.keys(choices).filter((id) => choices[id] === 'keep'));
+      const leave = new Set([...Object.keys(choices).filter((id) => choices[id] === 'keep'), ...gone]);
       const steps = planSync(local, records, server, new Set(open?.editing ? [open.id] : []), leave);
       const changed = (await inTurn(steps, (step) => this.carryOut(store, step, records))).some(Boolean) || took;
       this.lastContact = Date.now();
@@ -546,6 +560,18 @@ export class Sync {
     if (!this.account || this.account.auto === on) return;
     this.account = { ...this.account, auto: on, lastSync: this.lastSync };
     writeAccount(this.account, this.storage);
+    this.switched(on);
+  }
+
+  /** The account as stored changed (another tab): takes over its switch. Public for the tests. */
+  followStoredAccount(): void {
+    const stored = readAccount(this.storage);
+    if (!this.account || !stored || stored.token !== this.account.token || stored.auto === this.account.auto) return;
+    this.account = { ...this.account, auto: stored.auto, lastSync: stored.lastSync ?? this.lastSync };
+    this.switched(stored.auto);
+  }
+
+  private switched(on: boolean): void {
     if (on) {
       this.state = 'syncing';
       this.start();
@@ -571,10 +597,18 @@ export class Sync {
     const store = this.host.store();
     if (!this.account || !store) return [];
     const records = await store.syncRecords();
-    return (await store.list())
-      .filter((c) => changedHere(c, records.get(c.id)))
-      .sort((a, b) => a.updated.localeCompare(b.updated))
-      .map((c) => ({ id: c.id, name: c.name, updated: c.updated, known: records.has(c.id) }));
+    return (
+      (await store.list())
+        .filter((c) => changedHere(c, records.get(c.id)))
+        .sort((a, b) => a.updated.localeCompare(b.updated))
+        // Known: synced before, and not deleted at the service as far as the last list said.
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          updated: c.updated,
+          known: records.has(c.id) && this.server[c.id]?.deleted !== true,
+        }))
+    );
   }
 
   // ---- The code, the devices ----
@@ -628,16 +662,18 @@ export class Sync {
    * browser (a shared laptop; they stay on the player's other devices). `waiting`: changes here couldn't be sent,
    * so nothing happened; `offline`: the service didn't answer.
    */
-  async forgetThisDevice(): Promise<'ok' | 'waiting' | 'offline'> {
+  async forgetThisDevice(): Promise<'ok' | 'waiting' | 'offline' | 'kept'> {
     const store = this.host.store();
     const account = this.account;
     if (!store || !account) return 'ok';
-    // The player asked for it: runs with auto sync off too.
-    await this.round(true, { choices: {} });
+    // The player asked for it: runs with auto sync off too. Off, the changes made here stay out of it: whether a
+    // try-out goes to the other devices is answered in "Sync now", never by forgetting the device.
+    const kept = account.auto ? [] : await this.waiting();
+    await this.round(true, { choices: Object.fromEntries(kept.map((c) => [c.id, 'keep' as const])) });
     const records = await store.syncRecords();
     const local = await store.list();
     if (local.some((c) => changedHere(c, records.get(c.id))) || [...records.values()].some((r) => r.deleted)) {
-      return this.state === 'offline' ? 'offline' : 'waiting';
+      return this.state === 'offline' ? 'offline' : kept.length ? 'kept' : 'waiting';
     }
     try {
       await this.api.forgetDevice(account.device);

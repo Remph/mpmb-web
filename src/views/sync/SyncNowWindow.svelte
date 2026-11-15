@@ -5,6 +5,7 @@
   `again`: the player turns auto sync back on; "keep it here" isn't offered then, since the next round would send it.
 -->
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import Modal from '../../popups/Modal.svelte';
@@ -25,9 +26,10 @@
   let choices: Record<string, SyncChoice> = $state({});
   let loaded = $state(false);
 
+  // Once, as the window opens: untracked, since waiting() reads the account, which a finished round replaces (a
+  // re-run would reset the player's choices).
   $effect(() => {
-    void session.sync
-      .waiting()
+    void untrack(() => session.sync.waiting())
       .catch(() => [])
       .then((found) => {
         rows = found;

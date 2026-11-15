@@ -504,6 +504,59 @@ describe('auto sync off', () => {
     expect(pc.sync.mark((await pc.store.list())[0]!)).toBe('waiting');
   });
 
+  test('"Take the synced copy" when there is none left (deleted on the other device): it stays here, not sent', async () => {
+    const { pc, surface } = await apart();
+    await tryOut(pc, '3');
+    await surface.store.delete('a', (await surface.store.syncRecords()).get('a'));
+    await surface.sync.round(false);
+    await pc.sync.syncNow({ a: 'take' });
+    expect(service.characters.get(1)?.get('a')?.deleted).toBe(true);
+    expect(await pc.hp('a')).toBe('3');
+    // The window no longer offers to take it; sending it would bring it back, as any change does.
+    expect(await pc.sync.waiting()).toMatchObject([{ id: 'a', known: false }]);
+  });
+
+  test('forgetting the device sends no try-out: it says to "Sync now" first', async () => {
+    const { pc } = await apart();
+    await tryOut(pc, '3');
+    expect(await pc.sync.forgetThisDevice()).toBe('kept');
+    expect(pc.sync.on).toBe(true);
+    expect(await service.characters.get(1)?.get('a')?.version).toBe(1);
+    expect(await pc.hp('a')).toBe('3');
+  });
+
+  test('no "open on …" from the last Sync now: leases are live news, and none come in while off', async () => {
+    const { pc, surface } = await apart();
+    await surface.sync.hold('a');
+    await pc.sync.syncNow();
+    expect(pc.sync.heldElsewhere('a')).toBeNull();
+  });
+
+  test('another tab of the same browser follows the switch, so it stops sending too', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    const pc = await Device.on(service);
+    await pc.store.put(character('a', '20'));
+    await pc.sync.connect(CODE, 'PC');
+    const tab = new Sync({ ...hostOf(pc), store: () => pc.store }, () => ui.en, service.fetcher, storageOf(pc), BASE);
+    tab.start();
+    await vi.advanceTimersByTimeAsync(0);
+    pc.sync.setAuto(false);
+    tab.followStoredAccount();
+    expect(tab.auto).toBe(false);
+    expect(tab.state).toBe('manual');
+    service.log.length = 0;
+    await tryOut(pc, '3');
+    tab.changed();
+    await vi.advanceTimersByTimeAsync(PUSH_PACE_MS + 120_000);
+    expect(service.log).toEqual([]);
+
+    pc.sync.setAuto(true);
+    tab.followStoredAccount();
+    expect(tab.auto).toBe(true);
+    tab.stop();
+    pc.sync.stop();
+  });
+
   test('back on, it syncs at once', async () => {
     const { pc, surface } = await apart();
     await tryOut(surface, '15');

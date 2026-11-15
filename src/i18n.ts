@@ -106,6 +106,8 @@ export const ui = {
     syncForgetButton: 'Vergessen',
     syncForgetWaiting:
       'Nicht vergessen: Änderungen auf diesem Gerät sind noch nicht abgeglichen. Versuch es gleich noch einmal.',
+    syncForgetKept:
+      'Nicht vergessen: Auf diesem Gerät geänderte Charaktere sind noch nicht abgeglichen. Erst „Jetzt abgleichen“: mitschicken oder den abgeglichenen holen.',
     syncForgetOffline:
       'Nicht vergessen: Der Abgleich hat nicht geantwortet. Prüf die Verbindung und versuch es noch einmal.',
     syncForgotten: 'Dieses Gerät ist vergessen: hier wird nichts mehr abgeglichen.',
@@ -1599,6 +1601,8 @@ export const ui = {
     syncForgetMessage: 'Your characters leave this browser and stay on your other devices. Your code brings them back.',
     syncForgetButton: 'Forget',
     syncForgetWaiting: 'Not forgotten: changes on this device haven’t synced yet. Try again in a moment.',
+    syncForgetKept:
+      'Not forgotten: characters changed on this device haven’t synced. “Sync now” first: send them, or take the synced copies.',
     syncForgetOffline: 'Not forgotten: the sync didn’t answer. Check the connection and try again.',
     syncForgotten: 'This device is forgotten: nothing syncs here any more.',
     syncSignedOut:
