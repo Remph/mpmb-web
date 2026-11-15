@@ -265,6 +265,25 @@ describe.skipIf(!settings.DB_HOST)('the sync service on a real database', () => 
     expect((await call('GET', '/characters', undefined, aria)).status).toBe(UNAUTHORIZED);
   });
 
+  it('removes a player only on the second press, with their devices and characters', async () => {
+    const code = await addPlayer('Cato');
+    const cato = (await call('POST', '/login', { code, device: 'Laptop' })).body.token as string;
+    expect((await save(cato, 0, 'Cato’s')).status).toBe(OK);
+    const id = between(await admin({ password: ADMIN, action: 'list' }), 'name="remove" value="', '"');
+
+    const asked = await admin({ password: ADMIN, remove: id });
+    expect(asked).toContain('Remove Cato?');
+    expect(asked).toContain(`name="removeConfirmed" value="${id}"`);
+    expect((await call('GET', '/characters', undefined, cato)).status).toBe(OK);
+
+    const done = await admin({ password: ADMIN, removeConfirmed: id });
+    expect(done).toContain('Cato was removed.');
+    expect(done).toContain('No players yet.');
+    expect((await call('GET', '/characters', undefined, cato)).status).toBe(UNAUTHORIZED);
+    const left = await db.rows<{ n: number }>('SELECT COUNT(*) AS n FROM characters');
+    expect(Number(left[0]?.n)).toBe(0);
+  });
+
   it('answers the app’s origin with CORS headers, and no other', async () => {
     const app = await call('GET', '/health', undefined, undefined, 'https://remph.de');
     expect(app.headers.get('access-control-allow-origin')).toBe('https://remph.de');

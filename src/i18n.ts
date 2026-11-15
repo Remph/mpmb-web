@@ -128,6 +128,18 @@ export const ui = {
     syncDeleteOpenOn: '{name} ist auf {device} offen. Schließe ihn dort zuerst, dann lösche ihn.',
     syncKeptHere:
       '{name} wurde auch auf {device} geändert. Der Stand dieses Geräts bleibt als früherer Stand (Bogen-Menü, „Zu einem früheren Stand zurück“).',
+    syncKeptTheirs:
+      'Der Stand von {name} von {device} bleibt hier als früherer Stand (Bogen-Menü, „Zu einem früheren Stand zurück“); überall gilt jetzt dieser.',
+    syncClashTitle: '{name} gibt es zweimal',
+    syncClashMessage:
+      '{name} ist auf diesem Gerät anders als der abgeglichene Stand von {device}. Welchen sollen alle deine Geräte nehmen?',
+    syncClashHere: 'Dieses Gerät: geändert {when}',
+    syncClashThere: '{device}: geändert {when}',
+    syncClashHint:
+      'Der andere bleibt auf diesem Gerät als früherer Stand (Bogen-Menü, „Zu einem früheren Stand zurück“).',
+    syncClashKeepHere: 'Den von diesem Gerät',
+    syncClashTakeThere: 'Den von {device}',
+    syncClashLater: 'Später',
     syncAnotherDevice: 'einem anderen Gerät',
     noCharacters: 'Noch keine Charaktere.',
     unnamed: 'Ohne Namen',
@@ -196,6 +208,8 @@ export const ui = {
     deleteTitle: 'Charakter löschen?',
     deleteConfirm:
       '„{name}“ wird aus diesem Browser gelöscht. Das lässt sich nicht rückgängig machen; eine Sicherung bleibt erhalten.',
+    deleteConfirmSynced:
+      '„{name}“ wird auf allen deinen Geräten gelöscht. Das lässt sich nicht rückgängig machen; eine Sicherung bleibt erhalten.',
     restoreTitle: 'Sicherung einspielen?',
     restoreNew: '{name}: neu',
     restoreReplaces: '{name}: ersetzt den Charakter hier',
@@ -1578,6 +1592,18 @@ export const ui = {
     syncDeleteOpenOn: '{name} is open on {device}. Close it there first, then delete it.',
     syncKeptHere:
       '{name} was changed on {device} too. This device’s copy is kept as a restore point (Sheet menu, “Roll back to an earlier save”).',
+    syncKeptTheirs:
+      'The copy of {name} from {device} is kept here as a restore point (Sheet menu, “Roll back to an earlier save”); this one now goes everywhere.',
+    syncClashTitle: 'Two copies of {name}',
+    syncClashMessage:
+      '{name} on this device differs from the synced copy from {device}. Which one should all your devices use?',
+    syncClashHere: 'This device: changed {when}',
+    syncClashThere: '{device}: changed {when}',
+    syncClashHint:
+      'The other one is kept on this device as a restore point (Sheet menu, “Roll back to an earlier save”).',
+    syncClashKeepHere: 'This device’s',
+    syncClashTakeThere: 'The one from {device}',
+    syncClashLater: 'Later',
     syncAnotherDevice: 'another device',
     noCharacters: 'No characters yet.',
     unnamed: 'Unnamed',
@@ -1645,6 +1671,8 @@ export const ui = {
     cancel: 'Cancel',
     deleteTitle: 'Delete character?',
     deleteConfirm: '“{name}” will be deleted from this browser. This can’t be undone; backups are not affected.',
+    deleteConfirmSynced:
+      '“{name}” will be deleted on all your devices. This can’t be undone; backups are not affected.',
     restoreTitle: 'Restore backup?',
     restoreNew: '{name}: new',
     restoreReplaces: '{name}: replaces the character here',

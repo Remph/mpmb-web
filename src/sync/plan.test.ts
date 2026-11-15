@@ -37,15 +37,13 @@ describe('planSync with the service list', () => {
     ]);
   });
 
-  test('newer there: unchanged here takes it; changed here too is a clash (this copy becomes a restore point)', () => {
+  test('newer there: unchanged here takes it; changed here too is a clash (the player picks)', () => {
     const there = [server('a', 3, T3)];
     const record = records({ a: { version: 2, pushed: T1 } });
     expect(planSync([{ id: 'a', updated: T1 }], record, there)).toEqual([
       { kind: 'download', id: 'a', server: there[0] },
     ]);
-    expect(planSync([{ id: 'a', updated: T2 }], record, there)).toEqual([
-      { kind: 'conflict', id: 'a', server: there[0] },
-    ]);
+    expect(planSync([{ id: 'a', updated: T2 }], record, there)).toEqual([{ kind: 'clash', id: 'a', server: there[0] }]);
   });
 
   test('the character open here for changes is only ever pushed, never swapped under the player', () => {
@@ -75,13 +73,19 @@ describe('planSync with the service list', () => {
   });
 
   test('here and there without a record: the same copy is adopted, two different ones clash', () => {
-    const there = [server('a', 5, T1)];
-    expect(planSync([{ id: 'a', updated: T1 }], records({}), there)).toEqual([
+    const there = [server('a', 5, T2)];
+    expect(planSync([{ id: 'a', updated: T2 }], records({}), there)).toEqual([
       { kind: 'adopt', id: 'a', server: there[0] },
     ]);
-    expect(planSync([{ id: 'a', updated: T2 }], records({}), there)).toEqual([
-      { kind: 'conflict', id: 'a', server: there[0] },
+    // Older or newer here: the player picks (a newer copy may only be a try-out).
+    expect(planSync([{ id: 'a', updated: T1 }], records({}), there)).toEqual([
+      { kind: 'clash', id: 'a', server: there[0] },
     ]);
+    expect(planSync([{ id: 'a', updated: T3 }], records({}), there)).toEqual([
+      { kind: 'clash', id: 'a', server: there[0] },
+    ]);
+    // Open here: not asked while the player is in it.
+    expect(planSync([{ id: 'a', updated: T3 }], records({}), there, new Set(['a']))).toEqual([]);
   });
 
   test('a known character the service no longer has goes out again; a deleted one nobody has is ignored', () => {

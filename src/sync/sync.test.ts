@@ -11,7 +11,7 @@ import { CharacterStore, describeCharacter } from '../store/characters.ts';
 import type { StoredCharacter } from '../store/characters.ts';
 import type { Lease } from './api.ts';
 import { PUSH_PACE_MS, Sync } from './sync.svelte.ts';
-import type { SyncHost } from './sync.svelte.ts';
+import type { Clash, SyncHost } from './sync.svelte.ts';
 
 const CODE = 'orbit-hazard-melt-ripple';
 const BASE = 'https://sync.test';
@@ -47,6 +47,9 @@ class Device {
   readonly replaced: string[] = [];
   readonly removed: string[] = [];
   openId: { id: string; editing: boolean } | null = null;
+  /** The player's answer when two copies clash, and the clashes asked about. */
+  answer: 'here' | 'there' | 'later' = 'there';
+  readonly asked: Clash[] = [];
   private readonly values = new Map<string, string>();
 
   static async on(service: FakeSync): Promise<Device> {
@@ -60,6 +63,10 @@ class Device {
       removed: (id) => void device.removed.push(id),
       lost: (_id, lease) => void device.lost.push(lease),
       note: (_kind, text) => void device.notes.push(text),
+      pick: async (clash) => {
+        device.asked.push(clash);
+        return device.answer;
+      },
     };
     const storage = {
       getItem: (key: string) => device.values.get(key) ?? null,
@@ -127,6 +134,67 @@ describe('two devices', () => {
     expect(laptop.sync.mark((await laptop.store.list())[0]!)).toBe('synced');
     // Nothing lost, so nothing to keep.
     expect(await laptop.store.points('a')).toEqual([]);
+  });
+
+  test('both had it before syncing (a backup): the player picks, and keeping this one sends it everywhere', async () => {
+    const pc = await Device.on(service);
+    const surface = await Device.on(service);
+    const older = character('elrith', '20');
+    const newer = character('elrith', '7', older);
+    await pc.store.put(older);
+    await surface.store.put(newer);
+
+    // The PC with the older copy comes first; the Surface asks, and the player keeps the Surface's.
+    await pc.sync.connect(CODE, 'PC');
+    surface.answer = 'here';
+    await surface.sync.connect(CODE, 'Surface');
+    expect(surface.asked).toEqual([
+      { id: 'elrith', name: 'Anna', here: newer.meta.updated, there: Date.parse(older.meta.updated), device: 'PC' },
+    ]);
+    expect(await surface.hp('elrith')).toBe('7');
+    const kept = await surface.store.points('elrith');
+    expect(kept.map((p) => [p.reason, p.data.fields['HP Current']?.value])).toEqual([['sync', '20']]);
+    expect(surface.notes).toContain(ui.en.syncKeptTheirs.replace('{name}', 'Anna').replace('{device}', 'PC'));
+
+    // The PC's copy hadn't changed since it went out: it takes the Surface's without asking.
+    await pc.sync.round(true);
+    expect(pc.asked).toEqual([]);
+    expect(await pc.hp('elrith')).toBe('7');
+    expect(pc.sync.mark((await pc.store.list())[0]!)).toBe('synced');
+    expect(surface.sync.mark((await surface.store.list())[0]!)).toBe('synced');
+  });
+
+  test('both had it before syncing: taking the synced copy keeps this one as a restore point', async () => {
+    const pc = await Device.on(service);
+    const surface = await Device.on(service);
+    const older = character('elrith', '20');
+    const newer = character('elrith', '7', older);
+    await pc.store.put(older);
+    await surface.store.put(newer);
+
+    await surface.sync.connect(CODE, 'Surface');
+    pc.answer = 'there';
+    await pc.sync.connect(CODE, 'PC');
+    expect(await pc.hp('elrith')).toBe('7');
+    expect((await pc.store.points('elrith')).map((p) => p.data.fields['HP Current']?.value)).toEqual(['20']);
+    expect(await surface.store.points('elrith')).toEqual([]);
+  });
+
+  test('"Later" leaves both copies as they are, and doesn’t ask again until the page loads', async () => {
+    const pc = await Device.on(service);
+    const surface = await Device.on(service);
+    const older = character('elrith', '20');
+    await pc.store.put(older);
+    await surface.store.put(character('elrith', '7', older));
+    await pc.sync.connect(CODE, 'PC');
+    surface.answer = 'later';
+    await surface.sync.connect(CODE, 'Surface');
+    await surface.sync.round(true);
+    expect(surface.asked).toHaveLength(1);
+    expect(await surface.hp('elrith')).toBe('7');
+    expect(await surface.store.points('elrith')).toEqual([]);
+    await pc.sync.round(true);
+    expect(await pc.hp('elrith')).toBe('20');
   });
 
   test('changed on both while apart: the newer one at the service wins, the other stays as a restore point', async () => {

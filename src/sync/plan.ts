@@ -2,8 +2,10 @@
 // knew of the service (its sync records) and the service's list, and decides per character. Pure, so every case
 // has a test (plan.test.ts); sync.svelte.ts carries the steps out.
 //
-// The rules (decisions.md 2026-11-08 and 2026-11-15): nothing is overwritten without a trace. A character changed
-// here and elsewhere since the last sync keeps this browser's copy as a restore point and takes the service's.
+// The rules (decisions.md 2026-11-08 and 2026-11-15): nothing is overwritten without a trace. Two copies that went
+// apart (changed here and elsewhere since the last sync, or one a device had before its first sync, from a backup
+// say) are a clash: the player picks which copy every device uses, and the other is kept as a restore point here.
+// Newer isn't always right (a copy played on at the table vs. one changed to try something out), so it asks.
 // A change wins over a delete from another device, so a delete never loses work.
 import type { ServerCharacter } from './api.ts';
 
@@ -26,8 +28,8 @@ export interface LocalCharacter {
 export type SyncStep =
   /** New or newer at the service, unchanged here: take the service's copy. */
   | { kind: 'download'; id: string; server: ServerCharacter }
-  /** Changed here and at the service: keep this copy as a restore point, then take the service's. */
-  | { kind: 'conflict'; id: string; server: ServerCharacter }
+  /** Two copies that went apart: the player picks one, the other stays as a restore point here. */
+  | { kind: 'clash'; id: string; server: ServerCharacter }
   /** Changed here (or new): send it over `version` (0 for a character the service doesn't have). */
   | { kind: 'push'; id: string; version: number }
   /** Deleted at the service, unchanged here: delete it here too. */
@@ -99,7 +101,7 @@ export function planSync(
     if (!record) {
       // Known here and there without this browser having synced it: the same copy, or two that went apart.
       if (serverUpdated(found) === character.updated) steps.push({ kind: 'adopt', id, server: found });
-      else if (!hold.has(id)) steps.push({ kind: 'conflict', id, server: found });
+      else if (!hold.has(id)) steps.push({ kind: 'clash', id, server: found });
       return;
     }
     if (record.version === found.version) {
@@ -111,7 +113,7 @@ export function planSync(
       if (changed) steps.push({ kind: 'push', id, version: record.version });
       return;
     }
-    steps.push(changed ? { kind: 'conflict', id, server: found } : { kind: 'download', id, server: found });
+    steps.push(changed ? { kind: 'clash', id, server: found } : { kind: 'download', id, server: found });
   });
 
   // New at the service (from another device), never here.
