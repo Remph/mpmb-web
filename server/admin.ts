@@ -1,5 +1,5 @@
-// The admin page at /admin (Nick's pick, decisions.md 2026-11-15): Nick adds a player and gets their code, or
-// gives a player a new code. Behind ADMIN_PASSWORD, which lives in Plesk's Secrets. A plain form without
+// The admin page at /admin (Nick's pick, decisions.md 2026-11-15): Nick adds a player and gets their code, gives a
+// player a new code, or removes a player (after a second press: no scripts, so no confirm() either). Behind ADMIN_PASSWORD, which lives in Plesk's Secrets. A plain form without
 // scripts: every button posts the form, and the answer is the page again.
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { checkTries, clearFailures, countFailure } from './attempts.ts';
@@ -31,6 +31,13 @@ const TEXT = {
     noDatabase: 'The database isn’t set up (DB_HOST, DB_NAME, DB_USER, DB_PASSWORD).',
     taken: 'That name is taken.',
     noName: 'Type a name first.',
+    remove: 'Remove',
+    removeTitle: (name: string) => `Remove ${name}?`,
+    removeNote:
+      'Their code stops working, and their devices and characters are deleted from the sync. Each device keeps its own copies in its browser.',
+    removeYes: (name: string) => `Yes, remove ${name}`,
+    cancel: 'Cancel',
+    removed: (name: string) => `${name} was removed.`,
   },
   de: {
     title: 'MPMB Web Sync: Spieler',
@@ -54,6 +61,13 @@ const TEXT = {
     noDatabase: 'Die Datenbank ist nicht eingerichtet (DB_HOST, DB_NAME, DB_USER, DB_PASSWORD).',
     taken: 'Den Namen gibt es schon.',
     noName: 'Tippe zuerst einen Namen ein.',
+    remove: 'Entfernen',
+    removeTitle: (name: string) => `${name} entfernen?`,
+    removeNote:
+      'Der Code gilt nicht mehr, und Geräte und Charaktere werden aus dem Sync gelöscht. Jedes Gerät behält seine eigenen Kopien im Browser.',
+    removeYes: (name: string) => `Ja, ${name} entfernen`,
+    cancel: 'Abbrechen',
+    removed: (name: string) => `${name} wurde entfernt.`,
   },
 } as const;
 
@@ -91,6 +105,8 @@ interface PlayerRow {
 export interface AdminView {
   message?: string;
   code?: { name: string; code: string };
+  /** The player a "Remove" press asks about; the second press removes them. */
+  removing?: { id: number; name: string };
   players?: PlayerRow[];
   /** Kept in the form so the next button doesn't need it typed again. */
   password?: string;
@@ -107,10 +123,15 @@ const STYLE = `
     overflow-wrap: anywhere; }
   .message { font-weight: 600; }
   .players { list-style: none; padding: 0; margin-top: 1.5rem; }
-  .players li { display: flex; gap: 0.75rem; align-items: center; justify-content: space-between;
-    padding: 0.5rem 0; border-bottom: 1px solid; }
-  .players li div { min-width: 0; overflow-wrap: anywhere; }
-  .players button { margin-top: 0; flex: none; }
+  .players li { display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem; align-items: center;
+    justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid; }
+  /* On a phone the buttons go under the facts instead of squeezing them into a narrow column. */
+  .players li div { flex: 1 1 16rem; min-width: 0; overflow-wrap: anywhere; }
+  .players li > span { display: flex; gap: 0.5rem; flex: none; }
+  .players button { margin-top: 0; }
+  .ask { padding: 1rem; border: 2px solid; border-radius: 0.5rem; }
+  .ask h2 { margin-top: 0; }
+  .ask button { margin-right: 0.5rem; }
   .facts { font-variant-numeric: tabular-nums; }
 `;
 
@@ -123,7 +144,8 @@ function playerRow(player: PlayerRow, lang: Lang, t: Texts): string {
   return `<li><div><strong>${escapeHtml(player.name)}</strong><br>
     <span class="facts">${t.devices}: ${player.devices} · ${t.characters}: ${player.characters} ·
     ${t.lastSeen}: ${seen}</span></div>
-    <button name="newCode" value="${player.id}">${t.newCode}</button></li>`;
+    <span><button name="newCode" value="${player.id}">${t.newCode}</button>
+    <button name="remove" value="${player.id}">${t.remove}</button></span></li>`;
 }
 
 function playerTable(list: PlayerRow[], lang: Lang, t: Texts): string {
@@ -140,10 +162,20 @@ export function adminPage(lang: Lang, view: AdminView = {}): string {
     ? `<h2>${escapeHtml(t.codeFor(view.code.name))}</h2><p class="code">${view.code.code}</p><p>${t.codeNote}</p>`
     : '';
   const table = view.players ? playerTable(view.players, lang, t) : '';
+  const removing = view.removing;
+  // A form of its own, with the password hidden in it: Enter in a text box presses its form's first button, and in
+  // the main form that would be "Yes, remove" (typing the next name to add would remove this player).
+  const ask = removing
+    ? `<form method="post" action="/admin" class="ask" role="alert">
+      <h2>${escapeHtml(t.removeTitle(removing.name))}</h2><p>${t.removeNote}</p>
+      <input type="hidden" name="password" value="${password}">
+      <button name="removeConfirmed" value="${removing.id}">${escapeHtml(t.removeYes(removing.name))}</button>
+      <button name="action" value="list">${t.cancel}</button></form>`
+    : '';
   return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
     <title>${t.title}</title><style>${STYLE}</style></head><body><h1>${t.title}</h1>
-    ${view.message ? `<p class="message" role="alert">${escapeHtml(view.message)}</p>` : ''}${code}
+    ${view.message ? `<p class="message" role="alert">${escapeHtml(view.message)}</p>` : ''}${code}${ask}
     <form method="post" action="/admin">
       <label>${t.password}<input type="password" name="password" value="${password}" required
         autocomplete="current-password"></label>
@@ -169,8 +201,14 @@ const DUPLICATE = 'ER_DUP_ENTRY';
 const isDuplicate = (error: unknown) =>
   typeof error === 'object' && error !== null && (error as { code?: unknown }).code === DUPLICATE;
 
+const playerId = (value: string | null): number | null => {
+  const id = Number(value);
+  return value && Number.isSafeInteger(id) && id > 0 ? id : null;
+};
+
 /**
- * A posted form: password, then "list", "add" (with a name) or "newCode" (with a player's id). Returns what the
+ * A posted form: password, then "list", "add" (with a name), "newCode", "remove" (asks) or "removeConfirmed"
+ * (removes; the database deletes the player's devices and characters with them), each with a player's id. Returns what the
  * page shows. `adminPassword` is ADMIN_PASSWORD, empty when it isn't set.
  */
 export async function adminPost(
@@ -196,7 +234,11 @@ export async function adminPost(
   }
   await clearFailures(context.db, key);
   const view: AdminView = { password };
-  const newCodeFor = Number(form.get('newCode'));
+  const newCodeFor = playerId(form.get('newCode'));
+  const removeAsk = playerId(form.get('remove'));
+  const removeNow = playerId(form.get('removeConfirmed'));
+  const nameOf = async (id: number) =>
+    (await context.db.rows<{ name: string }>('SELECT name FROM players WHERE id = ?', [id]))[0]?.name;
   if (form.get('action') === 'add') {
     const name = cleanName(form.get('name'), '');
     if (!name) return { ...view, message: t.noName, players: await players(context) };
@@ -212,14 +254,24 @@ export async function adminPost(
       return { ...view, message: t.taken, players: await players(context) };
     }
     view.code = { name, code };
-  } else if (Number.isSafeInteger(newCodeFor) && newCodeFor > 0) {
-    const [player] = await context.db.rows<{ name: string }>('SELECT name FROM players WHERE id = ?', [newCodeFor]);
-    if (player) {
+  } else if (newCodeFor) {
+    const name = await nameOf(newCodeFor);
+    if (name !== undefined) {
       const code = newCode();
       await context.db.change('UPDATE players SET code_hash = ? WHERE id = ?', [await hashCode(code), newCodeFor]);
       // A new code is for a code that got out: the devices that know the old one are signed out.
       await context.db.change('DELETE FROM devices WHERE player_id = ?', [newCodeFor]);
-      view.code = { name: player.name, code };
+      view.code = { name, code };
+    }
+  } else if (removeAsk) {
+    const name = await nameOf(removeAsk);
+    if (name !== undefined) view.removing = { id: removeAsk, name };
+  } else if (removeNow) {
+    const name = await nameOf(removeNow);
+    if (name !== undefined) {
+      // ON DELETE CASCADE (db.ts) takes the player's devices and characters along.
+      await context.db.change('DELETE FROM players WHERE id = ?', [removeNow]);
+      view.message = t.removed(name);
     }
   }
   return { ...view, players: await players(context) };

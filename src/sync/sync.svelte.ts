@@ -24,7 +24,7 @@ import {
 } from './api.ts';
 import type { Fetch, Lease, ServerCharacter, SyncDevice } from './api.ts';
 import { localMeta, packData, serverMeta, unpackData } from './pack.ts';
-import { changedHere, planSync } from './plan.ts';
+import { changedHere, planSync, serverUpdated } from './plan.ts';
 import type { SyncRecord, SyncStep } from './plan.ts';
 
 /** Changes go out at most this often (the service's README asks for "every few seconds at most"). */
@@ -54,6 +54,19 @@ export interface SyncHost {
   /** Another device took over the open character; this one shows it read-only from now. */
   lost(id: string, lease: Lease): void;
   note(kind: 'info' | 'error', text: string): void;
+  /** Two copies of a character went apart: which one every device uses ('later': ask again next time). */
+  pick(clash: Clash): Promise<'here' | 'there' | 'later'>;
+}
+
+/** What the player sees of a clash: the two copies, when each changed, and where the other one comes from. */
+export interface Clash {
+  id: string;
+  name: string;
+  /** When this device's copy changed (ISO). */
+  here: string;
+  /** When the service's copy changed on its device (ms), and that device. */
+  there: number;
+  device: string | null;
 }
 
 /** Whether an error is this status from the service. */
@@ -90,6 +103,8 @@ export class Sync {
   private held: { id: string; timer: ReturnType<typeof setInterval> } | null = null;
   /** The character this device means to hold, set as soon as hold() starts (before the service answers). */
   private wanted: string | null = null;
+  /** Clashes the player put off ("Not now"): left alone until the page loads again. */
+  private readonly postponed = new Set<string>();
   private roundTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -234,7 +249,7 @@ export class Sync {
     const steps: { [K in SyncStep['kind']]: (step: Extract<SyncStep, { kind: K }>) => Promise<boolean> } = {
       push: (s) => this.push(store, s.id, s.version),
       download: (s) => this.download(store, s.id, false),
-      conflict: (s) => this.download(store, s.id, true),
+      clash: (s) => this.settle(store, s.id, s.server),
       remove: async (s) => {
         await store.delete(s.id);
         if (this.host.open()?.id === s.id) this.host.removed(s.id);
@@ -296,6 +311,42 @@ export class Sync {
     }
     if (this.host.open()?.id === id) await this.host.replaced(id);
     return true;
+  }
+
+  /**
+   * A clash: the player picks a copy. The service's: this one becomes a restore point and the service's comes in.
+   * This one: the service's becomes a restore point here, and this one goes out over it (the other devices take
+   * it with their next round). Not now: asked again on the next page load, nothing sent meanwhile.
+   */
+  private async settle(store: CharacterStore, id: string, server: ServerCharacter): Promise<boolean> {
+    const mine = await store.get(id);
+    if (!mine || this.postponed.has(id)) return false;
+    const answer = await this.host.pick({
+      id,
+      name: mine.meta.name,
+      here: mine.meta.updated,
+      // When the copy itself changed on its device (as `here`), not when it reached the service.
+      there: Date.parse(serverUpdated(server) ?? '') || server.updated,
+      device: server.device,
+    });
+    if (answer === 'later') {
+      this.postponed.add(id);
+      return false;
+    }
+    if (answer === 'there') return this.download(store, id, true);
+    const t = this.texts();
+    const full = await this.api.character(id);
+    const meta = localMeta(full.meta, id, mine.meta);
+    if (!meta) return false;
+    await store.addPoint({ meta, data: await unpackData(full.data) }, 'sync');
+    // The answer stands: this copy now counts as a change over the service's version (`pushed` matches no copy),
+    // so a refused push (open on the other device, 423) goes out with a later round instead of asking again and
+    // keeping another restore point each time. Saved there meanwhile (409): a real new clash, asked then.
+    await store.setSync(id, { version: full.version, pushed: '' });
+    await this.push(store, id, full.version);
+    const device = full.device ?? t.syncAnotherDevice;
+    this.host.note('info', fill(t.syncKeptTheirs, { name: mine.meta.name || t.unnamed, device }));
+    return false;
   }
 
   private async sendDelete(store: CharacterStore, id: string, version: number): Promise<boolean> {

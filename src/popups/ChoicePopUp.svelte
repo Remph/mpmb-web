@@ -15,7 +15,6 @@
 
 <Modal title={choice.title} onescape={() => answer(choice.cancel)} closeLabel={t.close}>
   <p class="message">{choice.message}</p>
-  {#if choice.hint}<p class="hint">{choice.hint}</p>{/if}
   {#if choice.lines?.length}
     <ul>
       {#each choice.lines as line, i (i)}
@@ -23,6 +22,8 @@
       {/each}
     </ul>
   {/if}
+  <!-- After the lines: what the answer leads to comes last, under what is being decided. -->
+  {#if choice.hint}<p class="hint">{choice.hint}</p>{/if}
   {#snippet actions()}
     {#each choice.buttons as button (button.value)}
       <button

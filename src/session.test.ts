@@ -15,6 +15,7 @@ import { makeBackup } from './store/backup.ts';
 import { CharacterStore, describeCharacter } from './store/characters.ts';
 import type { StoredCharacter } from './store/characters.ts';
 import type { Locks } from './store/tab-lock.ts';
+import { FakeSync } from '../test/fake-sync.ts';
 import { StandInLocks } from '../test/stand-in-locks.ts';
 import type { WorkerLike } from './worker/client.ts';
 import type { Command, FromWorker, ToWorker } from './worker/protocol.ts';
@@ -97,6 +98,8 @@ async function startSession(
     waitForStart?: boolean;
     /** The player's answer to MPMB's "Reset the whole sheet" question (the bookmark empties the sheet on Yes). */
     reset?: 'yes' | 'no';
+    /** A stand-in sync service this device can connect to. */
+    sync?: FakeSync;
   } = {},
 ): Promise<Session> {
   vi.stubGlobal('indexedDB', tab.browser ?? new IDBFactory());
@@ -134,10 +137,21 @@ async function startSession(
     () => t,
     () => new StandInWorker(answer, tab.hold),
     tab.locks,
+    tab.sync ? { fetcher: tab.sync.fetcher, storage: memoryStorage(), base: 'https://sync.test' } : {},
   );
   const starting = session.start();
   if (tab.waitForStart !== false) await starting;
   return session;
+}
+
+/** The device's account storage: localStorage's three calls on a map. */
+function memoryStorage() {
+  const values = new Map<string, string>();
+  return {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => void values.set(key, value),
+    removeItem: (key: string) => void values.delete(key),
+  };
 }
 
 const pdf = (data: CharacterData | string, name = 'sheet.pdf'): File =>
@@ -320,6 +334,24 @@ describe('removing a character', () => {
     await answer(session, 'delete');
     await removed;
     expect(names(session)).toEqual(['Bert']);
+  });
+
+  test('a synced one: the question says it goes from every device', async () => {
+    const service = new FakeSync();
+    service.addPlayer('Anna', 'orbit-hazard-melt-ripple');
+    const session = await startSession({ sync: service });
+    await session.importPdfs([pdf(sheetOf('Anna'))]);
+    const [anna] = session.characters;
+    if (!anna) throw new Error('Anna was not imported');
+    const local = session.remove(anna);
+    expect((await answer(session, 'cancel')).choice.message).toBe(t.deleteConfirm.replace('{name}', 'Anna'));
+    await local;
+
+    expect(await session.connectSync('orbit-hazard-melt-ripple', 'Laptop')).toBe('ok');
+    const synced = session.remove(anna);
+    expect((await answer(session, 'delete')).choice.message).toBe(t.deleteConfirmSynced.replace('{name}', 'Anna'));
+    await synced;
+    expect(names(session)).toEqual([]);
   });
 });
 

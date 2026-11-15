@@ -9,7 +9,8 @@ IndexedDB as the copy it works on and sends changes here at most every 5 seconds
 
 ## What it does
 
-- **Codes.** Nick adds a player on the admin page and hands them a four-word code ("orbit-hazard-melt-ripple").
+- **Codes.** Nick adds a player on the admin page and hands them a four-word code ("orbit-hazard-melt-ripple"),
+  and can remove a player there again.
   The database keeps only a slow hash of it (scrypt). A device types the code once and gets a token back; the
   token is what every later request carries. After 10 wrong codes from one address, it waits a quarter of an hour.
 - **Characters.** The app saves a character as two parts the service never reads: `meta` (what the character list
@@ -64,6 +65,11 @@ Nick set up the subdomain, Node.js and the database for the hosting test (#101).
    `http://sync.remph.de/health` ends up on `https://`.
 5. **Open `https://sync.remph.de/admin`**, type the admin password and a player's name, Add player: the page shows
    their code once. "New code" gives a player a new one and signs out all their devices (for a code that got out).
+   "Remove" asks once more, then deletes the player with their devices and characters at the service (each device
+   keeps its own copies in its browser).
+
+**Later updates** (a new `dist/app.cjs` only): upload `dist/app.cjs` over the old one, then Restart App and check
+`/health`. The database tables stay as they are.
 
 No npm install: `pnpm build:server` bundles the service with its two libraries into `dist/app.cjs`.
 

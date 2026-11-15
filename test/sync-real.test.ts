@@ -78,6 +78,8 @@ async function device(): Promise<{ store: CharacterStore; sync: Sync; lost: Leas
       removed: () => undefined,
       lost: (_id, lease) => void lost.push(lease),
       note: (_kind, text) => void notes.push(text),
+      // A clash takes the service's copy, so this one is the restore point.
+      pick: async () => 'there',
     },
     () => ui.en,
     undefined,

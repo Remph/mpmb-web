@@ -38,6 +38,7 @@ import { CharacterStore, copyHomebrew, describeCharacter, keepStorage } from './
 import { TabLock, browserLocks } from './store/tab-lock.ts';
 import type { Locks } from './store/tab-lock.ts';
 import { Sync } from './sync/sync.svelte.ts';
+import type { Clash } from './sync/sync.svelte.ts';
 import type { Fetch, Lease } from './sync/api.ts';
 import type { KeyValues } from './sync/account.ts';
 import type { UltCharges } from './homebrew/ult.ts';
@@ -216,6 +217,7 @@ export class Session {
         removed: (id) => this.removedElsewhere(id),
         lost: (id, lease) => this.lostToOtherDevice(id, lease),
         note: (kind, text) => void this.note(kind, text),
+        pick: (clash) => this.pickCopy(clash),
       },
       texts,
       syncWith.fetcher,
@@ -561,6 +563,35 @@ export class Session {
     // The newest copy before it opens; offline it opens as saved here.
     if (hold.held || 'lease' in hold) await this.sync.round(true);
     return this.watching;
+  }
+
+  /**
+   * Two copies of a character went apart (sync): the player picks the one every device uses, like a game's cloud
+   * save. The newer one is the main button, but only a suggestion: the newer copy may be a try-out.
+   */
+  private async pickCopy(clash: Clash): Promise<'here' | 'there' | 'later'> {
+    const t = this.t;
+    const name = clash.name || t.unnamed;
+    const device = clash.device ?? t.syncAnotherDevice;
+    const when = (at: number) =>
+      new Date(at).toLocaleString(t.locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const hereNewer = Date.parse(clash.here) >= clash.there;
+    return this.popUps.choose<'here' | 'there' | 'later'>({
+      title: fill(t.syncClashTitle, { name }),
+      message: fill(t.syncClashMessage, { name, device }),
+      // Two saves in the same minute look alike: the newer one says so.
+      lines: [
+        fill(t.syncClashHere, { when: when(Date.parse(clash.here)) }) + (hereNewer ? ` · ${t.syncClashNewer}` : ''),
+        fill(t.syncClashThere, { device, when: when(clash.there) }) + (hereNewer ? '' : ` · ${t.syncClashNewer}`),
+      ],
+      hint: t.syncClashHint,
+      buttons: [
+        { value: 'later', label: t.syncClashLater },
+        { value: 'there', label: fill(t.syncClashTakeThere, { device }), primary: !hereNewer },
+        { value: 'here', label: t.syncClashKeepHere, primary: hereNewer },
+      ],
+      cancel: 'later',
+    });
   }
 
   /** A time of day as the player's language writes it ("19:42"). */
@@ -1356,9 +1387,11 @@ export class Session {
   // ---- Delete, back up, restore ----
 
   async remove(meta: CharacterMeta): Promise<void> {
+    // A synced character goes from every device, not only this browser: the question says so.
+    const synced = this.sync.on && !!this.store && (await this.store.syncRecords()).has(meta.id);
     const answer = await this.popUps.choose({
       title: this.t.deleteTitle,
-      message: fill(this.t.deleteConfirm, { name: meta.name || this.t.unnamed }),
+      message: fill(synced ? this.t.deleteConfirmSynced : this.t.deleteConfirm, { name: meta.name || this.t.unnamed }),
       buttons: [
         { value: 'cancel', label: this.t.cancel },
         { value: 'delete', label: this.t.delete, danger: true },
