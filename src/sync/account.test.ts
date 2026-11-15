@@ -15,11 +15,17 @@ describe('the account', () => {
   test('is remembered and forgotten; never the code itself', () => {
     const storage = memory();
     expect(readAccount(storage)).toBeNull();
-    const account = { token: 't', player: 'Anna', device: 3, name: 'iPad' };
+    const account = { token: 't', player: 'Anna', device: 3, name: 'iPad', auto: false, lastSync: 1_000 };
     writeAccount(account, storage);
     expect(readAccount(storage)).toEqual(account);
     writeAccount(null, storage);
     expect(readAccount(storage)).toBeNull();
+  });
+
+  test('one remembered before the auto sync switch syncs by itself', () => {
+    const storage = memory();
+    storage.setItem('mpmb-web.sync', JSON.stringify({ token: 't', player: 'Anna', device: 3, name: 'iPad' }));
+    expect(readAccount(storage)).toMatchObject({ auto: true, lastSync: null });
   });
 
   test('a broken or blocked storage reads as no account', () => {

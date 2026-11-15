@@ -37,6 +37,22 @@ describe('planSync with the service list', () => {
     ]);
   });
 
+  test('a character left out (kept here for now): nothing goes out, nothing comes in, and it is not new there', () => {
+    const there = [server('a', 3, T2), server('b', 1, T1)];
+    const steps = planSync(
+      [
+        { id: 'a', updated: T3 },
+        { id: 'b', updated: T2 },
+        { id: 'c', updated: T1 },
+      ],
+      records({ a: { version: 2, pushed: T1 }, b: { version: 1, pushed: T1 } }),
+      there,
+      new Set(),
+      new Set(['a', 'b', 'c']),
+    );
+    expect(steps).toEqual([]);
+  });
+
   test('newer there: unchanged here takes it; changed here too is a clash (the player picks)', () => {
     const there = [server('a', 3, T3)];
     const record = records({ a: { version: 2, pushed: T1 } });

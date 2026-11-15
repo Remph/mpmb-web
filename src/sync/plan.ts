@@ -54,13 +54,15 @@ export const serverUpdated = (server: ServerCharacter): string | undefined => {
 /**
  * The steps for one sync round. `server` null: push only (between full rounds, after a save; the service's list
  * isn't asked for). `hold`: characters left alone except for pushes (the one open here, while this device edits
- * it: a download would swap the sheet under the player).
+ * it: a download would swap the sheet under the player). `leave`: characters left out of this round altogether
+ * (with auto sync off, the player kept their changes on this device for now: nothing goes out, nothing comes in).
  */
 export function planSync(
   local: LocalCharacter[],
   records: ReadonlyMap<string, SyncRecord>,
   server: ServerCharacter[] | null,
   hold: ReadonlySet<string> = new Set(),
+  leave: ReadonlySet<string> = new Set(),
 ): SyncStep[] {
   const steps: SyncStep[] = [];
   const here = new Map(local.map((c) => [c.id, c]));
@@ -81,6 +83,7 @@ export function planSync(
   });
 
   here.forEach((character, id) => {
+    if (leave.has(id)) return;
     const record = records.get(id);
     const changed = changedHere(character, record);
     if (!server) {

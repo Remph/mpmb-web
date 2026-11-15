@@ -122,3 +122,66 @@ test('a character made on the laptop shows on the iPad, read only while open the
   await laptopContext.close();
   await ipadContext.close();
 });
+
+test('with auto sync off, a change stays on this device until Sync now sends it', async ({ browser }) => {
+  const service = new FakeSync();
+  service.addPlayer('Anna', CODE);
+  const context = await browser.newContext();
+  await routeSync(context, service);
+  const page = await context.newPage();
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  const changesAlert = page.getByRole('dialog', { name: 'Changes alert' });
+  await page.addLocatorHandler(changesAlert, async () => {
+    await changesAlert.getByRole('button', { name: 'Close', exact: true }).last().click();
+  });
+  const puts = (): number => service.log.filter((line) => line.startsWith('PUT')).length;
+
+  await connect(page, 'PC');
+  await page.getByRole('button', { name: 'New character' }).click();
+  await page
+    .getByRole('dialog', { name: 'Source selection' })
+    .getByRole('button', { name: 'Apply' })
+    .click({ timeout: STARTUP });
+  await page.getByRole('link', { name: 'Done: to the play view' }).click({ timeout: STARTUP });
+  await expect(page.getByText('✓ Synced', { exact: true })).toBeVisible({ timeout: SYNCED });
+
+  // The switch off; a try-out on the sheet says it is saved on this device only, and nothing goes out.
+  await page.getByRole('link', { name: '← Characters' }).click();
+  const auto = page.getByRole('switch', { name: 'Sync automatically' });
+  await auto.click();
+  await expect(auto).toHaveAttribute('aria-checked', 'false');
+  await expect(page.getByRole('heading', { name: 'Syncs when you say so' })).toBeVisible();
+  const sent = puts();
+  await page.locator('.characters a.card').first().click();
+  await page.getByRole('tab', { name: 'Notes' }).click({ timeout: STARTUP });
+  const notes = page.getByRole('textbox', { name: 'Notes', exact: true });
+  await notes.fill('A try-out');
+  await notes.blur();
+  await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible({ timeout: SYNCED });
+  await page.getByRole('link', { name: '← Characters' }).click();
+  await expect(page.locator('.characters li').first()).toContainText('only on this device so far');
+  await expect(page.getByText(/^1 character changed here/)).toBeVisible();
+
+  // Sync now, keeping it here: still nothing out. Then sending it.
+  const syncNow = page.getByRole('button', { name: 'Sync now' });
+  const window = page.getByRole('dialog', { name: 'Sync now' });
+  await syncNow.click();
+  await window.getByRole('combobox').selectOption('keep');
+  await window.getByRole('button', { name: 'Sync now' }).click();
+  await expect(window).toBeHidden();
+  await expect(page.getByText(/^1 character changed here · last sync/)).toBeVisible();
+  expect(puts()).toBe(sent);
+  await syncNow.click();
+  await window.getByRole('button', { name: 'Sync now' }).click();
+  await expect(page.locator('.characters li').first()).toContainText('☁ synced');
+  expect(puts()).toBe(sent + 1);
+
+  // Back on: nothing waits, so no question; it syncs by itself again.
+  await auto.click();
+  await expect(auto).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByRole('heading', { name: 'Synced with your code' })).toBeVisible({ timeout: SYNCED });
+  await expect(syncNow).toBeHidden();
+  expect(errors).toEqual([]);
+  await context.close();
+});

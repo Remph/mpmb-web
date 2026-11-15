@@ -10,6 +10,13 @@ export interface Account {
   device: number;
   /** This device's name, shown to the player's other devices. */
   name: string;
+  /**
+   * Whether this device syncs by itself (the usual case). Off, it syncs only when the player taps "Sync now": for
+   * trying things out on one device without the saves reaching the others (Nick, 2026-11-15).
+   */
+  auto: boolean;
+  /** When this device last finished a sync round (ms since 1970): the start page says so while auto sync is off. */
+  lastSync: number | null;
 }
 
 const KEY = 'mpmb-web.sync';
@@ -34,6 +41,9 @@ export function readAccount(storage: KeyValues | null = browserStorage()): Accou
       player: String(value.player ?? ''),
       device: value.device,
       name: String(value.name ?? ''),
+      // Accounts from before the switch sync by themselves.
+      auto: value.auto !== false,
+      lastSync: typeof value.lastSync === 'number' ? value.lastSync : null,
     };
   } catch {
     return null;

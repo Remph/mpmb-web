@@ -7,6 +7,11 @@
 // - a full round (the service's list, then pushes and downloads) when the page opens, every FULL_ROUND_MS, when
 //   the page comes back into view or the network comes back, and before a character opens;
 // - while a character is open for changes, its lease every LEASE_RENEW_MS, so another device sees "open on …".
+//
+// With auto sync off (the player's switch, per device; Nick 2026-11-15: trying things out on the PC without the saves
+// reaching the Surface), none of that: the device saves as before and talks to the service only when the player taps
+// "Sync now". It holds no leases either, since it sends nothing by itself; copies that went apart meanwhile are a
+// clash at the next "Sync now", answered by the player as ever.
 import type { Texts } from '../i18n.ts';
 import { fill } from '../i18n.ts';
 import type { CharacterStore } from '../store/characters.ts';
@@ -36,9 +41,30 @@ export const LEASE_RENEW_MS = 45_000;
 
 /**
  * What the start page and the top bar say. `synced`: nothing waiting; `waiting`: changes go out in a moment;
- * `syncing`: talking to the service; `offline`: it didn't answer, changes wait here.
+ * `syncing`: talking to the service; `offline`: it didn't answer, changes wait here; `manual`: auto sync is off,
+ * nothing happens until the player taps "Sync now".
  */
-export type SyncState = 'off' | 'synced' | 'waiting' | 'syncing' | 'offline';
+export type SyncState = 'off' | 'synced' | 'waiting' | 'syncing' | 'offline' | 'manual';
+
+/**
+ * What "Sync now" does with a character changed here (auto sync off): `send` it, `keep` it on this device for now
+ * (left out of the round: nothing goes out, nothing comes in), or `take` the synced copy (this one becomes a
+ * restore point). Characters not named are sent.
+ */
+export type SyncChoice = 'send' | 'keep' | 'take';
+
+/** A character changed here since the last sync, for "Sync now"; `known`: the service has a copy to take instead. */
+export interface WaitingCharacter {
+  id: string;
+  name: string;
+  updated: string;
+  known: boolean;
+}
+
+/** A round the player asked for ("Sync now"); the only kind that runs with auto sync off. */
+interface ByHand {
+  choices: Readonly<Record<string, SyncChoice>>;
+}
 
 /** What the sync needs of the session around it. */
 export interface SyncHost {
@@ -106,6 +132,8 @@ export class Sync {
   /** Clashes the player put off ("Not now"): left alone until the page loads again. */
   private readonly postponed = new Set<string>();
   private roundTimer: ReturnType<typeof setInterval> | null = null;
+  /** The round running is one the player asked for: a push refused because it's open elsewhere says so. */
+  private byHand = false;
 
   constructor(
     private readonly host: SyncHost,
@@ -115,13 +143,23 @@ export class Sync {
     base?: string,
   ) {
     this.account = readAccount(storage);
-    // With an account the page starts with a round (start()).
-    this.state = this.account ? 'syncing' : 'off';
+    // With an account the page starts with a round (start()), unless auto sync is off.
+    this.state = !this.account ? 'off' : this.account.auto ? 'syncing' : 'manual';
     this.api = new SyncApi(() => this.account?.token ?? null, base, fetcher);
   }
 
   get on(): boolean {
     return this.account !== null;
+  }
+
+  /** Whether this device syncs by itself (true without an account: nothing to switch off). */
+  get auto(): boolean {
+    return this.account?.auto !== false;
+  }
+
+  /** When this device last finished a sync (ms), as remembered across visits; null before the first. */
+  get lastSync(): number | null {
+    return this.lastContact ?? this.account?.lastSync ?? null;
   }
 
   /** Whether a character has changes this browser hasn't sent yet (null without sync). */
@@ -142,6 +180,10 @@ export class Sync {
    */
   start(): void {
     this.stop();
+    if (!this.auto) {
+      void this.loadRecords();
+      return;
+    }
     this.roundTimer = setInterval(() => void this.round(true), FULL_ROUND_MS);
     if (typeof window !== 'undefined') {
       window.addEventListener('online', this.wake);
@@ -170,6 +212,7 @@ export class Sync {
   changed(): void {
     if (!this.account) return;
     void this.loadRecords();
+    if (!this.auto) return;
     if (this.state === 'synced') this.state = 'waiting';
     if (this.pushTimer) return;
     const wait = Math.max(0, this.lastPush + PUSH_PACE_MS - Date.now());
@@ -191,14 +234,21 @@ export class Sync {
 
   /**
    * One round: `full` reads the service's list too (downloads, deletes from other devices); otherwise only
-   * this browser's changes go out. Rounds run one after the other.
+   * this browser's changes go out. Rounds run one after the other. With auto sync off only a round the player
+   * asked for runs (`byHand`, from syncNow()); the others are dropped.
    */
-  round(full: boolean): Promise<void> {
+  round(full: boolean, byHand?: ByHand): Promise<void> {
     const before = this.running;
     const run = async (): Promise<void> => {
       await before;
-      if (!this.account || !this.host.store()) return;
-      await this.roundNow(full || this.fullSoon);
+      // Checked when its turn comes: the switch may have been turned off while it waited.
+      if (!this.account || !this.host.store() || (!this.account.auto && !byHand)) return;
+      this.byHand = !!byHand;
+      try {
+        await this.roundNow(full || this.fullSoon || !!byHand, byHand?.choices ?? {});
+      } finally {
+        this.byHand = false;
+      }
     };
     const guarded = async (): Promise<void> => {
       try {
@@ -211,7 +261,7 @@ export class Sync {
     return this.running;
   }
 
-  private async roundNow(full: boolean): Promise<void> {
+  private async roundNow(full: boolean, choices: Readonly<Record<string, SyncChoice>>): Promise<void> {
     const store = this.host.store();
     if (!store) return;
     this.state = 'syncing';
@@ -223,14 +273,27 @@ export class Sync {
         this.server = Object.fromEntries(server.map((c) => [c.id, c]));
         this.devices = (await this.api.devices()).devices;
       }
+      // "Take the synced copy": the service's copy comes in first (this one becomes a restore point), so the plan
+      // below sees it unchanged.
+      const takes = Object.keys(choices).filter((id) => choices[id] === 'take' && this.server[id]?.deleted === false);
+      const took = (await inTurn(takes, (id) => this.download(store, id, true))).some(Boolean);
       const records = await store.syncRecords();
       const local = await store.list();
       const open = this.host.open();
-      const steps = planSync(local, records, server, new Set(open?.editing ? [open.id] : []));
-      const changed = (await inTurn(steps, (step) => this.carryOut(store, step, records))).some(Boolean);
+      const leave = new Set(Object.keys(choices).filter((id) => choices[id] === 'keep'));
+      const steps = planSync(local, records, server, new Set(open?.editing ? [open.id] : []), leave);
+      const changed = (await inTurn(steps, (step) => this.carryOut(store, step, records))).some(Boolean) || took;
       this.lastContact = Date.now();
       await this.loadRecords();
       if (changed) await this.host.changed();
+      if (!this.account) return;
+      if (!this.account.auto) {
+        // Remembered across visits: the start page says when this device last synced.
+        this.account = { ...this.account, lastSync: this.lastContact };
+        writeAccount(this.account, this.storage);
+        this.state = 'manual';
+        return;
+      }
       const waiting = (await store.list()).some((c) => changedHere(c, this.records[c.id]));
       this.state = waiting ? 'waiting' : 'synced';
     } catch (err) {
@@ -239,7 +302,7 @@ export class Sync {
         this.signedOut();
         return;
       }
-      this.state = err instanceof SyncOffline ? 'offline' : 'waiting';
+      this.state = err instanceof SyncOffline ? 'offline' : this.account.auto ? 'waiting' : 'manual';
       if (!(err instanceof SyncOffline)) console.warn('Sync failed:', err);
     }
   }
@@ -291,6 +354,10 @@ export class Sync {
         if (this.held?.id === id && err.lease) {
           this.letGo();
           this.host.lost(id, err.lease);
+        } else if (this.byHand && err.lease) {
+          // "Sync now" with auto sync off: the player should know why this one is still waiting.
+          const name = character.meta.name || this.texts().unnamed;
+          this.host.note('info', fill(this.texts().syncWaitsOpenOn, { name, device: err.lease.device }));
         }
       } else console.warn('Sync refused a save:', err);
     }
@@ -396,7 +463,8 @@ export class Sync {
   async hold(id: string, takeOver = false): Promise<Hold> {
     this.letGo();
     this.wanted = id;
-    if (!this.account) return { held: true };
+    // Auto sync off: this device sends nothing by itself, so it doesn't keep the others from opening it.
+    if (!this.account?.auto) return { held: true };
     try {
       await this.api.hold(id, takeOver);
     } catch (err) {
@@ -468,13 +536,61 @@ export class Sync {
     }
   }
 
+  // ---- Auto sync on or off ----
+
+  /**
+   * Turns auto sync on or off for this device. On: the regular rounds start, with one at once. Off: they stop, and
+   * the lease of a character held here goes (it lapses at the service by itself).
+   */
+  setAuto(on: boolean): void {
+    if (!this.account || this.account.auto === on) return;
+    this.account = { ...this.account, auto: on, lastSync: this.lastSync };
+    writeAccount(this.account, this.storage);
+    if (on) {
+      this.state = 'syncing';
+      this.start();
+    } else {
+      this.stop();
+      this.letGo();
+      this.state = 'manual';
+    }
+  }
+
+  /**
+   * "Sync now": one full round, auto sync on or off. `choices`: what happens to each character changed here (see
+   * SyncChoice); the rest are sent.
+   */
+  syncNow(choices: Readonly<Record<string, SyncChoice>> = {}): Promise<void> {
+    if (this.pushTimer) clearTimeout(this.pushTimer);
+    this.pushTimer = null;
+    return this.round(true, { choices });
+  }
+
+  /** The characters changed here since the last sync, oldest change first: what "Sync now" asks about. */
+  async waiting(): Promise<WaitingCharacter[]> {
+    const store = this.host.store();
+    if (!this.account || !store) return [];
+    const records = await store.syncRecords();
+    return (await store.list())
+      .filter((c) => changedHere(c, records.get(c.id)))
+      .sort((a, b) => a.updated.localeCompare(b.updated))
+      .map((c) => ({ id: c.id, name: c.name, updated: c.updated, known: records.has(c.id) }));
+  }
+
   // ---- The code, the devices ----
 
   /** Signs this device in with the player's code and syncs; the reason when it didn't work. */
   async connect(code: string, name: string): Promise<'ok' | 'wrong' | 'wait' | 'offline'> {
     try {
       const answer = await this.api.login(code, name);
-      this.account = { token: answer.token, player: answer.player, device: answer.device, name };
+      this.account = {
+        token: answer.token,
+        player: answer.player,
+        device: answer.device,
+        name,
+        auto: true,
+        lastSync: null,
+      };
       writeAccount(this.account, this.storage);
     } catch (err) {
       if (err instanceof SyncRefused) return err.status === TOO_MANY_TRIES ? 'wait' : 'wrong';
@@ -516,7 +632,8 @@ export class Sync {
     const store = this.host.store();
     const account = this.account;
     if (!store || !account) return 'ok';
-    await this.round(true);
+    // The player asked for it: runs with auto sync off too.
+    await this.round(true, { choices: {} });
     const records = await store.syncRecords();
     const local = await store.list();
     if (local.some((c) => changedHere(c, records.get(c.id))) || [...records.values()].some((r) => r.deleted)) {

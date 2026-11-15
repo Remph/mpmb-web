@@ -50,7 +50,8 @@ class Device {
   /** The player's answer when two copies clash, and the clashes asked about. */
   answer: 'here' | 'there' | 'later' = 'there';
   readonly asked: Clash[] = [];
-  private readonly values = new Map<string, string>();
+  readonly values = new Map<string, string>();
+  host!: SyncHost;
 
   static async on(service: FakeSync): Promise<Device> {
     const device = new Device();
@@ -73,6 +74,7 @@ class Device {
       setItem: (key: string, value: string) => void device.values.set(key, value),
       removeItem: (key: string) => void device.values.delete(key),
     };
+    device.host = host;
     device.sync = new Sync(host, () => ui.en, service.fetcher, storage, BASE);
     return device;
   }
@@ -82,6 +84,14 @@ class Device {
     return field ? String(field.value) : undefined;
   }
 }
+
+const hostOf = (device: Device): SyncHost => device.host;
+/** The device's browser storage, as a new page load would read it. */
+const storageOf = (device: Device) => ({
+  getItem: (key: string) => device.values.get(key) ?? null,
+  setItem: (key: string, value: string) => void device.values.set(key, value),
+  removeItem: (key: string) => void device.values.delete(key),
+});
 
 let service: FakeSync;
 
@@ -405,6 +415,103 @@ describe('open on another device', () => {
     await ipad.sync.round(true);
     expect(await ipad.hp('a')).toBe('3');
     expect(ipad.replaced).toEqual(['a']);
+  });
+});
+
+describe('auto sync off', () => {
+  /** A PC and a Surface both with character 'a' synced, and the PC's switch off. */
+  async function apart(): Promise<{ pc: Device; surface: Device }> {
+    const pc = await Device.on(service);
+    const surface = await Device.on(service);
+    await pc.store.put(character('a', '20'));
+    await pc.sync.connect(CODE, 'PC');
+    await surface.sync.connect(CODE, 'Surface');
+    pc.sync.setAuto(false);
+    service.log.length = 0;
+    return { pc, surface };
+  }
+  const tryOut = async (device: Device, hp: string): Promise<void> => {
+    await device.store.put(character('a', hp, (await device.store.get('a'))!));
+    device.sync.changed();
+  };
+
+  test('a change stays on this device: no push, no round, and the switch is remembered', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    const { pc } = await apart();
+    expect(pc.sync.state).toBe('manual');
+    await tryOut(pc, '3');
+    await vi.advanceTimersByTimeAsync(PUSH_PACE_MS + 120_000);
+    await pc.sync.now(true);
+    await pc.sync.round(true);
+    expect(service.log).toEqual([]);
+    expect(pc.sync.mark((await pc.store.list())[0]!)).toBe('waiting');
+    expect(await service.characters.get(1)?.get('a')?.version).toBe(1);
+
+    // The next visit starts with the switch off and asks the service nothing.
+    const again = new Sync({ ...hostOf(pc), store: () => pc.store }, () => ui.en, service.fetcher, storageOf(pc), BASE);
+    expect(again.auto).toBe(false);
+    expect(again.state).toBe('manual');
+    again.start();
+    await vi.advanceTimersByTimeAsync(120_000);
+    again.stop();
+    expect(service.log).toEqual([]);
+  });
+
+  test('opening a character holds no lease, so the other device opens it without asking', async () => {
+    const { pc, surface } = await apart();
+    expect(await pc.sync.hold('a')).toEqual({ held: true });
+    expect(service.log).toEqual([]);
+    expect(await surface.sync.hold('a')).toEqual({ held: true });
+  });
+
+  test('"Sync now" sends a change, or keeps it here, or takes the synced copy instead', async () => {
+    const { pc, surface } = await apart();
+    await tryOut(pc, '3');
+    expect(await pc.sync.waiting()).toMatchObject([{ id: 'a', name: 'Anna', known: true }]);
+
+    // Kept here: nothing goes out and nothing comes in, though the Surface changed it meanwhile.
+    await tryOut(surface, '15');
+    await surface.sync.round(false);
+    await pc.sync.syncNow({ a: 'keep' });
+    expect(await pc.hp('a')).toBe('3');
+    expect(pc.asked).toEqual([]);
+    expect(await service.characters.get(1)?.get('a')?.data).toBeDefined();
+    expect(pc.sync.lastSync).not.toBeNull();
+    expect(pc.sync.state).toBe('manual');
+
+    // Take the synced copy: the Surface's comes in, the try-out stays as a restore point.
+    await pc.sync.syncNow({ a: 'take' });
+    expect(await pc.hp('a')).toBe('15');
+    expect((await pc.store.points('a')).map((p) => [p.reason, p.data.fields['HP Current']?.value])).toEqual([
+      ['sync', '3'],
+    ]);
+    expect(pc.sync.mark((await pc.store.list())[0]!)).toBe('synced');
+    expect(await pc.sync.waiting()).toEqual([]);
+
+    // Send it: goes out like an automatic push.
+    await tryOut(pc, '9');
+    await pc.sync.syncNow();
+    await surface.sync.round(true);
+    expect(await surface.hp('a')).toBe('9');
+  });
+
+  test('"Sync now" while the other device has it open says why the change still waits', async () => {
+    const { pc, surface } = await apart();
+    await tryOut(pc, '3');
+    await surface.sync.hold('a');
+    await pc.sync.syncNow();
+    expect(pc.notes).toContain(ui.en.syncWaitsOpenOn.replace('{name}', 'Anna').replace('{device}', 'Surface'));
+    expect(pc.sync.mark((await pc.store.list())[0]!)).toBe('waiting');
+  });
+
+  test('back on, it syncs at once', async () => {
+    const { pc, surface } = await apart();
+    await tryOut(surface, '15');
+    await surface.sync.round(false);
+    pc.sync.setAuto(true);
+    await vi.waitFor(async () => expect(await pc.hp('a')).toBe('15'));
+    pc.sync.stop();
+    expect(pc.sync.auto).toBe(true);
   });
 });
 
