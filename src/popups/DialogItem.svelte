@@ -501,4 +501,19 @@
       min-width: auto;
     }
   }
+
+  /*
+   * Phones (UI review 2, finding 16): MPMB's columns of groups (Source Selection's three) wrap under each other
+   * instead of running past the right edge, where nothing could reach them. Columns that still fit side by side at
+   * 14 rem stay together. Tables keep their columns: their cells must line up (they scroll instead, see above).
+   */
+  @media (max-width: 499px) {
+    .group.row:not(:global(.table)):has(> :global(.group)) {
+      flex-wrap: wrap;
+    }
+
+    .group.row:not(:global(.table)) > :global(.group) {
+      flex: 1 1 14rem;
+    }
+  }
 </style>

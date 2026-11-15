@@ -154,8 +154,13 @@
     opacity: 0;
   }
 
+  /*
+   * Side by side while both words fit; under a narrow portrait (a phone's Profile tab) "Remove" / German "Entfernen"
+   * takes a row of its own instead of being cut (found in the #94 review).
+   */
   .acts {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.375rem;
   }
 
@@ -163,7 +168,7 @@
   .acts button {
     display: inline-flex;
     position: relative;
-    flex: 1;
+    flex: 1 1 auto;
     align-items: center;
     justify-content: center;
     min-height: 44px;
@@ -177,7 +182,15 @@
     cursor: pointer;
   }
 
+  /* Each as wide as its word at least (the quiet one's box was narrower than "Entfernen"); they share what is left. */
+  .button,
+  .acts button {
+    min-width: max-content;
+  }
+
+  /* Borderless, so it needs little padding: German "Ändern" and "Entfernen" fit side by side under the portrait. */
   .acts button.quiet {
+    padding-inline: 0.25rem;
     border-color: transparent;
     background: none;
     color: var(--ink-muted);
