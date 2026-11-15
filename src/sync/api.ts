@@ -152,4 +152,17 @@ export class SyncApi {
   release(id: string): Promise<void> {
     return this.call('DELETE', `/characters/${encodeURIComponent(id)}/lease`);
   }
+
+  /** The group's Lager (M16); only `{version}` when it is still at `since`. */
+  lager(since: number | null): Promise<unknown> {
+    return this.call('GET', since === null ? '/lager' : `/lager?since=${since}`);
+  }
+
+  /**
+   * Changes to the Lager; the answer is the Lager after them. `request` names this request: sent again with the same
+   * one after a lost answer, the service applies it only once.
+   */
+  changeLager(ops: readonly object[], request: string): Promise<unknown> {
+    return this.call('POST', '/lager', { ops, request });
+  }
 }

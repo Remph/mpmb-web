@@ -2,7 +2,8 @@
 // The app's sync (src/sync/) against the real service (server/) on a real MySQL or MariaDB, so the app and the
 // service can't drift apart while each passes its own tests against a stand-in. Runs, like server/sync.test.ts,
 // only when TEST_DB_HOST, TEST_DB_USER and TEST_DB_PASSWORD reach a database server, with its own empty database
-// in TEST_APP_DB_NAME (not server/sync.test.ts's: test files run side by side and wipe their tables).
+// in TEST_APP_DB_NAME (not server/sync.test.ts's: test files run side by side and wipe their tables). The Lager
+// (M16) too: what the app shows at once (applyOps) must be what the service then answers.
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { IDBFactory } from 'fake-indexeddb';
@@ -15,7 +16,9 @@ import { ui } from '../src/i18n.ts';
 import { CharacterStore, describeCharacter } from '../src/store/characters.ts';
 import type { StoredCharacter } from '../src/store/characters.ts';
 import { Sync } from '../src/sync/sync.svelte.ts';
-import type { Lease } from '../src/sync/api.ts';
+import { SyncApi, type Lease } from '../src/sync/api.ts';
+import { LagerStore } from '../src/lager/lager.svelte.ts';
+import type { Lager, Op } from '../src/lager/lager.ts';
 
 const env = process.env;
 const settings = {
@@ -174,5 +177,61 @@ describe.skipIf(!settings.DB_HOST || !settings.DB_NAME)('the app’s sync on the
 
     expect(await ipad.sync.forgetThisDevice()).toBe('ok');
     expect((await laptop.sync.listDevices())?.map((d) => d.name)).toEqual(['Laptop']);
+  });
+
+  it('shows a Lager change at once as the service then makes it, and on the other device', async () => {
+    const code = await addPlayer('Anna');
+    const lagerOf = async (name: string) => {
+      let token: string | null = null;
+      const api = new SyncApi(() => token, base);
+      token = (await api.login(code, name)).token;
+      const store = new LagerStore(api, () => 'Anna');
+      await store.refresh();
+      return store;
+    };
+    const laptop = await lagerOf('Laptop');
+    const ipad = await lagerOf('iPad');
+    expect(laptop.status).toBe('ready');
+    // The times differ by the request's way there; everything else must match.
+    const plain = (lager: Lager | null) => ({
+      ...lager,
+      version: 0,
+      updated: 0,
+      items: lager?.items.map((item) => ({ ...item, updated: 0 })),
+    });
+    const rounds: Op[][] = [
+      [
+        { op: 'addGroup', id: 'g1', name: 'Magic items', kind: 'place' },
+        { op: 'addGroup', id: 'g2', name: 'Materials', kind: 'count' },
+        { op: 'add', id: 'a', group: 'g1', name: 'Goggles of Night', count: 1, place: 'Lager', note: 'Darkvision.' },
+        { op: 'add', id: 'b', group: 'g2', name: 'Iron Ore', count: 2, place: '', note: '' },
+        { op: 'add', id: 'x', group: 'nowhere', name: 'Lost', count: 1, place: '', note: '' },
+        { op: 'gold', to: 123_450 },
+        { op: 'goldNote', note: 'for the ship' },
+      ],
+      [
+        { op: 'count', id: 'b', by: -5 },
+        { op: 'set', id: 'a', place: 'Aria', note: 'Darkvision, 60 feet.' },
+        { op: 'set', id: 'a', group: 'g2' },
+        { op: 'set', id: 'a', group: 'nowhere', name: 'Goggles' },
+        { op: 'renameGroup', id: 'g2', name: 'Stuff' },
+        { op: 'gold', by: -450 },
+      ],
+      [
+        { op: 'remove', id: 'b' },
+        { op: 'removeGroup', id: 'g1' },
+      ],
+    ];
+    // One round after the other, each checked as it comes back.
+    await rounds.reduce(async (done, ops) => {
+      await done;
+      const sent = laptop.change(ops);
+      const shown = plain(laptop.lager);
+      expect(await sent).toBe(true);
+      expect(plain(laptop.lager)).toEqual(shown);
+    }, Promise.resolve());
+    await ipad.refresh();
+    expect(plain(ipad.lager)).toEqual(plain(laptop.lager));
+    expect(ipad.lager).toMatchObject({ copper: 123_000, by: 'Anna', groups: [{ name: 'Stuff' }] });
   });
 });

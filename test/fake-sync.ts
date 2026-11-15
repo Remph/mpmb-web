@@ -1,7 +1,9 @@
 // A stand-in for the sync service (server/sync.ts) in memory, for the app's tests: the same routes, answers and
 // refusals (401, 404, 409, 423, 429), without MySQL. The unit tests call it through `fetcher`, the browser tests
 // (e2e/sync.spec.ts) through Playwright's request routing. server/sync.test.ts tests the real service; when the two
-// disagree, the real one is right and this one gets fixed.
+// disagree, the real one is right and this one gets fixed. The Lager (M16) changes by the app's own applyOps, which
+// test/sync-real.test.ts checks against the real service.
+import { applyOps, EMPTY_LAGER, type Lager, type Op } from '../src/lager/lager.ts';
 
 const LEASE_MS = 120_000;
 const MAX_TRIES = 10;
@@ -87,6 +89,10 @@ export class FakeSync {
   readonly log: string[] = [];
   /** While true, every request fails as if the network were down. */
   offline = false;
+  /** The group's Lager. */
+  lager: Lager = EMPTY_LAGER;
+  /** The Lager requests' ids seen so far. */
+  private readonly requests = new Set<string>();
   private failures = 0;
   private nextDevice = 1;
 
@@ -186,6 +192,7 @@ export class FakeSync {
       this.devices.splice(at, 1);
       return answer(NO_CONTENT);
     }
+    if (path === '/lager') return this.lagerRoute(method, url, device, input);
     if (method === 'GET' && path === '/characters') {
       const list = [...mine.values()].sort((a, b) => b.updated - a.updated).map((c) => this.summary(c));
       return answer(OK, { characters: list });
@@ -250,6 +257,28 @@ export class FakeSync {
       return answer(OK, { version: c.version, updated: this.now });
     }
     return refuse(NOT_FOUND, 'no such route');
+  }
+
+  /** GET /lager[?since=] and POST /lager {ops}, as server/lager.ts answers them. */
+  private lagerRoute(method: string, url: string, device: FakeDevice, input: Record<string, unknown>): FakeAnswer {
+    if (method === 'GET') {
+      const since = new URL(url).searchParams.get('since');
+      return answer(
+        OK,
+        since !== null && Number(since) === this.lager.version ? { version: this.lager.version } : this.lager,
+      );
+    }
+    if (method !== 'POST') return refuse(NOT_FOUND, 'no such route');
+    const ops = input.ops;
+    if (!Array.isArray(ops) || !ops.length) return refuse(BAD_REQUEST, 'bad body');
+    // A request sent again (after a lost answer) changes nothing the second time, as server/lager.ts.
+    const request = typeof input.request === 'string' ? input.request : null;
+    if (request !== null && this.requests.has(request)) return answer(OK, this.lager);
+    if (request !== null) this.requests.add(request);
+    const player = this.players.find((p) => p.id === device.player)?.name ?? '';
+    const next = applyOps(this.lager, ops as Op[], player, this.now);
+    this.lager = { ...next, version: this.lager.version + 1 };
+    return answer(OK, this.lager);
   }
 
   /** The service as `fetch` (the unit tests' SyncApi uses it). */
