@@ -143,13 +143,6 @@
   /** The Spells tab only for a character with spell sheet pages. */
   const hasSpells = $derived(readSpells(open.fields).length > 0);
   const shownTab = $derived((wide && tab === 'checks') || (tab === 'spells' && !hasSpells) ? 'combat' : tab);
-  // The roll card (M14) belongs to the place it was rolled from: another tab, page or character closes it, so its
-  // Mark never reaches a pop-up that is no longer there.
-  $effect(() => {
-    void [shownTab, open.meta.id, shownPrefix, shownFormKey];
-    dice.close();
-  });
-  onDestroy(() => dice.close());
   const phoneTabs = $derived(tabs.filter(([key]) => !MORE_TABS.includes(key)));
 
   // Companion pages (Remph picked B, 2026-11-04): the bar under the top bar switches all three columns to a
@@ -205,6 +198,15 @@
     return key && forms.some((f) => formKey(f) === key) ? key : null;
   });
   const shownForm = $derived(forms.find((f) => formKey(f) === shownFormKey) ?? null);
+  // The roll card (M14) belongs to the place it was rolled from: another tab, page or character closes it, so its
+  // Mark never reaches a pop-up that is no longer there.
+  // A string, so a save that hands in a new `open` object (same character) doesn't count as a new place.
+  const rollPlace = $derived(`${open.meta.id}|${shownTab}|${shownPrefix}|${shownFormKey}`);
+  $effect(() => {
+    void rollPlace;
+    dice.close();
+  });
+  onDestroy(() => dice.close());
   const formShape = $derived(shownForm && formAsCompanion(shownForm, t.formKind));
 
   function showForm(key: string) {
