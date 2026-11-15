@@ -154,7 +154,10 @@
     const bonus = bonusOf(value);
     if (bonus === null) return (marking = true);
     const mark = () => (marking = true);
-    dice.d20({ title: t.initiative, bonus, mode: modeOf(initiativeEdge, initiativeDouble), mark });
+    dice.d20(
+      { title: t.initiative, bonus, mode: modeOf(initiativeEdge, initiativeDouble), mark },
+      { from: initiativeTile },
+    );
   }
   /** Focus goes back to the tile once the pop-up is gone (while it is open the page is inert). */
   async function closeMark() {

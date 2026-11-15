@@ -60,7 +60,7 @@
     const bonus = bonusOf(shown);
     const boxes = what.kind === 'save' ? `${what.key} ST` : what.key;
     if (bonus === null) return open(what, row);
-    dice.d20({ title, bonus, mode: modeOf(e, doubled(boxes, e)), mark: () => open(what, row) });
+    dice.d20({ title, bonus, mode: modeOf(e, doubled(boxes, e)), mark: () => open(what, row) }, { from: row });
   }
 
   /** Focus can only move once the pop-up is gone: while it is open, the page behind it is inert. */

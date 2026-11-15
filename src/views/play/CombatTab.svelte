@@ -87,13 +87,16 @@
   function rollAttack(attack: Attack, button: HTMLButtonElement) {
     const bonus = bonusOf(attack.toHit);
     if (bonus === null) return openMark(button);
-    dice.d20({
-      title: fill(t.attackRollsOf, { name: attack.name }),
-      bonus,
-      mode: modeOf(attackEdge, attackDouble),
-      mark: () => openMark(button),
-      damage: damageOf(attack),
-    });
+    dice.d20(
+      {
+        title: fill(t.attackRollsOf, { name: attack.name }),
+        bonus,
+        mode: modeOf(attackEdge, attackDouble),
+        mark: () => openMark(button),
+        damage: damageOf(attack),
+      },
+      { from: button },
+    );
   }
 
   async function closeMark() {
@@ -214,7 +217,8 @@
               type="button"
               class="badge damage"
               aria-label={`${fill(t.diceDamageTitle, { name: attack.name })} ${attack.damage} ${attack.damageType}`}
-              onclick={() => dice.damage(damage)}>{attack.damage} <small>{attack.damageType}</small></button
+              onclick={(ev) => dice.damage(damage, { from: ev.currentTarget })}
+              >{attack.damage} <small>{attack.damageType}</small></button
             >
           {:else}
             <span class="badge damage">{attack.damage} <small>{attack.damageType}</small></span>

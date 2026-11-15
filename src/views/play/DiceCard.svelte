@@ -46,19 +46,41 @@
   const damage = $derived(shown.kind === 'd20' ? shown.ask.damage : undefined);
 
   function again(mode?: RollMode) {
-    if (shown.kind === 'd20') dice.d20(shown.ask, mode);
-    else dice.damage(shown.ask, shown.crit);
+    if (shown.kind === 'd20') dice.d20(shown.ask, { mode });
+    else dice.damage(shown.ask, { crit: shown.crit });
+  }
+
+  let card: HTMLElement | undefined = $state();
+
+  /**
+   * Closes the card. If the focus was in it (✕, or Escape after "Again"), it goes back to the number the roll came
+   * from: the card's buttons are gone, and a lost focus falls to the top of the page.
+   */
+  function close() {
+    const from = dice.from;
+    const inside = !!card?.contains(document.activeElement);
+    dice.close();
+    if (inside) from?.focus();
   }
 
   /** Escape closes the card, unless a window is open (its own Escape comes first). */
   function onkeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && !document.querySelector('dialog[open]')) dice.close();
+    if (event.key === 'Escape' && !document.querySelector('dialog[open]')) close();
   }
+
+  // Mock B outlines the number the card's roll came from (app.css `[data-rolled]`), so the eye finds it again.
+  // An attribute on another component's element: that component doesn't own it, so this one puts it back.
+  $effect(() => {
+    const from = dice.from;
+    if (!from) return;
+    from.dataset.rolled = '';
+    return () => delete from.dataset.rolled;
+  });
 </script>
 
 <svelte:window {onkeydown} />
 
-<section class="card" aria-label={t.diceCard}>
+<section class="card" aria-label={t.diceCard} bind:this={card}>
   <div class="head">
     <h2>{title}</h2>
     {#if shown.kind === 'd20' && shown.ask.mark}
@@ -70,7 +92,7 @@
         onclick={shown.ask.mark}>{t.diceMark}</button
       >
     {/if}
-    <button type="button" class="x" aria-label={t.close} onclick={() => dice.close()}>
+    <button type="button" class="x" aria-label={t.close} onclick={close}>
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
         ><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg
       >
@@ -113,7 +135,7 @@
 
   <div class="acts">
     {#if damage}
-      <button type="button" class="main" onclick={() => dice.damage(damage, crit)}
+      <button type="button" class="main" onclick={() => dice.damage(damage, { crit })}
         >{fill(crit ? t.diceCritDamage : t.diceDamage, { formula: damageText(damage, crit) })}</button
       >
     {/if}

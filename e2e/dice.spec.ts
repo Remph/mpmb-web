@@ -89,6 +89,9 @@ test('a tap on the to-hit rolls it, the card rolls the damage, a marked skill ro
 
   await page.getByRole('button', { name: '+2 Halberd attack roll +8', exact: true }).click();
   await expect(card.getByRole('heading', { name: '+2 Halberd attack roll' })).toBeVisible();
+  // The number the roll came from is ringed while the card shows it (mock B).
+  const hit = page.getByRole('button', { name: '+2 Halberd attack roll +8', exact: true });
+  await expect(hit).toHaveAttribute('data-rolled');
   const attack = await readCard(page);
   expect(attack.dice).toHaveLength(1);
   expect(attack.total).toBe((attack.dice[0] ?? 0) + HALBERD_BONUS);
@@ -137,8 +140,25 @@ test('a tap on the to-hit rolls it, the card rolls the damage, a marked skill ro
   await page.keyboard.press('Escape');
   await expect(card).toHaveCount(0);
 
-  // Initiative rolls from its tile.
-  await page.getByRole('button', { name: 'Initiative 0', exact: true }).click();
+  await expect(stealth).not.toHaveAttribute('data-rolled');
+
+  // Initiative rolls from its tile. Closing the card from its own buttons hands the focus back to the tile (review
+  // of #100: it fell to the top of the page), with Escape after "Again" and with ✕.
+  const initiative = page.getByRole('button', { name: 'Initiative 0', exact: true });
+  await initiative.click();
+  await expect(card.getByRole('heading', { name: 'Initiative' })).toBeVisible();
+  await expect(initiative).toHaveAttribute('data-rolled');
+  await card.getByRole('button', { name: 'Roll again' }).focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Escape');
+  await expect(card).toHaveCount(0);
+  await expect(initiative).toBeFocused();
+  await initiative.click();
+  await card.getByRole('button', { name: 'Close' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(card).toHaveCount(0);
+  await expect(initiative).toBeFocused();
+  await initiative.click();
   await expect(card.getByRole('heading', { name: 'Initiative' })).toBeVisible();
   // Another tab closes the card: its Mark belongs to the place it was rolled from.
   await page.getByRole('tab', { name: 'Spells' }).click();

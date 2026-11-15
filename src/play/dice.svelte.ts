@@ -36,25 +36,32 @@ class Dice {
   shown: Shown | null = $state(null);
   /** Counts the rolls, so the card can tell a new roll from the same one (and announce it again). */
   count = $state(0);
+  /**
+   * The number on the sheet the roll came from: the card outlines it (mock B) and hands the focus back to it when
+   * it closes. A roll from the card's own buttons (damage, again) keeps it. Raw: a DOM element, never a proxy.
+   */
+  from: HTMLElement | null = $state.raw(null);
 
   /** Rolls a d20 for `ask`, in the sheet's mode unless the card's "again with advantage" asks for another. */
-  d20(ask: D20Ask, mode: RollMode = ask.mode) {
+  d20(ask: D20Ask, { mode = ask.mode, from }: { mode?: RollMode; from?: HTMLElement } = {}) {
     const roll = rollD20(mode);
-    this.show({ kind: 'd20', ask, roll, total: roll.result + ask.bonus });
+    this.show({ kind: 'd20', ask, roll, total: roll.result + ask.bonus }, from);
   }
 
   /** Rolls an attack's damage; a critical hit throws every die twice. */
-  damage(ask: DamageAsk, crit = false) {
+  damage(ask: DamageAsk, { crit = false, from }: { crit?: boolean; from?: HTMLElement } = {}) {
     const roll = rollFormula(crit ? critical(ask.formula) : ask.formula);
-    this.show({ kind: 'damage', ask, crit, roll });
+    this.show({ kind: 'damage', ask, crit, roll }, from);
   }
 
   close() {
     this.shown = null;
+    this.from = null;
   }
 
-  private show(shown: Shown) {
+  private show(shown: Shown, from: HTMLElement | undefined) {
     this.shown = shown;
+    if (from) this.from = from;
     this.count += 1;
   }
 }
