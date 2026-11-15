@@ -13,7 +13,8 @@ echo json_encode([
     'service' => 'mpmb-web-sync (PHP fallback)',
     'php' => PHP_VERSION,
     'mysqli' => extension_loaded('mysqli'),
-    'pdo_mysql' => in_array('mysql', PDO::getAvailableDrivers(), true),
+    // Without the PDO extension the class is missing and calling it would end the page with an error.
+    'pdo_mysql' => class_exists('PDO') && in_array('mysql', PDO::getAvailableDrivers(), true),
     'sodium' => extension_loaded('sodium'), // for hashing the players' codes
     'time' => gmdate('c'),
 ]);

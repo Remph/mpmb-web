@@ -36,18 +36,24 @@ The steps for the spike. Write down what each step showed (or a screenshot), esp
    Let Plesk issue its SSL certificate (Let's Encrypt), so the address is `https://`.
 2. **Turn on Node.js for it.** On the subdomain's page, Node.js. If there is no Node.js entry, the webspace
    can't run Node: skip to step 6.
-3. **Upload three files** into the subdomain's folder (for example `sync.remph.de/`), with the same FTP login as
+3. **Upload four files** into the subdomain's folder (for example `sync.remph.de/`), with the same FTP login as
    the deploy:
    - `server/package.json`
+   - `server/start.cjs`
    - `server/dist/app.js`
    - `server/dist/health.js` (both from `pnpm build:server`; they go into a `dist/` folder there too)
-4. **Node.js settings:** Application Root and Document Root the subdomain's folder, Application Startup File
-   `dist/app.js`, the newest Node version offered. Enable Node.js, then Restart App. No NPM install is needed:
-   the service has no dependencies.
+4. **Node.js settings:** Application Root the subdomain's folder, Document Root its `public` folder (Plesk's
+   default; create it empty if it's missing), Application Startup File `start.cjs`, the newest Node version
+   offered. Enable Node.js, then Restart App. No NPM install is needed: the service has no dependencies.
+   - Document Root: the web server hands out every file in it as it is, so it must not be the app's own folder.
+   - `start.cjs`: Plesk starts the app with `require()`, which older Node versions can't use on the service's
+     ES modules; `start.cjs` loads them another way. If Plesk shows an error page instead of the JSON, send it.
 5. **Open `https://sync.remph.de/health`** and send the JSON it shows. Open it again a minute later: does `uptime`
    go up (Passenger keeps it running) or start again from 0?
-6. **The fallback, either way:** upload `php/health.php` into the same subdomain's folder (or any folder of a
-   domain with PHP) and open it, for example `https://sync.remph.de/health.php`. Send that JSON too.
+6. **The fallback, either way:** upload `php/health.php` into the subdomain's `public` folder and open
+   `https://sync.remph.de/health.php`. If that shows the file's text or an error instead of JSON, put it into a
+   folder of another domain with PHP instead (never into remph.de's `mpmb/`: the deploy deletes what isn't in
+   the build). Send that JSON too.
 7. **Only if Node worked:** Databases, Add Database (MySQL or MariaDB, whatever Plesk offers), name `mpmb`,
    a new user with a long random password. Then in the Node.js page, Custom environment variables:
    `DB_HOST` (Plesk shows it, often `localhost`), `DB_NAME`, `DB_USER`, `DB_PASSWORD`. Restart App, open
@@ -57,10 +63,19 @@ What happens next depends on the answers: Node with a database, PHP with a datab
 
 ## Why it's built this way
 
-- **No framework, no dependencies:** Plesk runs Node through Passenger, and an upload of two files is the
+- **No framework, no dependencies:** Plesk runs Node through Passenger, and an upload of a few files is the
   smallest thing that can show whether that works. A later PR may add a database driver.
 - **Its own subdomain:** Plesk's Node.js runs per domain or subdomain, not in a subfolder of remph.de. So the
   app (on `https://remph.de/mpmb/`) calls it from another origin. Every answer allows that one origin (CORS) and
   says it may be read across origins (`Cross-Origin-Resource-Policy`), which the app's
   `Cross-Origin-Embedder-Policy` needs.
 - **`/api/health` too:** in case Plesk mounts the app under a path.
+
+## Before the app calls it (PR 2)
+
+- The app's Content-Security-Policy (`public/.htaccess`) has `connect-src 'self'`, which blocks every fetch to
+  `https://sync.remph.de`. Add the service's origin there in the PR that first calls it. (Checked in Firefox:
+  with the app's COOP/COEP the health check is read across origins; with that CSP it is refused.)
+- A `POST` with a JSON body is preflighted: the `OPTIONS` answer then also needs `Access-Control-Allow-Methods`
+  and `Access-Control-Allow-Headers: Content-Type`.
+- `/health` names the Node version for the spike; drop that once the hosting question is settled.

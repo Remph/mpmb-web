@@ -1,6 +1,6 @@
 // MPMB Web's sync service, PR 1 of M15: a health check only, to learn how the remph.de webspace runs Node (Plesk's
 // Node.js extension starts this file through Phusion Passenger). No framework and no dependencies, so the upload is
-// two files. The sync itself (codes, characters, leases) comes in later PRs; see server/README.md.
+// a few files. The sync itself (codes, characters, leases) comes in later PRs; see server/README.md.
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { health } from './health.ts';
