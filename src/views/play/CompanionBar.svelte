@@ -4,6 +4,8 @@
   Open it lists the character and every companion with its hit points, plus "+ Companion". Whether the
   list is open is kept for this browser, like the language. A druid's Wild Shape forms get a row of their
   own under the companions, with the uses left (Remph picked A, 2026-11-08).
+  Phones (M13, mock-up pass 2): the list lives in a sheet opened from the "+1 ▾" badge after the name in the top
+  bar; the bar itself shows only on a companion's or form's page, with the way back.
 -->
 <script lang="ts">
   import { counted, fill } from '../../i18n.ts';
@@ -11,6 +13,7 @@
   import { companionLabel } from '../../play/companions.ts';
   import type { Companion } from '../../play/companions.ts';
   import { formKey } from '../../play/wild-shapes.ts';
+  import Modal from '../../popups/Modal.svelte';
   import type { WildShapeForm, WildShapeUses } from '../../play/wild-shapes.ts';
 
   interface Props {
@@ -33,6 +36,11 @@
     inForm?: WildShapeForm | null;
     onshowform?: (key: string) => void;
     onaddform?: () => void;
+    /** Phones: no list in the bar (the sheet has it), and no bar at all on the character's own page. */
+    phone?: boolean;
+    /** Phones: the switcher sheet is open (the top bar's badge opens it). */
+    sheetOpen?: boolean;
+    onclosesheet?: () => void;
     t: Texts;
   }
 
@@ -51,8 +59,19 @@
     inForm = null,
     onshowform = () => {},
     onaddform = () => {},
+    phone = false,
+    sheetOpen = false,
+    onclosesheet = () => {},
     t,
   }: Props = $props();
+
+  /** In the sheet every pick also closes it: the page behind is what the player asked for. */
+  const then =
+    (action: () => void): (() => void) =>
+    () => {
+      if (phone) onclosesheet();
+      action();
+    };
 
   const STORAGE_KEY = 'mpmb-web.companionList';
   let listOpen = $state(readOpen());
@@ -98,79 +117,94 @@
   const nameOf = (c: Companion): string => companionLabel(c) || t.companionEmptyPage;
 </script>
 
-<nav class="bar" class:in-form={inForm !== null} aria-label={wildShape ? t.barListForms : t.companionsList}>
-  <div class="inner">
-    <div class="line">
-      {#if current}
-        <button type="button" class="back" onclick={() => onshow(null)}
-          >← {fill(t.companionBack, { name: character })}</button
-        >
-        <span class="now"><b>{nameOf(current)}</b> <small>{hpText(current)}</small></span>
-      {:else if currentForm}
-        <button type="button" class="back" onclick={() => onshow(null)}
-          >← {fill(t.companionBack, { name: character })}</button
-        >
-        <span class="now"
-          ><b>{currentForm.name}</b>
-          <small>{formKey(currentForm) === inFormKey ? t.formNow : t.formKind}</small></span
-        >
-      {:else if inForm}
-        <span class="now"><b>{fill(t.characterAs, { name: character, form: inForm.name })}</b></span>
-      {:else}
-        <span class="now"><b>{title}</b></span>
-      {/if}
-      <button type="button" class="toggle" aria-expanded={listOpen} aria-controls="companion-list" onclick={toggle}>
-        {count}
-        <span aria-hidden="true">{listOpen ? '▴' : '▾'}</span>
-        <span class="sr">{listOpen ? t.companionsHideList : t.companionsShowList}</span>
+{#snippet lists()}
+  <div class="list" id={phone ? undefined : 'companion-list'}>
+    <button
+      type="button"
+      class="pick"
+      aria-pressed={shown === null && shownForm === null}
+      onclick={then(() => onshow(null))}
+    >
+      {character}<small>{inForm ? fill(t.characterAsShort, { form: inForm.name }) : t.companionCharacter}</small>
+    </button>
+    {#each companions as c (c.prefix)}
+      <button
+        type="button"
+        class="pick"
+        class:gone={gone.includes(c.prefix)}
+        aria-pressed={shown === c.prefix}
+        onclick={then(() => onshow(c.prefix))}
+      >
+        {nameOf(c)}<small>{hpText(c) || c.kind}</small>
       </button>
-    </div>
-    {#if listOpen}
-      <div class="list" id="companion-list">
+    {/each}
+    <button type="button" class="pick add" {disabled} onclick={then(onadd)}>+ {t.companionAdd}</button>
+  </div>
+  {#if wildShape}
+    <div class="list forms" role="group" aria-labelledby="forms-title">
+      <span class="group">
+        <b id="forms-title">{t.wildShape}</b>
+        {#if uses}<small>{fill(t.wildShapeUsesLeft, { left: uses.left, total: uses.total })}</small>{/if}
+      </span>
+      {#each forms as f (formKey(f))}
         <button
           type="button"
           class="pick"
-          aria-pressed={shown === null && shownForm === null}
-          onclick={() => onshow(null)}
+          class:in={formKey(f) === inFormKey}
+          aria-pressed={shownForm === formKey(f)}
+          onclick={then(() => onshowform(formKey(f)))}
         >
-          {character}<small>{inForm ? fill(t.characterAsShort, { form: inForm.name }) : t.companionCharacter}</small>
+          {f.name}<small>{formLine(f)}</small>
         </button>
-        {#each companions as c (c.prefix)}
-          <button
-            type="button"
-            class="pick"
-            class:gone={gone.includes(c.prefix)}
-            aria-pressed={shown === c.prefix}
-            onclick={() => onshow(c.prefix)}
+      {/each}
+      <button type="button" class="pick add" {disabled} onclick={then(onaddform)}>+ {t.formAdd}</button>
+    </div>
+  {/if}
+{/snippet}
+
+{#if !phone || current || currentForm || inForm}
+  <nav class="bar" class:in-form={inForm !== null} aria-label={wildShape ? t.barListForms : t.companionsList}>
+    <div class="inner">
+      <div class="line">
+        {#if current}
+          <button type="button" class="back" onclick={() => onshow(null)}
+            >← {fill(t.companionBack, { name: character })}</button
           >
-            {nameOf(c)}<small>{hpText(c) || c.kind}</small>
+          <span class="now"><b>{nameOf(current)}</b> <small>{hpText(current)}</small></span>
+        {:else if currentForm}
+          <button type="button" class="back" onclick={() => onshow(null)}
+            >← {fill(t.companionBack, { name: character })}</button
+          >
+          <span class="now"
+            ><b>{currentForm.name}</b>
+            <small>{formKey(currentForm) === inFormKey ? t.formNow : t.formKind}</small></span
+          >
+        {:else if inForm}
+          <span class="now"><b>{fill(t.characterAs, { name: character, form: inForm.name })}</b></span>
+        {:else}
+          <span class="now"><b>{title}</b></span>
+        {/if}
+        {#if !phone}
+          <button type="button" class="toggle" aria-expanded={listOpen} aria-controls="companion-list" onclick={toggle}>
+            {count}
+            <span aria-hidden="true">{listOpen ? '▴' : '▾'}</span>
+            <span class="sr">{listOpen ? t.companionsHideList : t.companionsShowList}</span>
           </button>
-        {/each}
-        <button type="button" class="pick add" {disabled} onclick={onadd}>+ {t.companionAdd}</button>
+        {/if}
       </div>
-      {#if wildShape}
-        <div class="list forms" role="group" aria-labelledby="forms-title">
-          <span class="group">
-            <b id="forms-title">{t.wildShape}</b>
-            {#if uses}<small>{fill(t.wildShapeUsesLeft, { left: uses.left, total: uses.total })}</small>{/if}
-          </span>
-          {#each forms as f (formKey(f))}
-            <button
-              type="button"
-              class="pick"
-              class:in={formKey(f) === inFormKey}
-              aria-pressed={shownForm === formKey(f)}
-              onclick={() => onshowform(formKey(f))}
-            >
-              {f.name}<small>{formLine(f)}</small>
-            </button>
-          {/each}
-          <button type="button" class="pick add" {disabled} onclick={onaddform}>+ {t.formAdd}</button>
-        </div>
+      {#if listOpen && !phone}
+        {@render lists()}
       {/if}
-    {/if}
-  </div>
-</nav>
+    </div>
+  </nav>
+{/if}
+
+{#if phone && sheetOpen}
+  <!-- Phones: the same rows as a sheet, one per line, each a full thumb wide. -->
+  <Modal title={wildShape ? t.barListForms : t.companionsList} onescape={onclosesheet} closeLabel={t.close}>
+    <div class="sheet">{@render lists()}</div>
+  </Modal>
+{/if}
 
 <style>
   .bar {
@@ -291,6 +325,30 @@
   .group small {
     color: var(--ink-muted);
     font-size: 0.8125rem;
+  }
+
+  /* The sheet (phones): rows, not chips. */
+  .sheet .list {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+  }
+
+  .sheet .forms {
+    align-items: stretch;
+    margin-top: 0.5rem;
+  }
+
+  .sheet .group {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 0.5rem;
+    padding-top: 0.25rem;
+  }
+
+  .sheet .pick {
+    display: flex;
+    width: 100%;
   }
 
   /* The form the character is in: marked even while another page is shown. */

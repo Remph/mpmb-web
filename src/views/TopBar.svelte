@@ -16,9 +16,11 @@
     onfold?: () => void;
     /** Phones (M13): one row, the way back as an arrow, the name cut short rather than wrapped. */
     compact?: boolean;
+    /** Right after the name (phones: the companions' "+1 ▾" switcher). */
+    afterName?: Snippet;
   }
 
-  let { open, back, t, children, onfold, compact = false }: Props = $props();
+  let { open, back, t, children, onfold, compact = false, afterName }: Props = $props();
 
   const statusText = $derived(
     { opening: t.opening, working: t.saving, saving: t.saving, saved: t.saved, error: '', elsewhere: '' }[open.status],
@@ -32,7 +34,14 @@
     <a class="back" href={back.href}>← {back.label}</a>
   {/if}
   <div class="who">
-    <h1>{open.meta.name || t.unnamed}</h1>
+    {#if afterName}
+      <div class="name-line">
+        <h1>{open.meta.name || t.unnamed}</h1>
+        {@render afterName()}
+      </div>
+    {:else}
+      <h1>{open.meta.name || t.unnamed}</h1>
+    {/if}
     <p>{[open.meta.classes, open.meta.species].filter(Boolean).join(' · ')}</p>
   </div>
   {#if statusText}<span class="status" class:busy={open.status !== 'saved'} aria-live="polite">{statusText}</span>{/if}
@@ -160,6 +169,18 @@
   }
 
   .compact .who {
+    min-width: 0;
+  }
+
+  /* The name gives way to what follows it: the name is cut short, the switcher stays whole. */
+  .name-line {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-width: 0;
+  }
+
+  .name-line h1 {
     min-width: 0;
   }
 

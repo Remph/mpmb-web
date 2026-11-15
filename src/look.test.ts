@@ -1,11 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
+import { ui } from './i18n.ts';
 import { blockTokens, color, contrast, SHOWN, themeTokens } from '../test/theme-css.ts';
 import {
   DEFAULT_LOOK,
   LOOK_KEY,
   lookAttributes,
+  lookLine,
   MODES,
   parseLook,
   SHEET_COLORS,
@@ -57,6 +59,16 @@ describe('shownMode', () => {
 
   it('keeps OLED black dark whatever the mode says', () => {
     expect(shownMode({ ...DEFAULT_LOOK, theme: 'oled', mode: 'light' }, false)).toBe('dark');
+  });
+});
+
+describe('lookLine', () => {
+  it('names the theme and the mode in the current language, OLED always dark', () => {
+    expect(lookLine({ ...DEFAULT_LOOK, theme: 'campfire', mode: 'light' }, ui.en)).toBe('Campfire, Light');
+    expect(lookLine({ ...DEFAULT_LOOK, mode: 'device' }, ui.de)).toBe(`${ui.de.lookPurple}, ${ui.de.lookDevice}`);
+    expect(lookLine({ ...DEFAULT_LOOK, theme: 'oled', mode: 'light' }, ui.en)).toBe(
+      `${ui.en.lookOled}, ${ui.en.lookDark}`,
+    );
   });
 });
 

@@ -106,6 +106,8 @@
   /** The bottom bar's places; Features, Profile and Notes sit behind More. */
   const MORE_TABS: readonly Tab[] = ['features', 'profile', 'notes'];
   let moreOpen = $state(false);
+  /** Phones: the companions' switcher sheet, opened from the "+1 ▾" after the name (mock-up pass 2). */
+  let switcherOpen = $state(false);
   let moreButton: HTMLButtonElement | undefined = $state();
   /** Closed without picking a place: back to the More button, like the other windows. */
   async function closeMore() {
@@ -459,6 +461,17 @@
 
 <svelte:window bind:innerWidth={width} onbeforeprint={beforePrint} onafterprint={() => (printing = false)} />
 
+{#snippet switcher()}
+  <button
+    type="button"
+    class="switcher"
+    aria-haspopup="dialog"
+    aria-label={hasWildShape ? t.barListForms : t.companionsList}
+    onclick={() => (switcherOpen = true)}
+    ><span aria-hidden="true">+{listed.length + forms.length || ''} ▾</span></button
+  >
+{/snippet}
+
 <div class="screen-only">
   {#if !barFolded}
     <TopBar
@@ -467,6 +480,7 @@
       {t}
       compact={phone}
       onfold={canFold && !phone ? () => setFolded(true) : undefined}
+      afterName={phone && (listed.length || hasWildShape) && !elsewhereOnly ? switcher : undefined}
     >
       {#if phone}
         <!-- Rests and Dawn live in More on a phone; the bar keeps only the menu. -->
@@ -500,6 +514,9 @@
       {inForm}
       onshowform={showForm}
       onaddform={() => void openFormWindow()}
+      {phone}
+      sheetOpen={switcherOpen}
+      onclosesheet={() => (switcherOpen = false)}
       {t}
     />
   {/if}
@@ -1124,6 +1141,26 @@
     height: 3px;
     border-radius: 0 0 3px 3px;
     background: var(--accent);
+  }
+
+  /* The companions' switcher after the name: a small pill inside a 44 px target. */
+  .switcher {
+    flex: none;
+    min-width: 44px;
+    padding: 0;
+    border-color: transparent;
+    background: none;
+  }
+
+  .switcher span {
+    display: inline-block;
+    padding: 0.125rem 0.5rem;
+    border-radius: 1rem;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 0.875rem;
+    font-weight: 700;
+    white-space: nowrap;
   }
 
   .menu-icon {

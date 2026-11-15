@@ -18,7 +18,7 @@
   import LookWindow from '../LookWindow.svelte';
   import AboutWindow from '../AboutWindow.svelte';
   import { look } from '../../look.svelte.ts';
-  import { hasOneMode } from '../../look.ts';
+  import { lookLine } from '../../look.ts';
   import { homebrew } from '../../homebrew/switches.svelte.ts';
   import { pointWhen } from '../../store/restore-points.ts';
   import type { RestorePoint } from '../../store/restore-points.ts';
@@ -99,14 +99,7 @@
   let looks = $state(false);
   /** The About window, the same. */
   let about = $state(false);
-  const lookLine = $derived(
-    fill(t.lookMenuLine, {
-      theme: { purple: t.lookPurple, campfire: t.lookCampfire, oled: t.lookOled }[look.current.theme],
-      mode: hasOneMode(look.current.theme)
-        ? t.lookDark
-        : { device: t.lookDevice, light: t.lookLight, dark: t.lookDark }[look.current.mode],
-    }),
-  );
+  const lookShown = $derived(lookLine(look.current, t));
   const rulesOn = $derived(Object.values(homebrew.switches).filter(Boolean).length);
   const buildHref = $derived(`#/character/${encodeURIComponent(open.meta.id)}/build`);
 
@@ -225,7 +218,7 @@
         <b>{t.homebrewTitle}</b><small>{rulesOn ? fill(t.homebrewOnCount, { count: rulesOn }) : t.homebrewLine}</small>
       </button>
       <button type="button" class="tile" onclick={() => (looks = true)}>
-        <b>{t.lookTitle}</b><small>{lookLine}</small>
+        <b>{t.lookTitle}</b><small>{lookShown}</small>
       </button>
       <button type="button" class="tile" onclick={toggleLanguage}>
         <b lang={t.switchLanguage === 'English' ? 'en' : 'de'}>{t.switchLanguage}</b><small>{t.menuLanguageLine}</small>
