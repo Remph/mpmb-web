@@ -71,11 +71,18 @@ export interface Service {
   ready: () => Promise<void>;
 }
 
-/** The path's parts without the optional /api: "/api/characters/abc/lease" -> ["characters", "abc", "lease"]. */
+/**
+ * The path's parts without the optional /api: "/api/characters/abc/lease" -> ["characters", "abc", "lease"]. A path
+ * it can't read ("/characters/%", an absolute URL with a broken host) is a bad request, not an error that escapes.
+ */
 export function partsOf(url: string | undefined): string[] {
-  const path = new URL(url ?? '/', 'http://localhost').pathname;
-  const rest = path === PREFIX || path.startsWith(`${PREFIX}/`) ? path.slice(PREFIX.length) : path;
-  return rest.split('/').filter(Boolean).map(decodeURIComponent);
+  try {
+    const path = new URL(url ?? '/', 'http://localhost').pathname;
+    const rest = path === PREFIX || path.startsWith(`${PREFIX}/`) ? path.slice(PREFIX.length) : path;
+    return rest.split('/').filter(Boolean).map(decodeURIComponent);
+  } catch {
+    throw new Refusal(BAD_REQUEST, 'bad path');
+  }
 }
 
 /** One request that needs a signed-in device, routed by method and path. Returns the answer's body. */
@@ -146,8 +153,10 @@ export function service(env: Env, db: Db | null, clock: () => number = Date.now)
 
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const cors = corsHeaders(req.headers.origin, origins);
-    const parts = partsOf(req.url);
+    // Everything that can throw stays inside the try: start() doesn't wait for handle(), so an error that escaped
+    // it would be an unhandled rejection, which ends the whole process (until Passenger starts it again).
     try {
+      const parts = partsOf(req.url);
       if (req.method === 'OPTIONS') return sendJson(res, NO_CONTENT, undefined, cors);
       if (parts[0] === 'health' && parts.length === 1) {
         const state = await databaseState();
@@ -178,5 +187,11 @@ export function service(env: Env, db: Db | null, clock: () => number = Date.now)
 /** Starts the service (main.ts, the bundle's entry); a test imports `service` without starting anything. */
 export function start(env: Env = process.env): void {
   const { handle } = service(env, connect(env));
-  createServer((req, res) => void handle(req, res)).listen(Number(env.PORT) || DEFAULT_PORT);
+  // handle() answers every error itself; this is the last guard, so a slip there can't end the process.
+  createServer((req, res) => {
+    handle(req, res).catch((error: unknown) => {
+      console.error(error);
+      res.destroy();
+    });
+  }).listen(Number(env.PORT) || DEFAULT_PORT);
 }

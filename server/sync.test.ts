@@ -7,7 +7,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { MAX_FAILURES, WINDOW_MS } from './attempts.ts';
 import { CODE_WORDS } from './codes.ts';
 import { service } from './app.ts';
-import { connect, type Db } from './db.ts';
+import { connect, migrate, type Db } from './db.ts';
 import { LEASE_MS, META_LIMIT } from './sync.ts';
 
 const env = process.env;
@@ -122,6 +122,16 @@ describe.skipIf(!settings.DB_HOST)('the sync service on a real database', () => 
     expect(status).toBe(OK);
     expect(body.database).toBe('connected');
     expect((await call('GET', '/api/health')).body.database).toBe('connected');
+  });
+
+  it('brings the tables up to date again after a step that stopped halfway, or two starts at once', async () => {
+    // Two processes starting together (Passenger may run more than one), then a step that only got its first table.
+    await Promise.all([migrate(db), migrate(db)]);
+    await db.change('DROP TABLE attempts');
+    await db.change('UPDATE schema_version SET version = 0');
+    expect(await migrate(db)).toBe(FIRST);
+    expect(await db.rows('SELECT id, version FROM schema_version')).toEqual([{ id: FIRST, version: FIRST }]);
+    expect(await db.rows('SELECT * FROM attempts')).toEqual([]);
   });
 
   it('gives a new player a code once, and refuses a wrong admin password', async () => {

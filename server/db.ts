@@ -60,17 +60,19 @@ function fromPool(pool: Pool): Db {
 
 /**
  * The tables, one step per schema version. A step never changes once it has run on the webspace: a later change is
- * a new step, so a database at any version can be brought up to date.
+ * a new step, so a database at any version can be brought up to date. MySQL can't roll back a CREATE TABLE, so a
+ * step that stopped halfway (the webspace's MySQL refusing one table) left the tables before it behind; IF NOT EXISTS
+ * lets the next try carry on instead of failing on them for good.
  */
 const STEPS: readonly (readonly string[])[] = [
   [
-    `CREATE TABLE players (
+    `CREATE TABLE IF NOT EXISTS players (
       id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       name VARCHAR(80) NOT NULL UNIQUE,
       code_hash VARCHAR(200) NOT NULL,
       created BIGINT NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-    `CREATE TABLE devices (
+    `CREATE TABLE IF NOT EXISTS devices (
       id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       player_id INT UNSIGNED NOT NULL,
       token_hash CHAR(64) NOT NULL UNIQUE,
@@ -81,7 +83,7 @@ const STEPS: readonly (readonly string[])[] = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
     // One row per character and player. `data` is the character as the app sends it; the service never reads it.
     // A deleted character keeps its row (deleted = 1, empty data) so the other devices learn of it.
-    `CREATE TABLE characters (
+    `CREATE TABLE IF NOT EXISTS characters (
       player_id INT UNSIGNED NOT NULL,
       id VARCHAR(64) NOT NULL,
       version INT UNSIGNED NOT NULL,
@@ -99,7 +101,7 @@ const STEPS: readonly (readonly string[])[] = [
       FOREIGN KEY (lease_device) REFERENCES devices (id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
     // Wrong codes and admin passwords per address, to slow down guessing.
-    `CREATE TABLE attempts (
+    `CREATE TABLE IF NOT EXISTS attempts (
       address VARCHAR(80) NOT NULL PRIMARY KEY,
       failures INT UNSIGNED NOT NULL,
       since BIGINT NOT NULL
@@ -109,14 +111,20 @@ const STEPS: readonly (readonly string[])[] = [
 
 /** Brings the tables up to the newest schema; safe to run on every start. Returns the version it ended at. */
 export async function migrate(db: Db): Promise<number> {
-  await db.change('CREATE TABLE IF NOT EXISTS schema_version (version INT UNSIGNED NOT NULL) ENGINE=InnoDB');
-  const [row] = await db.rows<{ version: number }>('SELECT version FROM schema_version');
-  if (!row) await db.change('INSERT INTO schema_version (version) VALUES (0)');
+  // Always one row, id 1: a second process starting at the same moment can't add another (INSERT IGNORE), and
+  // hosts that require a primary key on every table accept it. The steps' IF NOT EXISTS makes running one twice
+  // harmless.
+  await db.change(`CREATE TABLE IF NOT EXISTS schema_version (
+    id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+    version INT UNSIGNED NOT NULL
+  ) ENGINE=InnoDB`);
+  await db.change('INSERT IGNORE INTO schema_version (id, version) VALUES (1, 0)');
+  const [row] = await db.rows<{ version: number }>('SELECT version FROM schema_version WHERE id = 1');
   const from = row?.version ?? 0;
   // One statement after the other: a step's tables refer to the ones before them.
   for (const [index, step] of STEPS.slice(from).entries()) {
     for (const sql of step) await db.change(sql);
-    await db.change('UPDATE schema_version SET version = ?', [from + index + 1]);
+    await db.change('UPDATE schema_version SET version = ? WHERE id = 1', [from + index + 1]);
   }
   return STEPS.length;
 }

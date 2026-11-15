@@ -1,12 +1,15 @@
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import { adminPage, langOf } from './admin.ts';
-import { partsOf } from './app.ts';
+import { partsOf, service } from './app.ts';
 import { health } from './health.ts';
 import { allowedOrigins, corsHeaders } from './http.ts';
 
 const NOW = new Date('2026-11-15T10:00:00.000Z');
 const UPTIME = 12.4;
 const ROUNDED = 12;
+const BAD_REQUEST = 400;
 
 describe('health', () => {
   it('says how it runs and whether it reaches the database', () => {
@@ -37,6 +40,23 @@ describe('requests', () => {
     ['/characters/a%20b', ['characters', 'a b']],
   ])('splits %j into %j', (url, parts) => {
     expect(partsOf(url)).toEqual(parts);
+  });
+
+  it('turns down a path it can’t read, without stopping the service', async () => {
+    expect(() => partsOf('/characters/%E0')).toThrow('bad path');
+    // An error thrown before the handler's try would reject handle(): Node then ends the whole process.
+    const { handle } = service({}, null);
+    const server = createServer((req, res) => {
+      handle(req, res).catch((error: unknown) => res.destroy(error as Error));
+    });
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    try {
+      const res = await fetch(`http://localhost:${(server.address() as AddressInfo).port}/characters/%`);
+      expect(res.status).toBe(BAD_REQUEST);
+      expect(await res.json()).toEqual({ error: 'bad path' });
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 
   it('allow the app’s origin and the extra ones, nothing else', () => {

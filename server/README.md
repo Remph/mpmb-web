@@ -50,7 +50,10 @@ Nick set up the subdomain, Node.js and the database for the hosting test (#101).
 3. **Restart App**, then open `https://sync.remph.de/health`: `database` should say `connected` (the service built
    its tables). `unreachable` means the `DB_*` settings or the database's access don't fit; the Node.js page shows
    the app's log.
-4. **Open `https://sync.remph.de/admin`**, type the admin password and a player's name, Add player: the page shows
+4. **HTTPS only:** in the subdomain's Hosting settings, turn on the permanent 301 redirect from HTTP to HTTPS (if it
+   isn't on yet). The admin password and the device tokens must never travel over plain `http://`; check that
+   `http://sync.remph.de/health` ends up on `https://`.
+5. **Open `https://sync.remph.de/admin`**, type the admin password and a player's name, Add player: the page shows
    their code once. "New code" gives a player a new one and signs out all their devices (for a code that got out).
 
 No npm install: `pnpm build:server` bundles the service with its two libraries into `dist/app.cjs`.
