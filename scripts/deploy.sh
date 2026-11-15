@@ -95,8 +95,16 @@ fi
 # the build's.
 mirror="mirror -R --overwrite --verbose --parallel=4 $dry_run --exclude-glob .ftpquota --exclude-glob .well-known/ --exclude-glob $files_list"
 listed="$(mktemp)"
-trap 'rm -f "$listed"' EXIT
+both="$(mktemp)"
+trap 'rm -f "$listed" "$both"' EXIT
 printf '%s\n' "$new_files" >"$listed"
+printf '%s\n' "$new_files" $spare | LC_ALL=C sort -u >"$both"
+# The list has to name the build that is live at every moment, or a deploy after one that stopped
+# halfway deletes the live build's files under the tabs running it. index.html switches builds in the
+# second pass, so around it the list names both builds, and once it is up only this one. A deploy that
+# stops anywhere leaves a list holding the live build (at worst one build too many, which the next
+# deploy removes). Without a list at the start none is written before the switch: one that named only
+# this build would leave the unknown live build unprotected if the switch then failed.
 {
   connect
   # Three passes, so that someone opening the app during an upload never gets a page whose scripts
@@ -106,10 +114,10 @@ printf '%s\n' "$new_files" >"$listed"
   # upload in one pass could put it first) together with removing the files of the builds before the
   # previous one (excluded files are never deleted).
   echo "$mirror --exclude-glob index.html --exclude-glob sw.js \"$local_dir\" ."
+  if [ -z "$dry_run" ] && [ -n "$previous" ]; then echo "put $(quote "$both") -o $files_list"; fi
   echo "$mirror --exclude-glob sw.js \"$local_dir\" ."
-  echo "$mirror $delete $keep \"$local_dir\" ."
-  # Last, so a deploy that stopped halfway leaves the list of the build that was fully up.
   if [ -z "$dry_run" ]; then echo "put $(quote "$listed") -o $files_list"; fi
+  echo "$mirror $delete $keep \"$local_dir\" ."
 } | lftp -f /dev/stdin 2>&1 |
   # A dry run prints full URLs including user:password; cut that part out of the log.
   sed -E 's#://[^@/]*@#://#g'
