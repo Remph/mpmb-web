@@ -55,7 +55,9 @@
 <section class="sync" data-state={sync.state} aria-labelledby="sync-title">
   <div class="text">
     <!-- Without a code there is no state to show, only the offer. -->
-    <h2 id="sync-title">{#if sync.on}<span class="dot" aria-hidden="true"></span>{/if}{title}</h2>
+    <h2 id="sync-title">
+      {#if sync.on}<span class="dot" aria-hidden="true"></span>{/if}{title}
+    </h2>
     <p aria-live="polite">{sync.on ? line : t.syncOffLine}</p>
   </div>
   <div class="row">
