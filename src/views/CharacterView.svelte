@@ -108,6 +108,10 @@
   let moreOpen = $state(false);
   /** Phones: the companions' switcher sheet, opened from the "+1 ▾" after the name (mock-up pass 2). */
   let switcherOpen = $state(false);
+  // Turned to a laptop width with the sheet open: the sheet isn't drawn there, so it closes rather than coming back.
+  $effect(() => {
+    if (!phone) switcherOpen = false;
+  });
   let moreButton: HTMLButtonElement | undefined = $state();
   /** Closed without picking a place: back to the More button, like the other windows. */
   async function closeMore() {

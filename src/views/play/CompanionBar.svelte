@@ -8,6 +8,7 @@
   bar; the bar itself shows only on a companion's or form's page, with the way back.
 -->
 <script lang="ts">
+  import { tick } from 'svelte';
   import { counted, fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import { companionLabel } from '../../play/companions.ts';
@@ -65,11 +66,18 @@
     t,
   }: Props = $props();
 
-  /** In the sheet every pick also closes it: the page behind is what the player asked for. */
+  /**
+   * In the sheet every pick also closes it: the page behind is what the player asked for. The action waits until the
+   * sheet is gone and has handed the focus back to "+1 ▾": a window it opens (+ Companion, + Form) then returns the
+   * focus there when it closes. Opened in the same update, that window found no opener and the focus fell to the page.
+   */
   const then =
-    (action: () => void): (() => void) =>
-    () => {
-      if (phone) onclosesheet();
+    (action: () => void): (() => Promise<void>) =>
+    async () => {
+      if (phone) {
+        onclosesheet();
+        await tick();
+      }
       action();
     };
 

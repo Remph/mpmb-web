@@ -135,4 +135,19 @@ test('on a phone, weapon rows keep their buttons clear and the companions switch
   await switcher.click();
   await page.keyboard.press('Escape');
   await expect(switcher).toBeFocused();
+
+  // + Companion from the sheet: its window hands the focus back to "+1 ▾", not to the page (review of #99).
+  await switcher.click();
+  await sheet.getByRole('button', { name: '+ Companion' }).click();
+  await expect(page.getByRole('dialog', { name: 'Add a companion' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(switcher).toBeFocused();
+
+  // Turned to a laptop width with the sheet open, and back: the sheet stays closed.
+  await switcher.click();
+  await expect(sheet).toBeVisible();
+  await page.setViewportSize(LAPTOP);
+  await page.setViewportSize(PHONE);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 });
