@@ -36,12 +36,12 @@
       });
   });
 
-  /** Today a time ("19:42"), before that a date and time. */
+  /** "today, 19:42", before today a date and time ("14 Nov, 19:42"). */
   function when(iso: string): string {
     const date = new Date(iso);
-    const today = date.toDateString() === new Date().toDateString();
-    return today
-      ? date.toLocaleTimeString(t.locale, { hour: '2-digit', minute: '2-digit' })
+    const time = date.toLocaleTimeString(t.locale, { hour: '2-digit', minute: '2-digit' });
+    return date.toDateString() === new Date().toDateString()
+      ? `${t.syncToday}, ${time}`
       : date.toLocaleString(t.locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   }
 
@@ -55,7 +55,7 @@
       <li>
         <span class="who">
           <b>{row.name || t.unnamed}</b>
-          <small>{fill(t.changedOn, { date: when(row.updated) })}</small>
+          <small>{fill(t.syncChangedWhen, { when: when(row.updated) })}</small>
         </span>
         <select bind:value={choices[row.id]} aria-label={fill(t.syncChoiceLabel, { name: row.name || t.unnamed })}>
           <option value="send">{t.syncSend}</option>

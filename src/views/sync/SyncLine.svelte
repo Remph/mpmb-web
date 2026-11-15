@@ -214,7 +214,8 @@
 
   .auto-text {
     display: grid;
-    flex: 1 1 14rem;
+    /* Small enough that the switch stays beside the words down to 320 px, rather than alone under them. */
+    flex: 1 1 8rem;
     min-width: 0;
   }
 

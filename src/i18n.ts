@@ -159,6 +159,8 @@ export const ui = {
     syncAgainLead:
       'Diese wurden auf diesem Gerät geändert, während der automatische Abgleich aus war. Was passiert mit jedem?',
     syncChoiceLabel: 'Was mit {name} passiert',
+    syncChangedWhen: 'geändert {when}',
+    syncToday: 'heute',
     syncSend: 'Mitschicken',
     syncKeep: 'Vorerst hier behalten',
     syncTake: 'Den abgeglichenen holen',
@@ -1648,6 +1650,8 @@ export const ui = {
     syncAgainTitle: 'Sync automatically again',
     syncAgainLead: 'These changed on this device while auto sync was off. What happens to each?',
     syncChoiceLabel: 'What happens to {name}',
+    syncChangedWhen: 'changed {when}',
+    syncToday: 'today',
     syncSend: 'Send it',
     syncKeep: 'Keep it here for now',
     syncTake: 'Take the synced copy',
