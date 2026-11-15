@@ -483,6 +483,12 @@
     font-weight: 700;
   }
 
+  /* One long word (German materials: "Feuersalamanderschuppen") breaks instead of pushing the row wider. */
+  .name span {
+    hyphens: auto;
+    overflow-wrap: anywhere;
+  }
+
   .name small {
     overflow: hidden;
     color: var(--ink-muted);
