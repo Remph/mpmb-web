@@ -93,6 +93,10 @@ test('on a phone, weapon rows keep their buttons clear and the companions switch
     await page.getByRole('button', { name: 'Add a weapon' }).first().click();
     await page.getByRole('dialog').getByRole('button', { name: weapon }).first().click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
+    // Wait for the weapon in its row before the next tap: the list closes at once, but the row fills only
+    // when the engine answers. A tap on "Add a weapon" in between can land on the weapon's name as the row
+    // turns into it, opening nothing (the deploy of #100 waited 3 minutes for a list that never opened).
+    await expect(page.getByRole('button', { name: `Change ${weapon}` })).toBeVisible();
   });
   const rows = page.locator('li.weapon:not(.empty)');
   await expect(rows).toHaveCount(WEAPONS.length);
