@@ -11,6 +11,7 @@ import {
   goldText,
   importOps,
   isLager,
+  movedGroup,
   parseGold,
   placeCounts,
   placeKind,
@@ -129,6 +130,24 @@ describe('changes shown at once', () => {
     expect(lager.groups.map((group) => group.id)).toEqual(['g1']);
     expect(lager.items.some((item) => item.group === 'g2')).toBe(false);
     expect(lager).toMatchObject({ copper: 700, goldNote: 'for the ship' });
+  });
+});
+
+describe('group order', () => {
+  test('a group moves a step up or down, not past either end', () => {
+    const lager = sample();
+    expect(movedGroup(lager, 'g2', -1)).toEqual(['g2', 'g1']);
+    expect(movedGroup(lager, 'g1', 1)).toEqual(['g2', 'g1']);
+    expect(movedGroup(lager, 'g1', -1)).toBeNull();
+    expect(movedGroup(lager, 'g2', 1)).toBeNull();
+    expect(movedGroup(lager, 'nowhere', 1)).toBeNull();
+  });
+
+  test('the order shows at once; a group the order doesn’t name follows the named ones', () => {
+    const three = applyOps(sample(), [{ op: 'addGroup', id: 'g3', name: 'Potions', kind: 'count' }], 'A', NOW);
+    const ids = (ops: Op[]) => applyOps(three, ops, 'A', NOW).groups.map((group) => group.id);
+    expect(ids([{ op: 'orderGroups', ids: ['g2', 'g1'] }])).toEqual(['g2', 'g1', 'g3']);
+    expect(ids([{ op: 'orderGroups', ids: ['g3', 'gone'] }])).toEqual(['g3', 'g1', 'g2']);
   });
 });
 

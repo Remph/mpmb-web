@@ -215,6 +215,8 @@ describe.skipIf(!settings.DB_HOST || !settings.DB_NAME)('the app’s sync on the
         { op: 'set', id: 'a', group: 'g2' },
         { op: 'set', id: 'a', group: 'nowhere', name: 'Goggles' },
         { op: 'renameGroup', id: 'g2', name: 'Stuff' },
+        { op: 'addGroup', id: 'g3', name: 'Potions', kind: 'count' },
+        { op: 'orderGroups', ids: ['g2', 'g1'] },
         { op: 'gold', by: -450 },
       ],
       [
@@ -232,6 +234,6 @@ describe.skipIf(!settings.DB_HOST || !settings.DB_NAME)('the app’s sync on the
     }, Promise.resolve());
     await ipad.refresh();
     expect(plain(ipad.lager)).toEqual(plain(laptop.lager));
-    expect(ipad.lager).toMatchObject({ copper: 123_000, by: 'Anna', groups: [{ name: 'Stuff' }] });
+    expect(ipad.lager).toMatchObject({ copper: 123_000, by: 'Anna', groups: [{ name: 'Stuff' }, { name: 'Potions' }] });
   });
 });

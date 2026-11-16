@@ -109,6 +109,16 @@ test('the Lager: open it from the Inventory tab, add, move, count, and see what 
   service.offline = false;
   await expect(panel.getByRole('button', { name: '+ Add' })).toBeEnabled({ timeout: POLLED });
 
+  // Materials first, for everyone: the group's window moves it up the list.
+  await panel.getByRole('button', { name: 'Change the group Materials' }).click();
+  const groupWindow = page.getByRole('dialog', { name: 'Materials' });
+  await expect(groupWindow.getByRole('button', { name: '↓ Move down' })).toBeDisabled();
+  await groupWindow.getByRole('button', { name: '↑ Move up' }).click();
+  await expect(groupWindow.getByRole('button', { name: '↑ Move up' })).toBeDisabled();
+  await groupWindow.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(panel.locator('section.group').first()).toHaveAccessibleName('Materials');
+  await expect.poll(() => service.lager.groups.map((group) => group.name)).toEqual(['Materials', 'Magic items']);
+
   // On a phone: a bottom sheet whose boxes are big enough not to zoom.
   await page.setViewportSize(PHONE);
   await panel.getByRole('button', { name: '+ Add' }).click();
