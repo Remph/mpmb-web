@@ -23,6 +23,9 @@ const HALBERD_DAMAGE_BONUS = 4;
 const D10 = 10;
 const D20 = 20;
 const TWO_DICE = 2;
+/** Guiding Bolt's 4d6 with a level 2 slot, and after a natural 20. */
+const GUIDING_BOLT_AT_2 = 5;
+const GUIDING_BOLT_CRIT_AT_2 = 10;
 
 /** The paladin as a backup file, restored on the start page. */
 async function openPaladin(page: Page): Promise<void> {
@@ -81,6 +84,17 @@ const readCard = async (page: Page): Promise<Card> => (await page.evaluate(READ_
 const CARD_PROBLEMS = `(() => [...document.querySelectorAll('section.card button')]
   .filter((b) => { const r = b.getBoundingClientRect(); return r.width < ${TARGET} || r.height < ${TARGET} || b.scrollWidth > b.clientWidth + 1; })
   .map((b) => b.textContent.trim()))()`;
+
+/**
+ * Px of the page that stay behind the card when scrolled to the end; 0 or less is fine. The page's room under its
+ * last rows follows the card's height (review of #114: the slot level row made it taller than the fixed room).
+ */
+const UNDER_CARD = `(() => {
+  window.scrollTo(0, document.documentElement.scrollHeight);
+  const play = document.querySelector('.play');
+  const end = play.getBoundingClientRect().bottom - parseFloat(getComputedStyle(play).paddingBottom);
+  return Math.round(end - document.querySelector('section.card').getBoundingClientRect().top);
+})()`;
 
 test('a tap on the to-hit rolls it, the card rolls the damage, a marked skill rolls two dice', async ({ page }) => {
   await page.setViewportSize(LAPTOP);
@@ -187,4 +201,37 @@ test('on a phone the card sits on the tab bar and fits in German', async ({ page
   await expect(page.getByRole('region', { name: 'Würfelwurf' })).toBeVisible();
   expect(await page.evaluate(CARD_PROBLEMS)).toEqual([]);
   expect(await page.evaluate('document.documentElement.scrollWidth - innerWidth')).toBe(0);
+});
+
+// M17: spells roll too. Guiding Bolt (Magic Initiate) on the reference paladin: "Spell attack for 4d6+1d6/SL
+// Radiant dmg", spell attack +8. The card steps the slot level for the damage.
+test('a spell attack rolls, and its damage grows with the slot level on the card', async ({ page }) => {
+  await page.setViewportSize(LAPTOP);
+  await openPaladin(page);
+  const card = page.getByRole('region', { name: 'Dice roll' });
+  await page.getByRole('tab', { name: 'Spells' }).click();
+
+  await page.getByRole('button', { name: 'Roll Guiding Bolt spell attack +8', exact: true }).click();
+  await expect(card.getByRole('heading', { name: 'Guiding Bolt spell attack' })).toBeVisible();
+  const attack = await readCard(page);
+  expect(attack.total).toBe((attack.dice[0] ?? 0) + HALBERD_BONUS);
+  const crit = attack.dice[0] === D20;
+  await expect(card.getByRole('button', { name: crit ? 'Critical damage 8d6' : 'Damage 4d6' })).toBeVisible();
+
+  // One slot level up: one d6 more (two after a natural 20).
+  await card.getByRole('button', { name: 'Slot level: More' }).click();
+  await card.getByRole('button', { name: crit ? 'Critical damage 10d6' : 'Damage 5d6' }).click();
+  await expect(
+    card.getByRole('heading', { name: crit ? 'Guiding Bolt critical damage' : 'Guiding Bolt damage' }),
+  ).toBeVisible();
+  const damage = await readCard(page);
+  expect(damage.dice).toHaveLength(crit ? GUIDING_BOLT_CRIT_AT_2 : GUIDING_BOLT_AT_2);
+  expect(damage.line).toContain('level 2 slot');
+  expect(await page.evaluate(CARD_PROBLEMS)).toEqual([]);
+  expect(await page.evaluate(UNDER_CARD)).toBeLessThanOrEqual(0);
+
+  // A save spell has no attack, only its damage: Hellish Rebuke, "2d10+1d10/SL Fire dmg".
+  await page.getByRole('button', { name: 'Roll Hellish Rebuke damage 2d10 Fire' }).click();
+  await expect(card.getByRole('heading', { name: 'Hellish Rebuke damage' })).toBeVisible();
+  expect((await readCard(page)).dice).toHaveLength(TWO_DICE);
 });

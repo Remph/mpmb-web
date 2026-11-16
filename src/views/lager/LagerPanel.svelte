@@ -539,8 +539,14 @@
     font: inherit;
     text-align: left;
     /* A group's name is the players' own: a long one-word German name wraps instead of widening the panel. */
-    hyphens: auto;
     overflow-wrap: anywhere;
+  }
+
+  /* Hyphens only in German, whose long compounds need them; in English they split short names that would fit on
+     the next line (UI review of M16, finding 09). */
+  :global(:lang(de)) .fold,
+  :global(:lang(de)) .name span {
+    hyphens: auto;
   }
 
   .fold:disabled {
@@ -619,7 +625,6 @@
 
   /* One long word (German materials: "Feuersalamanderschuppen") breaks instead of pushing the row wider. */
   .name span {
-    hyphens: auto;
     overflow-wrap: anywhere;
   }
 
