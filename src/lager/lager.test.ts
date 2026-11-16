@@ -11,7 +11,10 @@ import {
   goldText,
   importOps,
   isLager,
+  lagerFile,
+  lagerFileName,
   movedGroup,
+  noteLine,
   parseGold,
   placeCounts,
   placeKind,
@@ -19,6 +22,7 @@ import {
   sameItem,
   shownGroups,
   type Lager,
+  type LagerItem,
   type Op,
 } from './lager.ts';
 import { LagerStore } from './lager.svelte.ts';
@@ -64,13 +68,30 @@ describe('places', () => {
 });
 
 describe('the list', () => {
-  test('search finds every word in the name or place; the filter only narrows place groups', () => {
+  test('search finds every word in the name, place or note; a place filter hides the materials', () => {
     const lager = sample();
     const names = (query: string, filter: Parameters<typeof shownGroups>[2]) =>
       shownGroups(lager, query, filter).map(({ items }) => items.map((item) => item.name));
     expect(names('of aria', 'all')).toEqual([['Rope of Climbing', 'Bag of Holding'], []]);
-    expect(names('', 'gone')).toEqual([['Potion of Healing'], ['Iron Ore']]);
+    expect(names('', 'gone')).toEqual([['Potion of Healing'], []]);
+    expect(names('', 'all')[1]).toEqual(['Iron Ore']);
+    // "60 feet" is only in the goggles' note; "goggles feet" mixes the name and the note.
+    expect(names('60 FEET', 'all')).toEqual([['Goggles of Night'], []]);
+    expect(names('goggles feet', 'lager')).toEqual([['Goggles of Night'], []]);
+    expect(names('feet', 'character')).toEqual([[], []]);
     expect(shownGroups(lager, 'goggles', 'all')[0]?.total).toBe(5);
+  });
+
+  test("under the name: the note's first line, or the line a search found the item by", () => {
+    const goggles = sample().items[0] as LagerItem;
+    expect(noteLine(goggles, '')).toBe('Darkvision.');
+    expect(noteLine(goggles, 'goggles')).toBe('Darkvision.');
+    expect(noteLine(goggles, 'feet')).toBe('60 feet.');
+    expect(noteLine(goggles, 'night 60')).toBe('60 feet.');
+    // A hit far into a long line: cut in front at a word, so the hit shows in the row.
+    const long = { ...goggles, note: 'Intro.\nThis crystal is worth a lot when you sell it to a dwarf in the city.' };
+    expect(noteLine(long, 'dwarf')).toBe('… sell it to a dwarf in the city.');
+    expect(noteLine(long, 'crystal')).toBe('This crystal is worth a lot when you sell it to a dwarf in the city.');
   });
 
   test('a name the group has already, whatever its case and spaces', () => {
@@ -152,17 +173,50 @@ describe('group order', () => {
 });
 
 describe('gold', () => {
-  test('typed in either language', () => {
-    expect(['1234.5', '1234,5', '1.234,5', '1,234.50', ' 12 ', '0,05'].map(parseGold)).toEqual([
-      123_450, 123_450, 123_450, 123_450, 1_200, 5,
-    ]);
-    expect(['', 'abc', '-3', '.5', '1e3'].map(parseGold)).toEqual([null, null, null, null, null]);
+  test('a new total, typed in either language', () => {
+    expect(['1234.5', '1234,5', '1.234,5', '1,234.50', ' 12 ', '0,05'].map(parseGold)).toEqual(
+      [123_450, 123_450, 123_450, 123_450, 1_200, 5].map((to) => ({ to })),
+    );
+    expect(['', 'abc', '.5', '1e3', '100 gp', '+', '--3', '+-3', '5+'].map(parseGold)).toEqual(Array(9).fill(null));
+  });
+
+  test('a leading + or − changes it by that amount', () => {
+    // The hyphen, the minus sign and the dash a phone's keyboard may make of a hyphen all take away.
+    expect(['+50', '-20', '−20', '–20', '+ 1.234,5', '-0,5', '+1,234.50'].map(parseGold)).toEqual(
+      [5_000, -2_000, -2_000, -2_000, 123_450, -50, 123_450].map((by) => ({ by })),
+    );
   });
 
   test('shown in the locale, without trailing zeros', () => {
     expect(goldText(123_450, 'en')).toBe('1,234.5');
     expect(goldText(123_450, 'de')).toBe('1.234,5');
     expect(goldText(1_200, 'en')).toBe('12');
+  });
+});
+
+describe('a copy', () => {
+  test('saved as a list file, it imports back into the same list', () => {
+    const lager = { ...sample(), copper: 123_450, goldNote: 'after the dragon' };
+    let next = 0;
+    const ops = importOps(JSON.parse(JSON.stringify(lagerFile(lager))), () => `copy${++next}`);
+    const copy = applyOps(EMPTY_LAGER, ops ?? [], 'Bram', NOW + 1);
+    const shape = (each: Lager) => ({
+      copper: each.copper,
+      goldNote: each.goldNote,
+      groups: each.groups.map((group) => [group.name, group.kind]),
+      items: each.items.map((item) => [
+        each.groups.find((group) => group.id === item.group)?.name,
+        item.name,
+        item.count,
+        item.place,
+        item.note,
+      ]),
+    });
+    expect(shape(copy)).toEqual(shape(lager));
+  });
+
+  test('named with the day it was saved', () => {
+    expect(lagerFileName(new Date(2026, 10, 6, 23, 30))).toBe('mpmb-web-lager-2026-11-06.json');
   });
 });
 

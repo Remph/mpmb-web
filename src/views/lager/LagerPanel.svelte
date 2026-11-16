@@ -11,10 +11,14 @@
   import Modal from '../../popups/Modal.svelte';
   import Stepper from '../play/Stepper.svelte';
   import type { LagerStore } from '../../lager/lager.svelte.ts';
+  import { download } from '../../download.ts';
   import {
     goldText,
     importOps,
     IN_LAGER,
+    lagerFile,
+    lagerFileName,
+    noteLine,
     parseGold,
     placeCounts,
     placeKind,
@@ -26,6 +30,7 @@
     type PlaceFilter,
   } from '../../lager/lager.ts';
   import { changedWhen } from './when.ts';
+  import { ticking } from './now.svelte.ts';
   import { loadFolded, toggleFolded } from '../../lager/folded.ts';
   import LagerAddWindow from './LagerAddWindow.svelte';
   import LagerItemWindow from './LagerItemWindow.svelte';
@@ -40,8 +45,9 @@
 
   let { store, onclose, t }: Props = $props();
 
-  // Fresh numbers while the panel is open.
+  // Fresh numbers while the panel is open, and a clock for "Last changed …, just now".
   $effect(() => store.watch());
+  const clock = ticking();
 
   /** The groups this device shows folded (a tap on a group's heading). */
   const storage = typeof localStorage === 'undefined' ? undefined : localStorage;
@@ -54,6 +60,8 @@
   let placeOf = $state<string | null>(null);
   let groupOpen = $state<string | null>(null);
   let importBad = $state(false);
+  /** The gold box holds text it can't read: it stays there with a hint instead of quietly going back. */
+  let goldBad = $state(false);
   let importInput: HTMLInputElement | undefined = $state();
 
   const lager = $derived(store.lager);
@@ -77,18 +85,25 @@
     void store.change(ops);
   }
 
-  /** The gold box: the difference to what it showed, so a change by someone else meanwhile isn't undone. */
+  /**
+   * The gold box: "+50" or "−20" changes the gold by that amount; a new total goes as the difference to what the box
+   * showed, so a change by someone else meanwhile isn't undone.
+   */
   function goldChanged(input: HTMLInputElement): void {
     if (!lager) return;
-    const copper = parseGold(input.value);
-    if (copper === null) {
-      input.value = goldText(lager.copper, t.locale);
-      return;
-    }
-    if (copper !== lager.copper) send([{ op: 'gold', by: copper - lager.copper }]);
+    const entry = parseGold(input.value);
+    goldBad = entry === null && input.value.trim() !== '';
+    if (goldBad) return;
+    const by = entry === null ? 0 : 'by' in entry ? entry.by : entry.to - lager.copper;
+    // The box shows the total again ("+50" becomes the new sum once the change is in).
+    input.value = goldText(lager.copper, t.locale);
+    if (by) send([{ op: 'gold', by }]);
   }
 
-  /** "Add an item …" under a group: a name already there counts up (materials) instead of a second row. */
+  /**
+   * "Add an item …" under a group, on Enter only: a tap elsewhere keeps the half-typed name in the box instead of
+   * adding it for everyone (review 01). A name already there counts up (materials) instead of a second row.
+   */
   function quickAdd(input: HTMLInputElement, group: LagerGroup): void {
     const name = input.value.trim();
     input.value = '';
@@ -115,14 +130,16 @@
     if (ops) void store.importList(ops);
   }
 
-  /** The note's first line under the name, so an item with a text shows that it has one. */
-  const firstLine = (note: string) => note.split('\n')[0] ?? '';
+  function saveCopy(): void {
+    if (!lager) return;
+    download(new Blob([JSON.stringify(lagerFile(lager), null, 2)], { type: 'application/json' }), lagerFileName());
+  }
 </script>
 
 <Modal title={t.lagerTitle} onescape={onclose} closeLabel={t.close} side>
   {#if lager?.updated}
     <p class="muted">
-      {fill(t.lagerChanged, { who: lager.by || '?', when: changedWhen(lager.updated, Date.now(), t) })}
+      {fill(t.lagerChanged, { who: lager.by || '?', when: changedWhen(lager.updated, clock.now, t) })}
     </p>
   {/if}
   <div class="status" role="status">
@@ -140,6 +157,9 @@
           inputmode="decimal"
           value={goldText(lager.copper, t.locale)}
           disabled={readonly}
+          aria-invalid={goldBad}
+          aria-describedby={goldBad ? 'lager-gold-bad' : undefined}
+          oninput={() => (goldBad = false)}
           onchange={(event) => goldChanged(event.currentTarget)}
         />
         <span>{t.lagerGold}</span>
@@ -155,6 +175,7 @@
           onchange={(event) => send([{ op: 'goldNote', note: event.currentTarget.value }])}
         />
       </label>
+      {#if goldBad}<p class="gold-bad" id="lager-gold-bad" role="alert">{t.lagerGoldBad}</p>{/if}
     </div>
 
     {#if lager.groups.length}
@@ -171,10 +192,10 @@
       {#if (query || filter !== 'all') && !found}<p class="muted">{t.lagerNothing}</p>{/if}
 
       {#each groups as { group, items, total } (group.id)}
-        {#if items.length || (!query && filter === 'all') || (group.kind === 'count' && !query)}
-          <!-- A search or a place filter opens folded groups: what it found must show. The filter only picks among
-               the magic items, so it leaves a folded materials group folded. -->
-          {@const finding = Boolean(query) || (filter !== 'all' && group.kind === 'place')}
+        {#if items.length || (!query && filter === 'all')}
+          <!-- A search or a place filter opens folded groups: what it found must show. The filter hides the materials
+               (shownGroups), and their folding stays as it was for when it's off. -->
+          {@const finding = Boolean(query) || filter !== 'all'}
           {@const open = !folded.has(group.id) || finding}
           <section class="group" aria-label={group.name}>
             <div class="group-head">
@@ -202,7 +223,7 @@
                 {#each items as item (item.id)}
                   <li class="row">
                     <button type="button" class="name" onclick={() => (itemOpen = item.id)}
-                      ><span>{item.name}</span>{#if item.note}<small>{firstLine(item.note)}</small>{/if}</button
+                      ><span>{item.name}</span>{#if item.note}<small>{noteLine(item, query)}</small>{/if}</button
                     >
                     {#if group.kind === 'place'}
                       {#if item.count !== 1}<span class="times">{item.count}×</span>{/if}
@@ -229,20 +250,38 @@
                 {/each}
               </ul>
               {#if !query}
-                <input
-                  class="quick"
-                  type="text"
-                  placeholder={t.lagerAddLine}
-                  aria-label={`${group.name}: ${t.lagerAddLine}`}
-                  maxlength={200}
-                  disabled={readonly}
-                  onchange={(event) => quickAdd(event.currentTarget, group)}
-                />
+                <form
+                  onsubmit={(event) => {
+                    event.preventDefault();
+                    const input = event.currentTarget.elements.namedItem('name');
+                    if (input instanceof HTMLInputElement) quickAdd(input, group);
+                  }}
+                >
+                  <input
+                    class="quick"
+                    type="text"
+                    name="name"
+                    placeholder={t.lagerAddLine}
+                    aria-label={`${group.name}: ${t.lagerAddLine}`}
+                    maxlength={200}
+                    enterkeyhint="done"
+                    disabled={readonly}
+                  />
+                </form>
               {/if}
             {/if}
           </section>
         {/if}
       {/each}
+
+      <!-- A copy of the whole list outside the service (review 08); not while a search or filter shows a part of it,
+           which would read as if only that part were saved. -->
+      {#if !query && filter === 'all'}
+        <div class="copy">
+          <button type="button" onclick={saveCopy}>{t.lagerSaveCopy}</button>
+          <p>{t.lagerSaveCopyHint}</p>
+        </div>
+      {/if}
     {:else if store.status === 'ready'}
       <p class="empty">{t.lagerEmpty}</p>
       <button type="button" disabled={store.importing} onclick={() => importInput?.click()}>{t.lagerImport}</button>
@@ -390,10 +429,19 @@
     font-size: 1rem;
   }
 
+  /* Repeats the size and weight: `input[type='text']` above is as specific as `.coin input` and comes later. */
   .coin input[type='text'] {
     border: 0;
     background: transparent;
     font-size: 1.375rem;
+    font-weight: 800;
+  }
+
+  .gold-bad {
+    flex: 1 1 100%;
+    margin: 0;
+    color: var(--ink-muted);
+    font-size: 0.875rem;
   }
 
   .quick {
@@ -425,6 +473,11 @@
     overflow-wrap: anywhere;
   }
 
+  /* The count on its own line under the word, on every width, so all four sit at the same height (review 05). */
+  .filter .count {
+    display: block;
+  }
+
   .filter button + button {
     border-left: 1px solid var(--line);
   }
@@ -437,12 +490,6 @@
 
   .count {
     font-size: 0.8125rem;
-  }
-
-  @media (max-width: 499px) {
-    .filter .count {
-      display: block;
-    }
   }
 
   .group {
@@ -597,6 +644,19 @@
 
   .empty {
     margin: 0.5rem 0 0.75rem;
+  }
+
+  /* Quiet, at the end of the list: "+ Add" stays the panel's one main action. */
+  .copy {
+    margin-top: 1.5rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--line);
+  }
+
+  .copy p {
+    margin: 0.375rem 0 0;
+    color: var(--ink-muted);
+    font-size: 0.875rem;
   }
 
   .sr-only {
