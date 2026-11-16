@@ -11,6 +11,7 @@
   import { IN_LAGER, LAGER_LIMITS, type Lager, type LagerItem, type Op } from '../../lager/lager.ts';
   import PlaceChips from './PlaceChips.svelte';
   import { changedWhen } from './when.ts';
+  import { ticking } from './now.svelte.ts';
 
   interface Props {
     item: LagerItem;
@@ -31,6 +32,7 @@
   let count = $state(start.count);
   let note = $state(start.note);
   let sure = $state(false);
+  const clock = ticking();
 
   // Most open an item to read its text: Save gets the focus, not the text box, so a tablet doesn't bring up its
   // keyboard over the text. After the window's own focus (showModal), hence the frame's wait.
@@ -67,7 +69,7 @@
   >
     {#if item.updated}
       <p class="hint">
-        {fill(t.lagerChanged, { who: item.by || '?', when: changedWhen(item.updated, Date.now(), t) })}
+        {fill(t.lagerChanged, { who: item.by || '?', when: changedWhen(item.updated, clock.now, t) })}
       </p>
     {/if}
     <label class="field">

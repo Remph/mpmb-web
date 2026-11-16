@@ -1,9 +1,11 @@
 /* eslint-disable ts-patterns/no-magic-numbers -- counts, gold and sizes are the test data */
 // The group's Lager (M16) in a real browser, on the stand-in sync service (test/fake-sync.ts): the line at the end
 // of the Inventory tab, the side panel, adding (a new group, a second of the same material), moving an item, the
-// gold, a change from another device showing within a poll, and read only without a connection. Made-up items only.
+// gold, a change from another device showing within a poll, read only without a connection, folding, the filter,
+// and a saved copy. Made-up items only.
+import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
-import { applyOps } from '../src/lager/lager.ts';
+import { applyOps, type LagerFile } from '../src/lager/lager.ts';
 import { FakeSync } from '../test/fake-sync.ts';
 import { CODE, connect, routeSync } from './fake-service.ts';
 
@@ -91,15 +93,62 @@ test('the Lager: open it from the Inventory tab, add, move, count, and see what 
   await gold.fill('1,234.5');
   await gold.press('Enter');
   await expect.poll(() => service.lager.copper).toBe(123_450);
+  // A leading + or − changes it by that amount; text it can't read stays in the box with a hint.
+  await gold.fill('+50');
+  await gold.press('Enter');
+  await expect.poll(() => service.lager.copper).toBe(128_450);
+  await expect(gold).toHaveValue('1,284.5');
+  await gold.fill('100 gp');
+  await gold.press('Enter');
+  await expect(panel.getByRole('alert')).toHaveText('Type a number, or + or − and an amount.');
+  await expect(gold).toHaveValue('100 gp');
+  // Someone else changes the gold meanwhile: the box shows the new sum, so the hint goes with the unread text.
+  service.lager = {
+    ...applyOps(service.lager, [{ op: 'gold', by: 1_000 }], 'Bram', service.now),
+    version: service.lager.version + 1,
+  };
+  await expect(gold).toHaveValue('1,294.5', { timeout: POLLED });
+  await expect(panel.getByRole('alert')).toBeHidden();
+  await expect(gold).not.toHaveAttribute('aria-invalid', 'true');
+  await gold.fill('lots');
+  await gold.press('Enter');
+  await expect(panel.getByRole('alert')).toBeVisible();
+  // The same "+5" twice in a row (two finds) counts twice, and a tap elsewhere afterwards changes nothing.
+  await gold.fill('+5');
+  await gold.press('Enter');
+  await expect.poll(() => service.lager.copper).toBe(129_950);
+  await gold.fill('+5');
+  await gold.press('Enter');
+  await expect.poll(() => service.lager.copper).toBe(130_450);
+  await expect(gold).toHaveValue('1,304.5');
+  await panel.getByRole('heading', { name: 'Lager' }).click();
+  // Leaving the box takes what's in it, like Enter.
+  await gold.fill('-104.5');
+  await panel.getByRole('heading', { name: 'Lager' }).click();
+  await expect.poll(() => service.lager.copper).toBe(120_000);
+  await expect(gold).toHaveValue('1,200');
+  await expect(panel.getByRole('alert')).toBeHidden();
   expect(service.lager.items.map((item) => [item.name, item.place, item.count])).toEqual([
     ['Goggles of Night', 'Aria', 1],
     ['Iron Ore', '', 5],
   ]);
 
+  // The quick "Add an item …" line adds on Enter only: a tap elsewhere keeps the half-typed name in the box.
+  const quick = materials.getByRole('textbox', { name: 'Materials: Add an item …' });
+  await quick.fill('Half-typed');
+  await panel.getByRole('heading', { name: 'Lager' }).click();
+  await expect(quick).toHaveValue('Half-typed');
+  expect(service.lager.items).toHaveLength(2);
+  await quick.fill('Silver Ore');
+  await quick.press('Enter');
+  await expect(materials.getByRole('listitem')).toHaveCount(2);
+  await expect(quick).toHaveValue('');
+  await expect.poll(() => service.lager.items.map((item) => item.name)).toContain('Silver Ore');
+
   // Someone else's change shows within a poll.
   const ore = service.lager.items[1]?.id ?? '';
   service.lager = { ...applyOps(service.lager, [{ op: 'count', id: ore, by: 4 }], 'Bram', service.now), version: 99 };
-  await expect(materials.getByRole('listitem')).toContainText('9', { timeout: POLLED });
+  await expect(materials.getByRole('listitem').first()).toContainText('9', { timeout: POLLED });
   await expect(panel.getByText('Last changed by Bram')).toBeVisible();
 
   // Without a connection: the last copy, read only.
@@ -123,20 +172,32 @@ test('the Lager: open it from the Inventory tab, add, move, count, and see what 
   await expect(materials.getByRole('listitem')).toHaveCount(1);
   await search.fill('');
   await expect(materials.getByRole('listitem')).toHaveCount(0);
-  // The place filter picks among the magic items only: it opens their folded group, not the folded materials.
+  // The place filter picks among the magic items only: it opens their folded group and hides the materials, whose
+  // folding is back as it was once the filter is off.
   const magic = panel.getByRole('region', { name: 'Magic items' });
   await magic.locator('button.fold').click();
   await expect(magic.getByRole('listitem')).toHaveCount(0);
   const show = panel.getByRole('group', { name: 'Show items' });
-  await show.getByRole('button').filter({ hasText: 'With characters' }).click();
+  await show.getByRole('button').filter({ hasText: 'Carried' }).click();
   await expect(magic.getByRole('listitem')).toHaveCount(1);
-  await expect(materials.getByRole('listitem')).toHaveCount(0);
-  await expect(materials.locator('button.fold')).toBeEnabled();
+  await expect(materials).toBeHidden();
   await show.getByRole('button').filter({ hasText: 'All' }).click();
   await expect(magic.getByRole('listitem')).toHaveCount(0);
+  await expect(materials.locator('button.fold')).toHaveAttribute('aria-expanded', 'false');
   await magic.locator('button.fold').click();
   await materials.locator('button.fold').click();
-  await expect(materials.getByRole('listitem')).toHaveCount(1);
+  await expect(materials.getByRole('listitem')).toHaveCount(2);
+
+  // A copy of the whole list, in the file "Import a list" reads.
+  const saving = page.waitForEvent('download');
+  await panel.getByRole('button', { name: 'Save a copy' }).click();
+  const copy = await saving;
+  expect(copy.suggestedFilename()).toMatch(/^mpmb-web-lager-\d{4}-\d\d-\d\d\.json$/);
+  const saved = JSON.parse(readFileSync((await copy.path()) as string, 'utf8')) as LagerFile;
+  expect(saved.groups.map((group) => [group.name, group.items.map((item) => item.name)])).toEqual([
+    ['Magic items', ['Goggles of Night']],
+    ['Materials', ['Iron Ore', 'Silver Ore']],
+  ]);
 
   // Materials first, for everyone: the group's window moves it up the list (not without a connection).
   await panel.getByRole('button', { name: 'Change the group Materials' }).click();

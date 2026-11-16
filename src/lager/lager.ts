@@ -94,26 +94,57 @@ export function placeKind(place: string): PlaceKind {
 /** The place filter over the items of place groups. */
 export type PlaceFilter = 'all' | PlaceKind;
 
-/** The groups with their items in the Lager's order, after a search and the place filter. */
+/** A search's words, lowercased: "Ring  of" is ["ring", "of"]. */
+function searchWords(query: string): string[] {
+  // Split at runs of white space. Try it: https://regex101.com/?regex=%5Cs%2B&testString=ring%20%20of
+  return query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+/**
+ * The groups with their items in the Lager's order, after a search and the place filter. The search looks in the
+ * name, the place and the note (review 07: the materials' texts say what they're for). The filter is about where
+ * things are: materials have no place, so their groups show nothing while it's on (Nick's pick, review 06 A).
+ */
 export function shownGroups(
   lager: Lager,
   query: string,
   filter: PlaceFilter,
 ): { group: LagerGroup; items: LagerItem[]; total: number }[] {
-  // Split at runs of white space: "ring  of" is ["ring", "of"].
-  // Try it: https://regex101.com/?regex=%5Cs%2B&testString=ring%20%20of
-  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const words = searchWords(query);
   const matches = (item: LagerItem) => {
-    const text = `${item.name} ${item.place}`.toLowerCase();
+    const text = `${item.name} ${item.place} ${item.note}`.toLowerCase();
     return words.every((word) => text.includes(word));
   };
   return lager.groups.map((group) => {
     const all = lager.items.filter((item) => item.group === group.id);
-    const items = all.filter(
-      (item) => matches(item) && (group.kind !== 'place' || filter === 'all' || placeKind(item.place) === filter),
-    );
-    return { group, items, total: all.length };
+    const placed = (item: LagerItem) =>
+      filter === 'all' || (group.kind === 'place' && placeKind(item.place) === filter);
+    return { group, items: all.filter((item) => placed(item) && matches(item)), total: all.length };
   });
+}
+
+/** How far into a line a hit may start before the line is cut in front of it (the row shows about 40 letters). */
+const HIT_LEAD = 24;
+/** How much of the line stays in front of a hit that was cut to. */
+const HIT_BEFORE = 12;
+
+/**
+ * The note's line under an item's name: its first line, or, when a search found the item only through its note,
+ * the line with the hit, cut in front so the hit shows in the row (review 07).
+ */
+export function noteLine(item: LagerItem, query: string): string {
+  const lines = item.note.split('\n');
+  const first = lines[0] ?? '';
+  const named = `${item.name} ${item.place}`.toLowerCase();
+  const words = searchWords(query).filter((word) => !named.includes(word));
+  if (!words.length) return first;
+  const line = lines.find((each) => words.some((word) => each.toLowerCase().includes(word)));
+  if (line === undefined) return first;
+  const at = Math.min(...words.map((word) => line.toLowerCase().indexOf(word)).filter((index) => index >= 0));
+  if (at <= HIT_LEAD) return line;
+  // Start at a word: the last space a little before the hit.
+  const space = line.lastIndexOf(' ', at - HIT_BEFORE);
+  return `… ${line.slice(space < 0 ? at : space + 1)}`;
 }
 
 /** How many items of the place groups are in the Lager, with characters and gone (the filter's numbers). */
@@ -252,21 +283,30 @@ export function goldText(copper: number, locale: string): string {
   return new Intl.NumberFormat(locale, { maximumFractionDigits: GOLD_DECIMALS }).format(copper / COPPER_PER_GOLD);
 }
 
+/** What the gold box asks for: a new total, or a change by an amount (in copper, negative to take away). */
+export type GoldEntry = { to: number } | { by: number };
+
 /**
- * A typed amount of gold in copper, or null. Accepts "1234.5", "1234,5" (German) and thousands marks the
- * other way round ("1.234,5", "1,234.5"): the last dot or comma with one or two digits after it is the decimal one.
+ * What was typed into the gold box, or null. A plain amount is the new total; a leading + or − changes the gold by
+ * that amount ("+50" after loot, "-20" after a purchase: review 02). Accepts "1234.5", "1234,5" (German) and
+ * thousands marks the other way round ("1.234,5", "1,234.5"): the last dot or comma with one or two digits after it
+ * is the decimal one.
  */
-export function parseGold(text: string): number | null {
-  const plain = text.trim().replaceAll(' ', '').replaceAll(' ', '');
-  // "1.234,5" or "1,234.50": digits with dots or commas, and at most two digits after the last mark.
-  // Try it: https://regex101.com/?regex=%5E(%5Cd%5B%5Cd.%2C%5D*%3F)(%3F%3A%5B.%2C%5D(%5Cd%7B1%2C2%7D))%3F%24&testString=1.234%2C5
-  const match = /^(\d[\d.,]*?)(?:[.,](\d{1,2}))?$/.exec(plain);
+export function parseGold(text: string): GoldEntry | null {
+  const plain = text.trim().replaceAll(' ', '').replaceAll('\u00a0', '').replaceAll('\u202f', '');
+  // An optional sign (+, the hyphen, the minus sign or a dash a phone's keyboard makes of it), then digits with dots or
+  // commas, and at most two digits after the last mark.
+  // Try it: https://regex101.com/?regex=%5E(%5B%2B%5C-%E2%88%92%E2%80%93%5D)%3F(%5Cd%5B%5Cd.%2C%5D*%3F)(%3F%3A%5B.%2C%5D(%5Cd%7B1%2C2%7D))%3F%24&testString=-1.234%2C5
+  const match = /^([+\-−–])?(\d[\d.,]*?)(?:[.,](\d{1,2}))?$/.exec(plain);
   if (!match) return null;
   // The thousands marks out: "1.234" is "1234". Try it: https://regex101.com/?regex=%5B.%2C%5D&testString=1.234
-  const whole = Number((match[1] ?? '').replace(/[.,]/g, ''));
-  const cents = Number((match[2] ?? '').padEnd(GOLD_DECIMALS, '0'));
+  const whole = Number((match[2] ?? '').replace(/[.,]/g, ''));
+  const cents = Number((match[3] ?? '').padEnd(GOLD_DECIMALS, '0'));
   const copper = whole * COPPER_PER_GOLD + cents;
-  return Number.isSafeInteger(copper) && copper <= LAGER_LIMITS.copper ? copper : null;
+  if (!Number.isSafeInteger(copper) || copper > LAGER_LIMITS.copper) return null;
+  const sign = match[1];
+  if (!sign) return { to: copper };
+  return { by: sign === '+' ? copper : -copper };
 }
 
 /** The file an import reads: what the panel's "Import a list" accepts (the group's list was made into one). */
@@ -307,4 +347,31 @@ export function importOps(value: unknown, newId: () => string): Op[] | null {
     ops.push({ op: 'gold', to: clamp(file.copper as number, LAGER_LIMITS.copper) });
   if (typeof file.goldNote === 'string') ops.push({ op: 'goldNote', note: text(file.goldNote, LAGER_LIMITS.goldNote) });
   return ops.length && ops.length <= LAGER_LIMITS.ops ? ops : null;
+}
+
+/**
+ * The whole Lager as a list file, the same kind "Import a list" reads (review 08): a copy outside the service, so
+ * a group removed by mistake can be imported again into an empty Lager. Who changed what and when stays behind.
+ */
+export function lagerFile(lager: Lager): LagerFile {
+  return {
+    copper: lager.copper,
+    goldNote: lager.goldNote,
+    groups: lager.groups.map((group) => ({
+      name: group.name,
+      kind: group.kind,
+      items: lager.items
+        .filter((item) => item.group === group.id)
+        .map(({ name, count, place, note }) =>
+          group.kind === 'place' ? { name, count, place, note } : { name, count, note },
+        ),
+    })),
+  };
+}
+
+/** The copy's file name, with the day: "mpmb-web-lager-2026-11-16.json". */
+export function lagerFileName(now = new Date()): string {
+  // The local day, not UTC's: a copy saved after midnight in Germany is the new day's.
+  const day = [now.getFullYear(), now.getMonth() + 1, now.getDate()].map((part) => String(part).padStart(2, '0'));
+  return `mpmb-web-lager-${day.join('-')}.json`;
 }

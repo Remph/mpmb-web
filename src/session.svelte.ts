@@ -54,6 +54,7 @@ import { createLink } from './worker/link.ts';
 import { newEngineWorker } from './worker/start.ts';
 import type { FieldViews } from './worker/views.ts';
 import type { MenuNode, Migrated, Opened } from './worker/protocol.ts';
+import { download } from './download.ts';
 
 /** Where MPMB keeps the imported script files in a saved sheet (Acrobat's toSource of CurrentScriptFiles). */
 const SCRIPT_FILES_FIELD = 'User_Imported_Files.Stringified';
@@ -1547,17 +1548,4 @@ export class Session {
       this.note('error', backupFailureText(err, this.t));
     }
   }
-}
-
-/** How long a download's address stays valid. */
-const REVOKE_AFTER_MS = 60_000;
-
-function download(file: Blob, name: string): void {
-  const url = URL.createObjectURL(file);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  link.click();
-  // The download has started from the link; the address can go once the browser took it.
-  setTimeout(() => URL.revokeObjectURL(url), REVOKE_AFTER_MS);
 }
