@@ -102,9 +102,31 @@ test('the Lager: open it from the Inventory tab, add, move, count, and see what 
   await gold.press('Enter');
   await expect(panel.getByRole('alert')).toHaveText('Type a number, or + or − and an amount.');
   await expect(gold).toHaveValue('100 gp');
-  await gold.fill('-84.5');
+  // Someone else changes the gold meanwhile: the box shows the new sum, so the hint goes with the unread text.
+  service.lager = {
+    ...applyOps(service.lager, [{ op: 'gold', by: 1_000 }], 'Bram', service.now),
+    version: service.lager.version + 1,
+  };
+  await expect(gold).toHaveValue('1,294.5', { timeout: POLLED });
+  await expect(panel.getByRole('alert')).toBeHidden();
+  await expect(gold).not.toHaveAttribute('aria-invalid', 'true');
+  await gold.fill('lots');
   await gold.press('Enter');
+  await expect(panel.getByRole('alert')).toBeVisible();
+  // The same "+5" twice in a row (two finds) counts twice, and a tap elsewhere afterwards changes nothing.
+  await gold.fill('+5');
+  await gold.press('Enter');
+  await expect.poll(() => service.lager.copper).toBe(129_950);
+  await gold.fill('+5');
+  await gold.press('Enter');
+  await expect.poll(() => service.lager.copper).toBe(130_450);
+  await expect(gold).toHaveValue('1,304.5');
+  await panel.getByRole('heading', { name: 'Lager' }).click();
+  // Leaving the box takes what's in it, like Enter.
+  await gold.fill('-104.5');
+  await panel.getByRole('heading', { name: 'Lager' }).click();
   await expect.poll(() => service.lager.copper).toBe(120_000);
+  await expect(gold).toHaveValue('1,200');
   await expect(panel.getByRole('alert')).toBeHidden();
   expect(service.lager.items.map((item) => [item.name, item.place, item.count])).toEqual([
     ['Goggles of Night', 'Aria', 1],

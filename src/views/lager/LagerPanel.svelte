@@ -60,8 +60,11 @@
   let placeOf = $state<string | null>(null);
   let groupOpen = $state<string | null>(null);
   let importBad = $state(false);
-  /** The gold box holds text it can't read: it stays there with a hint instead of quietly going back. */
-  let goldBad = $state(false);
+  /**
+   * The gold box holds text it can't read: it stays there with a hint instead of quietly going back. Kept as the gold
+   * it was typed over: once the gold changes (someone else's change), the box shows the new sum and the hint goes.
+   */
+  let goldBadAt = $state<number | null>(null);
   let importInput: HTMLInputElement | undefined = $state();
 
   const lager = $derived(store.lager);
@@ -71,6 +74,7 @@
   const counts = $derived(lager ? placeCounts(lager) : null);
   const hasPlaces = $derived(Boolean(lager?.groups.some((group) => group.kind === 'place')));
   const found = $derived(groups.some((entry) => entry.items.length));
+  const goldBad = $derived(goldBadAt !== null && goldBadAt === lager?.copper);
   const FILTERS = [
     ['all', 'lagerFilterAll'],
     ['lager', 'lagerFilterLager'],
@@ -86,18 +90,20 @@
   }
 
   /**
-   * The gold box: "+50" or "−20" changes the gold by that amount; a new total goes as the difference to what the box
-   * showed, so a change by someone else meanwhile isn't undone.
+   * The gold box, on Enter and when it loses focus: "+50" or "−20" changes the gold by that amount; a new total goes
+   * as the difference to what the box showed, so a change by someone else meanwhile isn't undone. Not on `change`:
+   * Firefox fires no change when the text is the same as at the last one, so a second "+50" in a row did nothing.
+   * Safe to run twice (Enter, then the blur): afterwards the box holds the new total, which changes nothing.
    */
   function goldChanged(input: HTMLInputElement): void {
     if (!lager) return;
     const entry = parseGold(input.value);
-    goldBad = entry === null && input.value.trim() !== '';
-    if (goldBad) return;
+    goldBadAt = entry === null && input.value.trim() !== '' ? lager.copper : null;
+    if (goldBadAt !== null) return;
     const by = entry === null ? 0 : 'by' in entry ? entry.by : entry.to - lager.copper;
-    // The box shows the total again ("+50" becomes the new sum once the change is in).
-    input.value = goldText(lager.copper, t.locale);
     if (by) send([{ op: 'gold', by }]);
+    // The new total at once ("+50" becomes the sum): the store shows a change before the service answers.
+    input.value = goldText(store.lager?.copper ?? lager.copper, t.locale);
   }
 
   /**
@@ -159,8 +165,11 @@
           disabled={readonly}
           aria-invalid={goldBad}
           aria-describedby={goldBad ? 'lager-gold-bad' : undefined}
-          oninput={() => (goldBad = false)}
-          onchange={(event) => goldChanged(event.currentTarget)}
+          oninput={() => (goldBadAt = null)}
+          onkeydown={(event) => {
+            if (event.key === 'Enter') goldChanged(event.currentTarget);
+          }}
+          onblur={(event) => goldChanged(event.currentTarget)}
         />
         <span>{t.lagerGold}</span>
       </label>
