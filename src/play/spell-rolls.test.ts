@@ -33,6 +33,10 @@ const CASES: readonly [string, [boolean, string, string, string]][] = [
   ],
   ['6m rad, 12m high all 2d10 Bludg. dmg & 4d6 Cold dmg; save half', [false, '2d10', '', 'Bludg.']],
   ['Spell atk per beam for 1d10 Force damage; pick target per beam', [true, '1d10', '', 'Force']],
+  // The type is only the type: no ability in brackets, no "of other" (Fire Shield). Review of #114.
+  ['Spell atk for 1d6+3 (Wis) Fire dmg', [true, '1d6+3', '', 'Fire']],
+  ['Resist Fire or Cold; 2d8 of other dmg type to melee atkers if hit in 1.5m', [false, '2d8', '', '']],
+  ['Club I hold does 1d8 Force/wea dmg & uses Wis', [false, '1d8', '', 'Force/wea']],
   // Less damage, healing and counts of creatures are not damage to roll.
   ['1 crea save or Dis on Str d20 tests, deal -1d8 dmg, repeat save EoT', [false, '', '', '']],
   ['1 creature heals 2d8+2d8/SL+4 (Cha) HP', [false, '', '', '']],

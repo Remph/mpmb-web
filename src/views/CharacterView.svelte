@@ -201,12 +201,16 @@
   // The roll card (M14) belongs to the place it was rolled from: another tab, page or character closes it, so its
   // Mark never reaches a pop-up that is no longer there.
   // A string, so a save that hands in a new `open` object (same character) doesn't count as a new place.
-  const rollPlace = $derived(`${open.meta.id}|${shownTab}|${shownPrefix}|${shownFormKey}`);
+  // A companion's or form's own tabs count too (M17): their saves and skills roll from the Checks tab.
+  const rollPlace = $derived(`${open.meta.id}|${shownTab}|${shownPrefix}|${shownFormKey}|${companionTab}`);
   $effect(() => {
     void rollPlace;
     dice.close();
   });
   onDestroy(() => dice.close());
+  /** The roll card's height: the page gets that much room at the bottom, so its last rows scroll out from behind. */
+  let cardHeight = $state(0);
+  const cardRoom = $derived(cardHeight ? `${cardHeight}px` : undefined);
   const formShape = $derived(shownForm && formAsCompanion(shownForm, t.formKind));
 
   function showForm(key: string) {
@@ -563,7 +567,12 @@
   <!-- Open in another tab from the start: no sheet here, only the line offering to take it over. -->
   {#if !elsewhereOnly}
     {#if companion}
-      <div class="play" class:gone={gone.includes(companion.prefix)} class:rolling={!!dice.shown}>
+      <div
+        class="play"
+        class:gone={gone.includes(companion.prefix)}
+        class:rolling={!!dice.shown}
+        style:--card-room={cardRoom}
+      >
         <div class="side left">
           <CompanionVitals
             {companion}
@@ -615,7 +624,7 @@
         {/if}
       </div>
     {:else if shownForm && formShape}
-      <div class="play" class:rolling={!!dice.shown}>
+      <div class="play" class:rolling={!!dice.shown} style:--card-room={cardRoom}>
         <div class="side left">
           <FormPanel
             form={shownForm}
@@ -683,7 +692,7 @@
         {/if}
       </div>
     {:else}
-      <div class="play" class:phone class:rolling={!!dice.shown}>
+      <div class="play" class:phone class:rolling={!!dice.shown} style:--card-room={cardRoom}>
         <div class="side left">
           {#if noClass}
             <section class="start" aria-labelledby="no-class-title">
@@ -812,7 +821,12 @@
       {#key dice.count}{spokenOf(dice.shown, t)}{/key}
     </p>
     {#if dice.shown}
-      <DiceCard shown={dice.shown} onTabBar={phone && !companion && !(shownForm && formShape)} {t} />
+      <DiceCard
+        shown={dice.shown}
+        onTabBar={phone && !companion && !(shownForm && formShape)}
+        bind:height={cardHeight}
+        {t}
+      />
     {/if}
   {/if}
 
@@ -1245,14 +1259,16 @@
     font-size: 1.25rem;
   }
 
-  /* Room under the page while the roll card is up, so the last rows can scroll out from behind it. */
+  /* Room under the page while the roll card is up, so the last rows can scroll out from behind it: the card's
+     measured height (it grows with a slot level row, many dice or German buttons) plus its 1.5rem from the bottom
+     and a gap. Review of #114: a fixed 13rem left the last 72 px of the Spells tab under a Fireball card. */
   .play.rolling {
-    padding-bottom: 13rem;
+    padding-bottom: calc(var(--card-room, 13rem) + 2.5rem + env(safe-area-inset-bottom));
   }
 
-  /* A phone's card sits on the tab bar and may wrap its buttons in German. */
+  /* A phone's card sits on the tab bar. */
   .play.phone.rolling {
-    padding-bottom: calc(var(--tab-bar-height) + 16rem + env(safe-area-inset-bottom));
+    padding-bottom: calc(var(--tab-bar-height) + var(--card-room, 16rem) + 1.5rem + env(safe-area-inset-bottom));
   }
 
   /* The roll card's spoken result (M14): read out, not shown. */

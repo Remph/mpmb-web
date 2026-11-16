@@ -69,6 +69,17 @@ function readDice(word: string): { formula: Formula; perLevel: Formula | null } 
   return { formula, perLevel };
 }
 
+/**
+ * The words between the dice and "dmg" as the damage type: "Fire", "Bludg.", "elem.", "Acid/Cold". An ability in
+ * brackets ("1d6+5 (Cha) Bludg. dmg") is not part of it, and a plain lower-case word means the words are no type
+ * at all (Fire Shield's "2d8 of other dmg type"): then the badge shows no type rather than "of other".
+ */
+function typeOf(words: string[]): string {
+  const kept = words.map(typeWord).filter((word) => !word.startsWith('('));
+  const plain = (word: string): boolean => word === word.toLowerCase() && !word.includes('.') && !word.includes('/');
+  return kept.some(plain) ? '' : kept.join(' ');
+}
+
 /** The first dice in the line that are followed by "dmg" or "damage" within a word or two. */
 function damageOf(summary: string): SpellDamage | null {
   const words = summary.split(' ').filter(Boolean);
@@ -78,7 +89,7 @@ function damageOf(summary: string): SpellDamage | null {
       // The type's words and "dmg" itself.
       const after = dice ? words.slice(i + 1, i + 1 + TYPE_WORDS + 1) : [];
       const at = after.findIndex(isDamageWord);
-      return dice && at >= 0 ? { ...dice, type: after.slice(0, at).map(typeWord).join(' ') } : null;
+      return dice && at >= 0 ? { ...dice, type: typeOf(after.slice(0, at)) } : null;
     })
     .find((damage) => damage !== null);
   return found ?? null;

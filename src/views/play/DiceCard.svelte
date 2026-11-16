@@ -19,10 +19,12 @@
     shown: Shown;
     /** A phone's tab bar is under the card (the character's play view; companion pages have none yet). */
     onTabBar?: boolean;
+    /** The card's height in px, for the page to keep that much room under its last rows. */
+    height?: number;
     t: Texts;
   }
 
-  let { shown, onTabBar = true, t }: Props = $props();
+  let { shown, onTabBar = true, height = $bindable(0), t }: Props = $props();
 
   const MODE_WORD: Record<RollMode, 'advantage' | 'disadvantage' | 'doubleAdvantage' | 'doubleDisadvantage' | ''> = {
     normal: '',
@@ -94,7 +96,7 @@
 
 <svelte:window {onkeydown} />
 
-<section class="card" class:bar={onTabBar} aria-label={t.diceCard} bind:this={card}>
+<section class="card" class:bar={onTabBar} aria-label={t.diceCard} bind:this={card} bind:offsetHeight={height}>
   <div class="head">
     <h2>{title}</h2>
     {#if shown.kind === 'd20' && shown.ask.mark}

@@ -85,6 +85,17 @@ const CARD_PROBLEMS = `(() => [...document.querySelectorAll('section.card button
   .filter((b) => { const r = b.getBoundingClientRect(); return r.width < ${TARGET} || r.height < ${TARGET} || b.scrollWidth > b.clientWidth + 1; })
   .map((b) => b.textContent.trim()))()`;
 
+/**
+ * Px of the page that stay behind the card when scrolled to the end; 0 or less is fine. The page's room under its
+ * last rows follows the card's height (review of #114: the slot level row made it taller than the fixed room).
+ */
+const UNDER_CARD = `(() => {
+  window.scrollTo(0, document.documentElement.scrollHeight);
+  const play = document.querySelector('.play');
+  const end = play.getBoundingClientRect().bottom - parseFloat(getComputedStyle(play).paddingBottom);
+  return Math.round(end - document.querySelector('section.card').getBoundingClientRect().top);
+})()`;
+
 test('a tap on the to-hit rolls it, the card rolls the damage, a marked skill rolls two dice', async ({ page }) => {
   await page.setViewportSize(LAPTOP);
   await openPaladin(page);
@@ -217,6 +228,7 @@ test('a spell attack rolls, and its damage grows with the slot level on the card
   expect(damage.dice).toHaveLength(crit ? GUIDING_BOLT_CRIT_AT_2 : GUIDING_BOLT_AT_2);
   expect(damage.line).toContain('level 2 slot');
   expect(await page.evaluate(CARD_PROBLEMS)).toEqual([]);
+  expect(await page.evaluate(UNDER_CARD)).toBeLessThanOrEqual(0);
 
   // A save spell has no attack, only its damage: Hellish Rebuke, "2d10+1d10/SL Fire dmg".
   await page.getByRole('button', { name: 'Roll Hellish Rebuke damage 2d10 Fire' }).click();

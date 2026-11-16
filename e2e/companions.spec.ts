@@ -49,7 +49,10 @@ test('a steed is summoned, disappears at 0 HP and comes back when cast again', a
   await expect(
     page.getByRole('region', { name: 'Dice roll' }).getByRole('heading', { name: 'Otherworldly Slam damage' }),
   ).toBeVisible();
-  await page.getByRole('region', { name: 'Dice roll' }).getByRole('button', { name: 'Close' }).click();
+  // Another of the steed's tabs closes the card, as the character's tabs do.
+  await page.getByRole('tab', { name: 'Notes' }).click();
+  await expect(page.getByRole('region', { name: 'Dice roll' })).toBeHidden();
+  await page.getByRole('tab', { name: 'Combat' }).click();
 
   await page.getByRole('button', { name: 'Damage', exact: true }).click();
   const pad = page.getByRole('dialog');
