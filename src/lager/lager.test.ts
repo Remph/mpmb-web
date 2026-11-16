@@ -196,7 +196,7 @@ describe('gold', () => {
 
 describe('a copy', () => {
   test('saved as a list file, it imports back into the same list', () => {
-    const lager = { ...sample(), copper: 123_450, goldNote: 'after the dragon' };
+    const lager = { ...sample(), copper: 123_450, goldNote: 'after the market' };
     let next = 0;
     const ops = importOps(JSON.parse(JSON.stringify(lagerFile(lager))), () => `copy${++next}`);
     const copy = applyOps(EMPTY_LAGER, ops ?? [], 'Bram', NOW + 1);
