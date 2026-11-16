@@ -123,6 +123,18 @@ test('the Lager: open it from the Inventory tab, add, move, count, and see what 
   await expect(materials.getByRole('listitem')).toHaveCount(1);
   await search.fill('');
   await expect(materials.getByRole('listitem')).toHaveCount(0);
+  // The place filter picks among the magic items only: it opens their folded group, not the folded materials.
+  const magic = panel.getByRole('region', { name: 'Magic items' });
+  await magic.locator('button.fold').click();
+  await expect(magic.getByRole('listitem')).toHaveCount(0);
+  const show = panel.getByRole('group', { name: 'Show items' });
+  await show.getByRole('button').filter({ hasText: 'With characters' }).click();
+  await expect(magic.getByRole('listitem')).toHaveCount(1);
+  await expect(materials.getByRole('listitem')).toHaveCount(0);
+  await expect(materials.locator('button.fold')).toBeEnabled();
+  await show.getByRole('button').filter({ hasText: 'All' }).click();
+  await expect(magic.getByRole('listitem')).toHaveCount(0);
+  await magic.locator('button.fold').click();
   await materials.locator('button.fold').click();
   await expect(materials.getByRole('listitem')).toHaveCount(1);
 

@@ -172,8 +172,10 @@
 
       {#each groups as { group, items, total } (group.id)}
         {#if items.length || (!query && filter === 'all') || (group.kind === 'count' && !query)}
-          <!-- A search or a filter opens folded groups: what it found must show. -->
-          {@const open = !folded.has(group.id) || Boolean(query) || filter !== 'all'}
+          <!-- A search or a place filter opens folded groups: what it found must show. The filter only picks among
+               the magic items, so it leaves a folded materials group folded. -->
+          {@const finding = Boolean(query) || (filter !== 'all' && group.kind === 'place')}
+          {@const open = !folded.has(group.id) || finding}
           <section class="group" aria-label={group.name}>
             <div class="group-head">
               <h3>
@@ -181,7 +183,7 @@
                   type="button"
                   class="fold"
                   aria-expanded={open}
-                  disabled={Boolean(query) || filter !== 'all'}
+                  disabled={finding}
                   onclick={() => (folded = toggleFolded(folded, group.id, storage))}
                   ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
                   {group.name} <small>{total}</small></button
@@ -469,6 +471,9 @@
     color: inherit;
     font: inherit;
     text-align: left;
+    /* A group's name is the players' own: a long one-word German name wraps instead of widening the panel. */
+    hyphens: auto;
+    overflow-wrap: anywhere;
   }
 
   .fold:disabled {
