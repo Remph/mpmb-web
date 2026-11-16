@@ -16,6 +16,12 @@
   import type { BuilderInfo } from '../../engine/builder.ts';
   import type { LagerStore } from '../../lager/lager.svelte.ts';
   import LagerLine from '../lager/LagerLine.svelte';
+  import { formulaText, rollFormula } from '../../dice/dice.ts';
+  import { dice } from '../../play/dice.svelte.ts';
+  import { fullValue, healing, leastValue, potionOf, unchangedSince } from '../../play/potions.ts';
+  import type { Potion } from '../../play/potions.ts';
+  import { readHitPoints } from '../../play/read.ts';
+  import { maxNow } from '../../play/rules.ts';
 
   interface Props {
     fields: FieldViews;
@@ -35,6 +41,8 @@
   /** The magic item whose text is open under the tiles, by row: one at a time, like the Actions card. */
   let itemOpen: number | null = $state(null);
   const openItem = $derived(inventory.magicItems.find((item) => item.row === itemOpen) ?? null);
+  /** A healing potion picked from MPMB's magic items drinks like one in the gear list, without a count. */
+  const openPotion = $derived(openItem ? potionOf(openItem.name) : null);
 
   const COIN_NAMES = {
     pp: ['coinPp', 'coinPpShort'],
@@ -83,6 +91,65 @@
       .filter(Boolean)
       .join(' · ');
     return line.charAt(0).toUpperCase() + line.slice(1);
+  }
+
+  // Healing potions (M17, Nick picked mock A on 2026-11-16): a Drink button on the potion's row opens a small window
+  // with the two ways to drink it. The window is the confirmation, so a stray tap never drinks.
+  interface Drinking {
+    name: string;
+    potion: Potion;
+    /** The gear row's count field and how many there are; null for a magic item (no count). */
+    amountField: string | null;
+    amount: number | null;
+    /** The Drink button: the card hands the focus back to it. */
+    from: HTMLElement;
+  }
+  let drinking: Drinking | null = $state(null);
+  const hp = $derived(readHitPoints(fields));
+  const hpTop = $derived(maxNow(hp) ?? 0);
+  const hpNow = $derived(hp.current ?? hpTop);
+
+  function openDrink(name: string, potion: Potion, from: HTMLElement, item?: GearItem) {
+    // A row without a number in its count (empty, or "a few") drinks without counting, like a magic item.
+    const counted = item && item.amount !== null;
+    drinking = { name, potion, from, amountField: counted ? item.amountField : null, amount: item?.amount ?? null };
+  }
+
+  /**
+   * Drinks the potion: an action heals the full value, a bonus action rolls (the group's house rule). The healing
+   * and one potion fewer go to the sheet at once; the dice card shows what happened and offers Undo.
+   */
+  function drink(how: 'action' | 'bonus') {
+    const open = drinking;
+    if (!open) return;
+    drinking = null;
+    const { formula } = open.potion;
+    const roll = how === 'bonus' ? rollFormula(formula) : null;
+    // Never below 0, like fullValue: a homebrew formula with a minus must not hurt.
+    const total = roll ? Math.max(0, roll.total) : fullValue(formula);
+    const healed = healing(fields, total);
+    const counted = open.amountField !== null && open.amount !== null && open.amount > 0;
+    const left = counted ? (open.amount ?? 1) - 1 : null;
+    const count: Step[] = counted && open.amountField ? [{ edit: open.amountField, text: String(left) }] : [];
+    const back: Step[] = counted && open.amountField ? [{ edit: open.amountField, text: String(open.amount) }] : [];
+    const after = counted && open.amountField && left !== null ? { field: open.amountField, left } : null;
+    change([...healed.edits, ...healed.clicks.map((click) => ({ click })), ...count]);
+    dice.heal(
+      {
+        name: open.name,
+        how,
+        formula,
+        roll,
+        total,
+        hp: healed.current,
+        max: hpTop,
+        left,
+        undo: () => change([...healed.undo.edits, ...healed.undo.clicks.map((click) => ({ click })), ...back]),
+        // Reads the `fields` prop, so the card's Undo goes away as soon as anything else changes the sheet.
+        canUndo: () => unchangedSince(fields, { hp: healed.after, count: after, unticked: healed.clicks }),
+      },
+      { from: open.from },
+    );
   }
 
   /** Page 3's free text box. Acrobat's line breaks ("\r") become the browser's. */
@@ -218,6 +285,19 @@
             <b>{openItem.name}</b>
             {#if kind}<p class="kind">{kind}</p>{/if}
             {#if openItem.description}<p>{openItem.description}</p>{/if}
+            {#if openPotion}
+              {@const itemPotion = openPotion}
+              {@const name = openItem.name}
+              <button
+                type="button"
+                class="drink"
+                aria-haspopup="dialog"
+                aria-label={fill(t.potionDrinkLabel, { name })}
+                {disabled}
+                onclick={(ev) => openDrink(name, itemPotion, ev.currentTarget)}
+                >{@render flask()}<span>{t.potionDrink}</span></button
+              >
+            {/if}
             <!-- MPMB's own attunement box: ticking it applies the item's features, unticking removes them
                  (playtest 2026-11-07). The rules allow three; MPMB doesn't stop a fourth, so neither do we. -->
             {#if openItem.attunable}
@@ -266,6 +346,7 @@
       {#if group.location}<h3>{group.location}</h3>{/if}
       <ul>
         {#each group.items as item (item.nameField)}
+          {@const potion = potionOf(item.name)}
           <li class="row item">
             <textarea
               class="name"
@@ -277,6 +358,17 @@
               onkeydown={enterSaves}
               onchange={(event) => rename(item.nameField, event)}></textarea>
             <span class="controls">
+              {#if potion}
+                <button
+                  type="button"
+                  class="drink"
+                  aria-haspopup="dialog"
+                  aria-label={fill(t.potionDrinkLabel, { name: item.name })}
+                  disabled={disabled || item.amount === 0}
+                  onclick={(ev) => openDrink(item.name, potion, ev.currentTarget, item)}
+                  >{@render flask()}<span class="word">{t.potionDrink}</span></button
+                >
+              {/if}
               {#if item.amount !== null}
                 <Stepper
                   text={String(item.amount)}
@@ -349,6 +441,54 @@
     {/if}
   </section>
 </div>
+
+{#snippet flask()}
+  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
+    ><path
+      d="M9 3h6M10 3v5.5L5.5 17a3 3 0 0 0 2.7 4h7.6a3 3 0 0 0 2.7-4L14 8.5V3"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    /><path d="M7.5 14h9" stroke="currentColor" stroke-width="2" /></svg
+  >
+{/snippet}
+
+{#if drinking}
+  {@const potion = drinking.potion}
+  {@const formula = formulaText(potion.formula)}
+  <Modal title={drinking.name} onescape={() => (drinking = null)} closeLabel={t.close}>
+    <p class="heals">
+      {[
+        fill(t.potionHeals, { formula }),
+        drinking.amount === null ? '' : fill(t.potionLeft, { count: drinking.amount }),
+        fill(t.potionHpNow, { hp: hpNow, max: hpTop }),
+      ]
+        .filter(Boolean)
+        .join(' · ')}
+    </p>
+    <div class="choices">
+      <button type="button" class="choice main" {disabled} onclick={() => drink('action')}>
+        <span class="k">{fullValue(potion.formula)}</span>
+        <b>{t.potionAction}</b>
+        <small>{fill(t.potionActionLine, { value: fullValue(potion.formula) })}</small>
+      </button>
+      <button type="button" class="choice" {disabled} onclick={() => drink('bonus')}>
+        <span class="k">{formula}</span>
+        <b>{t.potionBonus}</b>
+        <small
+          >{fill(t.potionBonusLine, {
+            formula,
+            least: leastValue(potion.formula),
+            full: fullValue(potion.formula),
+          })}</small
+        >
+      </button>
+    </div>
+    {#if drinking.amountField}<p class="hint">{t.potionCountHint}</p>{/if}
+  </Modal>
+{/if}
 
 {#if details}
   <Modal title={details.name} onescape={() => (detailsOf = null)} closeLabel={t.close}>
@@ -811,6 +951,103 @@
     margin: 0;
     color: var(--ink-muted);
     font-size: 0.875rem;
+  }
+
+  /* A healing potion's Drink button (M17): outlined in the accent, the row's one action besides counting. */
+  .drink {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 0.625rem;
+    border: 1px solid var(--accent);
+    border-radius: 0.5rem;
+    background: var(--surface);
+    color: var(--accent);
+    font: inherit;
+    font-size: 0.9375rem;
+    font-weight: 700;
+  }
+
+  .drink:disabled {
+    border-color: var(--line);
+    color: var(--ink-muted);
+  }
+
+  .text .drink {
+    margin-top: 0.5rem;
+  }
+
+  .heals {
+    margin: 0 0 0.875rem;
+    color: var(--ink-muted);
+  }
+
+  .choices {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .choice {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 0.75rem;
+    min-height: 56px;
+    padding: 0.5rem 0.875rem;
+    border: 1px solid var(--line);
+    border-radius: 0.625rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+  }
+
+  .choice .k {
+    grid-row: span 2;
+    display: grid;
+    place-items: center;
+    min-width: 3.25rem;
+    height: 2.5rem;
+    padding: 0 0.5rem;
+    border-radius: 0.5rem;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .choice small {
+    color: var(--ink-muted);
+    font-size: 0.875rem;
+  }
+
+  .choice.main {
+    border-color: var(--accent);
+  }
+
+  .choice.main .k {
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: 1.25rem;
+  }
+
+  .choices + .hint {
+    margin-top: 0.75rem;
+  }
+
+  /* A phone's gear row has no room for the word: the flask alone, its name for screen readers in the label. */
+  @media (max-width: 699px) {
+    .controls .drink {
+      padding: 0;
+    }
+
+    .controls .drink .word {
+      display: none;
+    }
   }
 
   .more {

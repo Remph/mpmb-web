@@ -35,7 +35,30 @@ export interface D20Ask {
   damage?: DamageAsk;
 }
 
+/** A healing potion drunk from the inventory (M17): already applied to the hit points when the card shows it. */
+export interface HealShown {
+  kind: 'heal';
+  /** "Potion of Healing". */
+  name: string;
+  /** An action heals the full value (the group's house rule), a bonus action rolls. */
+  how: 'action' | 'bonus';
+  formula: Formula;
+  /** The dice of a bonus action, null for an action. */
+  roll: FormulaRoll | null;
+  total: number;
+  /** Hit points after drinking, and the maximum. */
+  hp: number;
+  max: number;
+  /** Potions of this kind left on the row, null when the row doesn't count them. */
+  left: number | null;
+  /** Puts the hit points and the count back, as before the drink. */
+  undo: () => void;
+  /** Whether Undo still can: false once something else changed the hit points or the count (it would wipe that out). */
+  canUndo: () => boolean;
+}
+
 export type Shown =
+  | HealShown
   | { kind: 'd20'; ask: D20Ask; roll: D20Roll; total: number }
   | { kind: 'damage'; ask: DamageAsk; crit: boolean; slot: number | null; roll: FormulaRoll };
 
@@ -75,6 +98,12 @@ class Dice {
     this.slot = slot;
   }
 
+  /** Shows a drunk potion; the inventory has already written its healing. */
+  heal(shown: Omit<HealShown, 'kind'>, { from }: { from?: HTMLElement } = {}) {
+    if (from) this.slot = null;
+    this.show({ kind: 'heal', ...shown }, from);
+  }
+
   close() {
     this.shown = null;
     this.from = null;
@@ -104,10 +133,15 @@ export const damageText = (ask: DamageAsk, crit: boolean, slot: number | null = 
 /** The card's head: "+2 Halberd attack roll", "+2 Halberd damage", "+2 Halberd critical damage". */
 export function titleOf(shown: Shown, t: Texts): string {
   if (shown.kind === 'd20') return shown.ask.title;
+  if (shown.kind === 'heal')
+    return fill(shown.how === 'action' ? t.diceDrankAction : t.diceDrankBonus, { name: shown.name });
   return fill(shown.crit ? t.diceCritTitle : t.diceDamageTitle, { name: shown.ask.name });
 }
 
-export const totalOf = (shown: Shown): number => (shown.kind === 'd20' ? shown.total : shown.roll.total);
+export function totalOf(shown: Shown): number {
+  if (shown.kind === 'damage') return shown.roll.total;
+  return shown.total;
+}
 
 /** What a screen reader hears after a roll: "Stealth: 7". */
 export const spokenOf = (shown: Shown | null, t: Texts): string =>
