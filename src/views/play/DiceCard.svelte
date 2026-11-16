@@ -194,10 +194,14 @@
       </span>
     {:else if shown.kind === 'heal'}
       {@const heal = shown}
-      <!-- Drinking already healed: Undo is the way back from a mis-tap, nothing rolls again. -->
-      <button type="button" aria-label={fill(t.diceUndoLabel, { name: title })} onclick={() => undo(heal)}
-        >{t.diceUndo}</button
-      >
+      <!-- Drinking already healed: Undo is the way back from a mis-tap, nothing rolls again. It goes once the hit
+           points or the count changed otherwise (damage, a second drink): writing the old values back would undo
+           that too. -->
+      {#if heal.canUndo()}
+        <button type="button" aria-label={fill(t.diceUndoLabel, { name: title })} onclick={() => undo(heal)}
+          >{t.diceUndo}</button
+        >
+      {/if}
     {:else if restepped}
       <button type="button" class="main" onclick={() => again()}
         >{fill(shown.crit ? t.diceCritDamage : t.diceDamage, {

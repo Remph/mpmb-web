@@ -9,7 +9,7 @@
 import { parseFormula } from '../dice/dice.ts';
 import type { Formula } from '../dice/dice.ts';
 import { applyHealing, maxNow, tickedDeathSaves } from './rules.ts';
-import { readHitPoints, valueOf } from './read.ts';
+import { isOn, numberOf, readHitPoints, valueOf } from './read.ts';
 import type { FieldViews } from '../worker/views.ts';
 
 export interface Potion {
@@ -25,9 +25,11 @@ const KINDS: readonly { words: readonly string[]; formula: string }[] = [
   { words: [], formula: '2d4+2' },
 ];
 
-/** A healing potion by its name, in English or German. */
+/** A healing potion by its name, in English or German ("Heiltrank", "Trank der Heilung"). */
 const isHealingPotion = (name: string): boolean =>
-  (name.includes('potion') && name.includes('healing')) || name.includes('heiltrank');
+  (name.includes('potion') && name.includes('healing')) ||
+  name.includes('heiltrank') ||
+  (name.includes('trank') && name.includes('heilung'));
 
 /**
  * Dice written into the name win over the table: "Potion of Healing (2d4+2)", MPMB's own "Healing (Common; 2d4+2)",
@@ -53,13 +55,22 @@ export function potionOf(name: string): Potion | null {
   return formula ? { formula } : null;
 }
 
-/** The most the dice can give: what drinking as an Action heals. */
+/**
+ * The most the dice can give: what drinking as an Action heals. Never below 0: a homebrew "(1d4-5)" written into the
+ * name must not take hit points away.
+ */
 export const fullValue = (formula: Formula): number =>
-  formula.groups.reduce((sum, g) => sum + g.sign * g.count * g.sides, formula.bonus);
+  Math.max(
+    0,
+    formula.groups.reduce((sum, g) => sum + g.sign * g.count * g.sides, formula.bonus),
+  );
 
 /** The least the dice can give: the low end of "4 to 10". */
 export const leastValue = (formula: Formula): number =>
-  formula.groups.reduce((sum, g) => sum + g.sign * g.count, formula.bonus);
+  Math.max(
+    0,
+    formula.groups.reduce((sum, g) => sum + g.sign * g.count, formula.bonus),
+  );
 
 /** A field written back as it was, for Undo. */
 export interface HealEdit {
@@ -75,6 +86,8 @@ export interface Healing {
   clicks: string[];
   /** What Undo writes and clicks to put it all back (a death save box ticks again on a second click). */
   undo: { edits: HealEdit[]; clicks: string[] };
+  /** The "HP Current" field as drinking leaves it: a number, or null for the empty field of full health. */
+  after: number | null;
 }
 
 /**
@@ -96,5 +109,22 @@ export function healing(fields: FieldViews, amount: number): Healing {
     edits,
     clicks,
     undo: { edits: changed ? [{ edit: 'HP Current', text: old }] : [], clicks },
+    after: changed ? (text === '' ? null : next.current) : hp.current,
   };
 }
+
+/** What a drink left on the sheet: the hit points, the row's count, and the death save boxes it unticked. */
+export interface AfterDrink {
+  hp: number | null;
+  count: { field: string; left: number } | null;
+  unticked: string[];
+}
+
+/**
+ * Whether the sheet is still as the drink left it. Undo writes the old values back, so after anything else
+ * changed them (damage, a second potion, a rest, the count stepped by hand) it would wipe that change out too.
+ */
+export const unchangedSince = (fields: FieldViews, after: AfterDrink): boolean =>
+  numberOf(fields, 'HP Current') === after.hp &&
+  (after.count === null || numberOf(fields, after.count.field) === after.count.left) &&
+  after.unticked.every((box) => !isOn(fields, box));

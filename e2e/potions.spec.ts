@@ -84,4 +84,14 @@ test('a potion drunk as an action heals its full value, Undo puts it back, a bon
   await expect(page.locator('.now').first()).toHaveText(String(HURT + healed));
   expect(await hitPoints(page)).toBe(HURT + healed);
   await expect(count(page)).toContainText('4');
+  const undo = card.getByRole('button', { name: 'Undo Potion of Healing · bonus action' });
+  await expect(undo).toBeVisible();
+
+  // Damage after the drink: Undo would write the old hit points back and wipe the damage out, so it goes.
+  await page.getByRole('button', { name: 'Damage', exact: true }).click();
+  await page.keyboard.type('3');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.now').first()).toHaveText(String(HURT + healed - 3));
+  await expect(card).toBeVisible();
+  await expect(undo).toHaveCount(0);
 });

@@ -53,6 +53,8 @@ export interface HealShown {
   left: number | null;
   /** Puts the hit points and the count back, as before the drink. */
   undo: () => void;
+  /** Whether Undo still can: false once something else changed the hit points or the count (it would wipe that out). */
+  canUndo: () => boolean;
 }
 
 export type Shown =

@@ -18,7 +18,7 @@
   import LagerLine from '../lager/LagerLine.svelte';
   import { formulaText, rollFormula } from '../../dice/dice.ts';
   import { dice } from '../../play/dice.svelte.ts';
-  import { fullValue, healing, leastValue, potionOf } from '../../play/potions.ts';
+  import { fullValue, healing, leastValue, potionOf, unchangedSince } from '../../play/potions.ts';
   import type { Potion } from '../../play/potions.ts';
   import { readHitPoints } from '../../play/read.ts';
   import { maxNow } from '../../play/rules.ts';
@@ -110,7 +110,9 @@
   const hpNow = $derived(hp.current ?? hpTop);
 
   function openDrink(name: string, potion: Potion, from: HTMLElement, item?: GearItem) {
-    drinking = { name, potion, from, amountField: item?.amountField ?? null, amount: item?.amount ?? null };
+    // A row without a number in its count (empty, or "a few") drinks without counting, like a magic item.
+    const counted = item && item.amount !== null;
+    drinking = { name, potion, from, amountField: counted ? item.amountField : null, amount: item?.amount ?? null };
   }
 
   /**
@@ -123,12 +125,14 @@
     drinking = null;
     const { formula } = open.potion;
     const roll = how === 'bonus' ? rollFormula(formula) : null;
-    const total = roll ? roll.total : fullValue(formula);
+    // Never below 0, like fullValue: a homebrew formula with a minus must not hurt.
+    const total = roll ? Math.max(0, roll.total) : fullValue(formula);
     const healed = healing(fields, total);
     const counted = open.amountField !== null && open.amount !== null && open.amount > 0;
     const left = counted ? (open.amount ?? 1) - 1 : null;
     const count: Step[] = counted && open.amountField ? [{ edit: open.amountField, text: String(left) }] : [];
     const back: Step[] = counted && open.amountField ? [{ edit: open.amountField, text: String(open.amount) }] : [];
+    const after = counted && open.amountField && left !== null ? { field: open.amountField, left } : null;
     change([...healed.edits, ...healed.clicks.map((click) => ({ click })), ...count]);
     dice.heal(
       {
@@ -141,6 +145,8 @@
         max: hpTop,
         left,
         undo: () => change([...healed.undo.edits, ...healed.undo.clicks.map((click) => ({ click })), ...back]),
+        // Reads the `fields` prop, so the card's Undo goes away as soon as anything else changes the sheet.
+        canUndo: () => unchangedSince(fields, { hp: healed.after, count: after, unticked: healed.clicks }),
       },
       { from: open.from },
     );
