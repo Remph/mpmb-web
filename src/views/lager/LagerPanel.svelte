@@ -26,6 +26,7 @@
     type PlaceFilter,
   } from '../../lager/lager.ts';
   import { changedWhen } from './when.ts';
+  import { loadFolded, toggleFolded } from '../../lager/folded.ts';
   import LagerAddWindow from './LagerAddWindow.svelte';
   import LagerItemWindow from './LagerItemWindow.svelte';
   import LagerPlaceWindow from './LagerPlaceWindow.svelte';
@@ -42,6 +43,9 @@
   // Fresh numbers while the panel is open.
   $effect(() => store.watch());
 
+  /** The groups this device shows folded (a tap on a group's heading). */
+  const storage = typeof localStorage === 'undefined' ? undefined : localStorage;
+  let folded = $state(loadFolded(storage));
   let query = $state('');
   let filter = $state<PlaceFilter>('all');
   let adding = $state<{ group: string | null } | null>(null);
@@ -168,9 +172,21 @@
 
       {#each groups as { group, items, total } (group.id)}
         {#if items.length || (!query && filter === 'all') || (group.kind === 'count' && !query)}
+          <!-- A search or a filter opens folded groups: what it found must show. -->
+          {@const open = !folded.has(group.id) || Boolean(query) || filter !== 'all'}
           <section class="group" aria-label={group.name}>
             <div class="group-head">
-              <h3>{group.name} <small>{total}</small></h3>
+              <h3>
+                <button
+                  type="button"
+                  class="fold"
+                  aria-expanded={open}
+                  disabled={Boolean(query) || filter !== 'all'}
+                  onclick={() => (folded = toggleFolded(folded, group.id, storage))}
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+                  {group.name} <small>{total}</small></button
+                >
+              </h3>
               <button
                 type="button"
                 class="more"
@@ -179,46 +195,48 @@
                 onclick={() => (groupOpen = group.id)}>···</button
               >
             </div>
-            <ul>
-              {#each items as item (item.id)}
-                <li class="row">
-                  <button type="button" class="name" onclick={() => (itemOpen = item.id)}
-                    ><span>{item.name}</span>{#if item.note}<small>{firstLine(item.note)}</small>{/if}</button
-                  >
-                  {#if group.kind === 'place'}
-                    {#if item.count !== 1}<span class="times">{item.count}×</span>{/if}
-                    <button
-                      type="button"
-                      class="place {placeKind(item.place)}"
-                      aria-label={fill(t.lagerPlaceOf, { name: item.name })}
-                      disabled={readonly}
-                      onclick={() => (placeOf = item.id)}>{item.place || IN_LAGER}</button
+            {#if open}
+              <ul>
+                {#each items as item (item.id)}
+                  <li class="row">
+                    <button type="button" class="name" onclick={() => (itemOpen = item.id)}
+                      ><span>{item.name}</span>{#if item.note}<small>{firstLine(item.note)}</small>{/if}</button
                     >
-                  {:else}
-                    <Stepper
-                      text={String(item.count)}
-                      name={item.name}
-                      canLess={item.count > 0}
-                      canMore={true}
-                      disabled={readonly}
-                      onless={() => send([{ op: 'count', id: item.id, by: -1 }])}
-                      onmore={() => send([{ op: 'count', id: item.id, by: 1 }])}
-                      {t}
-                    />
-                  {/if}
-                </li>
-              {/each}
-            </ul>
-            {#if !query}
-              <input
-                class="quick"
-                type="text"
-                placeholder={t.lagerAddLine}
-                aria-label={`${group.name}: ${t.lagerAddLine}`}
-                maxlength={200}
-                disabled={readonly}
-                onchange={(event) => quickAdd(event.currentTarget, group)}
-              />
+                    {#if group.kind === 'place'}
+                      {#if item.count !== 1}<span class="times">{item.count}×</span>{/if}
+                      <button
+                        type="button"
+                        class="place {placeKind(item.place)}"
+                        aria-label={fill(t.lagerPlaceOf, { name: item.name })}
+                        disabled={readonly}
+                        onclick={() => (placeOf = item.id)}>{item.place || IN_LAGER}</button
+                      >
+                    {:else}
+                      <Stepper
+                        text={String(item.count)}
+                        name={item.name}
+                        canLess={item.count > 0}
+                        canMore={true}
+                        disabled={readonly}
+                        onless={() => send([{ op: 'count', id: item.id, by: -1 }])}
+                        onmore={() => send([{ op: 'count', id: item.id, by: 1 }])}
+                        {t}
+                      />
+                    {/if}
+                  </li>
+                {/each}
+              </ul>
+              {#if !query}
+                <input
+                  class="quick"
+                  type="text"
+                  placeholder={t.lagerAddLine}
+                  aria-label={`${group.name}: ${t.lagerAddLine}`}
+                  maxlength={200}
+                  disabled={readonly}
+                  onchange={(event) => quickAdd(event.currentTarget, group)}
+                />
+              {/if}
             {/if}
           </section>
         {/if}
@@ -437,6 +455,50 @@
     margin: 0;
     font-size: 1rem;
     font-weight: 800;
+  }
+
+  /* The heading folds its group: the whole name is the target, with a chevron that points down when open. */
+  .fold {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-width: 0;
+    padding: 0 0.5rem 0 0.25rem;
+    border-color: transparent;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+  }
+
+  .fold:disabled {
+    opacity: 1;
+  }
+
+  .fold svg {
+    flex: none;
+    width: 1.125rem;
+    height: 1.125rem;
+    fill: none;
+    stroke: var(--ink-muted);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 0.15s;
+  }
+
+  .fold[aria-expanded='true'] svg {
+    transform: rotate(90deg);
+  }
+
+  .fold:disabled svg {
+    visibility: hidden;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fold svg {
+      transition: none;
+    }
   }
 
   h3 small {

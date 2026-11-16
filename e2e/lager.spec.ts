@@ -109,6 +109,23 @@ test('the Lager: open it from the Inventory tab, add, move, count, and see what 
   service.offline = false;
   await expect(panel.getByRole('button', { name: '+ Add' })).toBeEnabled({ timeout: POLLED });
 
+  // A tap on a group's heading folds it, and this device remembers it; a search opens it while it finds something.
+  const fold = materials.locator('button.fold');
+  await fold.click();
+  await expect(fold).toHaveAttribute('aria-expanded', 'false');
+  await expect(materials.getByRole('listitem')).toHaveCount(0);
+  await panel.getByRole('button', { name: 'Close', exact: true }).click();
+  await line.getByRole('button', { name: 'Open the Lager' }).click();
+  await expect(materials.locator('button.fold')).toHaveAttribute('aria-expanded', 'false');
+  await expect(materials.getByRole('listitem')).toHaveCount(0);
+  const search = panel.getByRole('searchbox', { name: 'Search the Lager …' });
+  await search.fill('iron');
+  await expect(materials.getByRole('listitem')).toHaveCount(1);
+  await search.fill('');
+  await expect(materials.getByRole('listitem')).toHaveCount(0);
+  await materials.locator('button.fold').click();
+  await expect(materials.getByRole('listitem')).toHaveCount(1);
+
   // On a phone: a bottom sheet whose boxes are big enough not to zoom.
   await page.setViewportSize(PHONE);
   await panel.getByRole('button', { name: '+ Add' }).click();
