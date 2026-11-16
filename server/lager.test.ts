@@ -66,6 +66,9 @@ describe('what a Lager request may say', () => {
     expect(refused({ op: 'orderGroups', ids: [] })).toMatchObject({ details: { what: 'ids' } });
     expect(refused({ op: 'orderGroups', ids: [G1, G1] })).toMatchObject({ details: { what: 'ids' } });
     expect(refused({ op: 'orderGroups', ids: [G1, 'a b'] })).toMatchObject({ details: { what: 'id' } });
+    expect(refused({ op: 'orderGroups', ids: G1 })).toMatchObject({ details: { what: 'ids' } });
+    const tooMany = Array.from({ length: LIMITS.groups + 1 }, (_, index) => `g-${index}`);
+    expect(refused({ op: 'orderGroups', ids: tooMany })).toMatchObject({ details: { what: 'ids' } });
     // An op named after an object's own properties is no op.
     expect(refused({ op: 'toString', id: I1 })).toMatchObject({ details: { what: 'op' } });
   });
@@ -279,6 +282,13 @@ describe.skipIf(!settings.DB_HOST || !settings.DB_NAME)('the Lager on a real dat
     // A device that didn't know G3 yet names only the two it showed: G3 keeps its place after them.
     expect(ids((await change(token, { op: 'orderGroups', ids: [G1, G2] })).body)).toEqual([G1, G2, G3]);
     expect(ids((await change(token, { op: 'orderGroups', ids: [G3, 'g-gone'] })).body)).toEqual([G3, G1, G2]);
+    // A group added after a new order still comes last.
+    expect(ids((await change(token, { op: 'addGroup', id: 'g-gems', name: 'Gems', kind: 'count' })).body)).toEqual([
+      G3,
+      G1,
+      G2,
+      'g-gems',
+    ]);
   });
 
   it('keeps the items in the order they were added, and an import of a whole list in one request', async () => {

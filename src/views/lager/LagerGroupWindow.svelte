@@ -3,7 +3,7 @@
   2026-11-16), or remove it with all its items after asking once more, with how many items go with it.
 -->
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import Modal from '../../popups/Modal.svelte';
@@ -18,14 +18,30 @@
     onsave: (ops: Op[]) => void;
     /** Sends a move at once; the window stays open for the next step. */
     onmove: (ops: Op[]) => void;
+    /** No connection: a move would show and then fall back, so the buttons wait (like the panel's). */
+    readonly: boolean;
     onclose: () => void;
     t: Texts;
   }
 
-  let { group, count, lager, onsave, onmove, onclose, t }: Props = $props();
+  let { group, count, lager, onsave, onmove, readonly, onclose, t }: Props = $props();
 
   const up = $derived(movedGroup(lager, group.id, -1));
   const down = $derived(movedGroup(lager, group.id, 1));
+  let upButton: HTMLButtonElement | undefined = $state();
+  let downButton: HTMLButtonElement | undefined = $state();
+
+  /**
+   * At the top or bottom the button just pressed turns disabled and drops the focus to the page (Firefox): hand it
+   * to the other one, so a keyboard player stays in the window.
+   */
+  async function move(order: string[] | null, by: -1 | 1): Promise<void> {
+    if (!order) return;
+    onmove([{ op: 'orderGroups', ids: order }]);
+    await tick();
+    if (by < 0 && !up) downButton?.focus();
+    if (by > 0 && !down) upButton?.focus();
+  }
 
   const start = untrack(() => ({ ...group }));
   let name = $state(start.name);
@@ -52,10 +68,10 @@
     </label>
     <div class="move" role="group" aria-labelledby="lager-group-place">
       <span id="lager-group-place">{t.lagerGroupPlace}</span>
-      <button type="button" disabled={!up} onclick={() => up && onmove([{ op: 'orderGroups', ids: up }])}
+      <button type="button" bind:this={upButton} disabled={readonly || !up} onclick={() => move(up, -1)}
         >{t.lagerMoveUp}</button
       >
-      <button type="button" disabled={!down} onclick={() => down && onmove([{ op: 'orderGroups', ids: down }])}
+      <button type="button" bind:this={downButton} disabled={readonly || !down} onclick={() => move(down, 1)}
         >{t.lagerMoveDown}</button
       >
     </div>

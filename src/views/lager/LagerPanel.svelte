@@ -287,6 +287,7 @@
     count={lager.items.filter((item) => item.group === groupOpen).length}
     {lager}
     onmove={send}
+    {readonly}
     onsave={(ops) => {
       send(ops);
       groupOpen = null;
