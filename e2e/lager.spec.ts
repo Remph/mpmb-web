@@ -109,6 +109,35 @@ test('the Lager: open it from the Inventory tab, add, move, count, and see what 
   service.offline = false;
   await expect(panel.getByRole('button', { name: '+ Add' })).toBeEnabled({ timeout: POLLED });
 
+  // A tap on a group's heading folds it, and this device remembers it; a search opens it while it finds something.
+  const fold = materials.locator('button.fold');
+  await fold.click();
+  await expect(fold).toHaveAttribute('aria-expanded', 'false');
+  await expect(materials.getByRole('listitem')).toHaveCount(0);
+  await panel.getByRole('button', { name: 'Close', exact: true }).click();
+  await line.getByRole('button', { name: 'Open the Lager' }).click();
+  await expect(materials.locator('button.fold')).toHaveAttribute('aria-expanded', 'false');
+  await expect(materials.getByRole('listitem')).toHaveCount(0);
+  const search = panel.getByRole('searchbox', { name: 'Search the Lager …' });
+  await search.fill('iron');
+  await expect(materials.getByRole('listitem')).toHaveCount(1);
+  await search.fill('');
+  await expect(materials.getByRole('listitem')).toHaveCount(0);
+  // The place filter picks among the magic items only: it opens their folded group, not the folded materials.
+  const magic = panel.getByRole('region', { name: 'Magic items' });
+  await magic.locator('button.fold').click();
+  await expect(magic.getByRole('listitem')).toHaveCount(0);
+  const show = panel.getByRole('group', { name: 'Show items' });
+  await show.getByRole('button').filter({ hasText: 'With characters' }).click();
+  await expect(magic.getByRole('listitem')).toHaveCount(1);
+  await expect(materials.getByRole('listitem')).toHaveCount(0);
+  await expect(materials.locator('button.fold')).toBeEnabled();
+  await show.getByRole('button').filter({ hasText: 'All' }).click();
+  await expect(magic.getByRole('listitem')).toHaveCount(0);
+  await magic.locator('button.fold').click();
+  await materials.locator('button.fold').click();
+  await expect(materials.getByRole('listitem')).toHaveCount(1);
+
   // Materials first, for everyone: the group's window moves it up the list (not without a connection).
   await panel.getByRole('button', { name: 'Change the group Materials' }).click();
   const groupWindow = page.getByRole('dialog', { name: 'Materials' });
