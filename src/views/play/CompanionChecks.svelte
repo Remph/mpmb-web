@@ -1,10 +1,14 @@
 <!--
   A companion's abilities, saves and skills (the right column, or the Checks tab when narrow). Shown as
-  MPMB worked them out; a companion page has no advantage marks, so these are not buttons.
+  MPMB worked them out. A tap rolls a save or skill on the dice card (M17); a companion page has no advantage
+  marks, so the roll is a straight one and the card offers it again with advantage or disadvantage.
 -->
 <script lang="ts">
+  import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
   import type { Companion } from '../../play/companions.ts';
+  import { bonusOf } from '../../dice/dice.ts';
+  import { dice } from '../../play/dice.svelte.ts';
 
   interface Props {
     companion: Companion;
@@ -12,6 +16,11 @@
   }
 
   let { companion, t }: Props = $props();
+
+  function roll(title: string, shown: string, from: HTMLButtonElement) {
+    const bonus = bonusOf(shown);
+    if (bonus !== null) dice.d20({ title, bonus, mode: 'normal' }, { from });
+  }
 </script>
 
 <section class="panel" aria-labelledby="companion-abilities-title">
@@ -27,8 +36,20 @@
           <td class="score">{a.score}</td>
           <td class="num">{a.modifier}</td>
           <td class="num">
-            <span class="prof" class:no={!a.saveProficient} title={a.saveProficient ? t.proficient : undefined}
-            ></span>{a.save}
+            {#if bonusOf(a.save) === null}
+              <span class="prof" class:no={!a.saveProficient} title={a.saveProficient ? t.proficient : undefined}
+              ></span>{a.save}
+            {:else}
+              {@const title = fill(t.saveTitle, { ability: t[`ability${a.key}`] })}
+              <button
+                type="button"
+                class="roll"
+                aria-label={fill(t.diceRollLabel, { title, bonus: a.save })}
+                onclick={(ev) => roll(title, a.save, ev.currentTarget)}
+                ><span class="prof" class:no={!a.saveProficient} title={a.saveProficient ? t.proficient : undefined}
+                ></span>{a.save}</button
+              >
+            {/if}
           </td>
         </tr>
       {/each}
@@ -40,13 +61,20 @@
   <h2 id="companion-skills-title">{t.skills}</h2>
   <ul class="skills">
     {#each companion.skills as s (s.key)}
+      {@const name = t[`skill${s.key}`]}
       <li>
-        <span>
-          <span class="prof" class:no={s.mark === 'nothing'} class:exp={s.mark === 'expertise'}></span>{t[
-            `skill${s.key}`
-          ]}
-        </span>
-        <b>{s.bonus}</b>
+        <button
+          type="button"
+          class="roll skill"
+          aria-label={fill(t.diceRollLabel, { title: name, bonus: s.bonus })}
+          disabled={bonusOf(s.bonus) === null}
+          onclick={(ev) => roll(name, s.bonus, ev.currentTarget)}
+        >
+          <span>
+            <span class="prof" class:no={s.mark === 'nothing'} class:exp={s.mark === 'expertise'}></span>{name}
+          </span>
+          <b>{s.bonus}</b>
+        </button>
       </li>
     {/each}
   </ul>
@@ -141,8 +169,6 @@
   .skills li {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.25rem;
     min-height: 44px;
     border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
     font-size: 0.9375rem;
@@ -152,6 +178,36 @@
 
   .skills b {
     font-weight: 800;
+  }
+
+  /* The numbers roll (M17): plain text to look at, a 44 px target to tap, like the character's saves and skills. */
+  .roll {
+    min-height: 44px;
+    padding: 0 0.375rem;
+    border: 0;
+    border-radius: 0.375rem;
+    background: none;
+    color: inherit;
+    font: inherit;
+  }
+
+  .roll:not(:disabled):hover,
+  .roll:focus-visible {
+    background: var(--accent-soft);
+  }
+
+  .roll:disabled {
+    opacity: 1;
+  }
+
+  .skill {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem;
+    margin: 0 -0.375rem;
+    text-align: left;
   }
 
   .skills-panel {

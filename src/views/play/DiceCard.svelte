@@ -11,15 +11,20 @@
   import type { Texts } from '../../i18n.ts';
   import { formulaText, natural } from '../../dice/dice.ts';
   import type { RollMode } from '../../dice/dice.ts';
-  import { damageText, dice, isCritical, titleOf, totalOf } from '../../play/dice.svelte.ts';
+  import { TOP_SLOT, damageText, dice, isCritical, titleOf, totalOf } from '../../play/dice.svelte.ts';
+  import Stepper from './Stepper.svelte';
   import type { HealShown, Shown } from '../../play/dice.svelte.ts';
 
   interface Props {
     shown: Shown;
+    /** A phone's tab bar is under the card (the character's play view; companion pages have none yet). */
+    onTabBar?: boolean;
+    /** The card's height in px, for the page to keep that much room under its last rows. */
+    height?: number;
     t: Texts;
   }
 
-  let { shown, t }: Props = $props();
+  let { shown, onTabBar = true, height = $bindable(0), t }: Props = $props();
 
   const MODE_WORD: Record<RollMode, 'advantage' | 'disadvantage' | 'doubleAdvantage' | 'doubleDisadvantage' | ''> = {
     normal: '',
@@ -41,7 +46,10 @@
   const totalText = $derived(shown.kind === 'heal' ? `+${total}` : String(total));
   /** "d20 + 8 · with advantage" under the dice. */
   const line = $derived.by(() => {
-    if (shown.kind === 'damage') return damageText(shown.ask, shown.crit);
+    if (shown.kind === 'damage') {
+      const formula = damageText(shown.ask, shown.crit, shown.slot);
+      return shown.slot === null ? formula : fill(t.diceSlotLine, { formula, level: shown.slot });
+    }
     if (shown.kind === 'heal') {
       const formula = formulaText(shown.formula);
       return [
@@ -59,6 +67,17 @@
   const nat = $derived(shown.kind === 'd20' ? natural(shown.roll) : null);
   const crit = $derived(isCritical(shown));
   const damage = $derived(shown.kind === 'd20' ? shown.ask.damage : undefined);
+  /**
+   * A spell whose damage grows with the slot (M17): the card steps the slot level, from the spell's own up to 9.
+   * The next damage roll uses it; a roll already on the card stays as it was rolled.
+   */
+  const upcast = $derived.by(() => {
+    if (shown.kind === 'damage') return shown.ask.upcast;
+    return shown.kind === 'd20' ? shown.ask.damage?.upcast : undefined;
+  });
+  const slot = $derived(dice.slot ?? upcast?.level ?? 0);
+  /** A damage card whose slot was stepped: its main button rolls the new damage, not the old one again. */
+  const restepped = $derived(shown.kind === 'damage' && shown.slot !== null && shown.slot !== dice.slot);
 
   function again(mode?: RollMode) {
     if (shown.kind === 'd20') dice.d20(shown.ask, { mode });
@@ -101,7 +120,7 @@
 
 <svelte:window {onkeydown} />
 
-<section class="card" aria-label={t.diceCard} bind:this={card}>
+<section class="card" class:bar={onTabBar} aria-label={t.diceCard} bind:this={card} bind:offsetHeight={height}>
   <div class="head">
     <h2>{title}</h2>
     {#if shown.kind === 'd20' && shown.ask.mark}
@@ -157,7 +176,7 @@
   <div class="acts">
     {#if damage}
       <button type="button" class="main" onclick={() => dice.damage(damage, { crit })}
-        >{fill(crit ? t.diceCritDamage : t.diceDamage, { formula: damageText(damage, crit) })}</button
+        >{fill(crit ? t.diceCritDamage : t.diceDamage, { formula: damageText(damage, crit, dice.slot) })}</button
       >
     {/if}
     {#if shown.kind === 'd20'}
@@ -179,10 +198,30 @@
       <button type="button" aria-label={fill(t.diceUndoLabel, { name: title })} onclick={() => undo(heal)}
         >{t.diceUndo}</button
       >
+    {:else if restepped}
+      <button type="button" class="main" onclick={() => again()}
+        >{fill(shown.crit ? t.diceCritDamage : t.diceDamage, {
+          formula: damageText(shown.ask, shown.crit, dice.slot),
+        })}</button
+      >
     {:else}
       <button type="button" aria-label={t.diceAgainLabel} onclick={() => again()}>{t.diceAgain}</button>
     {/if}
   </div>
+  {#if upcast}
+    <div class="slot">
+      <span>{t.diceSlot}</span>
+      <Stepper
+        text={String(slot)}
+        name={t.diceSlot}
+        canLess={slot > upcast.level}
+        canMore={slot < TOP_SLOT}
+        onless={() => dice.setSlot(slot - 1)}
+        onmore={() => dice.setSlot(slot + 1)}
+        {t}
+      />
+    </div>
+  {/if}
 </section>
 
 <style>
@@ -203,7 +242,7 @@
   }
 
   @media (max-width: 699px) {
-    .card {
+    .card.bar {
       bottom: calc(var(--tab-bar-height) + 0.5rem + env(safe-area-inset-bottom));
     }
   }
@@ -341,6 +380,16 @@
     color: var(--accent);
     font: inherit;
     font-weight: 700;
+  }
+
+  .slot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: 0.5rem 0.625rem 0 0;
+    color: var(--ink-muted);
+    font-size: 0.9375rem;
   }
 
   .again {

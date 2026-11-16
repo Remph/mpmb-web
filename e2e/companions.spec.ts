@@ -44,6 +44,15 @@ test('a steed is summoned, disappears at 0 HP and comes back when cast again', a
   await expect(bar).toContainText('Otherworldly Steed 25/25 HP', { timeout: STARTUP });
   await expect(page.getByRole('heading', { name: 'Otherworldly Steed' })).toBeVisible();
   await expect(page.getByText('Steed · Large Fey')).toBeVisible();
+  // Its attack rolls on the dice card (M17), like the character's own.
+  await page.getByRole('button', { name: /^Roll Otherworldly Slam damage 1d8\+2/ }).click();
+  await expect(
+    page.getByRole('region', { name: 'Dice roll' }).getByRole('heading', { name: 'Otherworldly Slam damage' }),
+  ).toBeVisible();
+  // Another of the steed's tabs closes the card, as the character's tabs do.
+  await page.getByRole('tab', { name: 'Notes' }).click();
+  await expect(page.getByRole('region', { name: 'Dice roll' })).toBeHidden();
+  await page.getByRole('tab', { name: 'Combat' }).click();
 
   await page.getByRole('button', { name: 'Damage', exact: true }).click();
   const pad = page.getByRole('dialog');

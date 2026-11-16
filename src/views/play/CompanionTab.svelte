@@ -6,8 +6,12 @@
 <script lang="ts">
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
-  import type { Companion } from '../../play/companions.ts';
+  import type { Companion, CompanionAttack } from '../../play/companions.ts';
+  import { bonusOf, parseFormula } from '../../dice/dice.ts';
+  import { dice } from '../../play/dice.svelte.ts';
+  import type { DamageAsk } from '../../play/dice.svelte.ts';
   import RichText from './RichText.svelte';
+  import RollBadge from './RollBadge.svelte';
 
   interface Props {
     companion: Companion;
@@ -18,6 +22,22 @@
   let { companion, part, t }: Props = $props();
 
   const traits = $derived([companion.traits, companion.features].filter(Boolean).join('\r'));
+
+  /** The attack's damage as the dice card rolls it, or undefined when the field holds no formula. */
+  function damageOf(attack: CompanionAttack): DamageAsk | undefined {
+    const formula = parseFormula(attack.damage);
+    return formula ? { name: attack.name, formula, type: attack.damageType } : undefined;
+  }
+
+  /**
+   * A tap on the to-hit rolls it (M17, like the character's attacks since M14). A companion page has no advantage
+   * marks, so it rolls straight; the card's "again with advantage" is there when the table says so.
+   */
+  const rollAttack = (attack: CompanionAttack, bonus: number, from: HTMLButtonElement): void =>
+    dice.d20(
+      { title: fill(t.attackRollsOf, { name: attack.name }), bonus, mode: 'normal', damage: damageOf(attack) },
+      { from },
+    );
 </script>
 
 {#if part === 'combat'}
@@ -32,8 +52,39 @@
       <div class="attack">
         <span class="name">{attack.name}</span>
         <span class="hit">
-          {#if attack.toHit}<span class="badge">{attack.toHit}</span>{/if}
-          {#if attack.damage}<span class="badge damage">{attack.damage} <small>{attack.damageType}</small></span>{/if}
+          {#if attack.toHit}
+            {@const bonus = bonusOf(attack.toHit)}
+            {#if bonus !== null}
+              <RollBadge
+                label={fill(t.diceRollLabel, {
+                  title: fill(t.attackRollsOf, { name: attack.name }),
+                  bonus: attack.toHit,
+                })}
+                text={attack.toHit}
+                onroll={(from) => rollAttack(attack, bonus, from)}
+              />
+            {:else}
+              <!-- A saving throw DC ("DC 12"): nothing to roll. -->
+              <span class="badge">{attack.toHit}</span>
+            {/if}
+          {/if}
+          {#if attack.damage}
+            {@const damage = damageOf(attack)}
+            {#if damage}
+              <RollBadge
+                label={fill(t.diceRollLabel, {
+                  title: fill(t.diceDamageTitle, { name: attack.name }),
+                  bonus: `${attack.damage} ${attack.damageType}`,
+                })}
+                text={attack.damage}
+                small={attack.damageType}
+                damage
+                onroll={(from) => dice.damage(damage, { from })}
+              />
+            {:else}
+              <span class="badge damage">{attack.damage} <small>{attack.damageType}</small></span>
+            {/if}
+          {/if}
         </span>
         <span class="muted">{[attack.range, attack.description].filter(Boolean).join(', ')}</span>
       </div>

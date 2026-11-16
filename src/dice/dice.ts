@@ -180,3 +180,22 @@ export function rollFormula(formula: Formula, random: RandomSource = randomInt):
   const dice = rolls.reduce((sum, r) => sum + r.group.sign * r.dice.reduce((a, b) => a + b, 0), 0);
   return { formula, rolls, total: dice + formula.bonus };
 }
+
+// ---- a spell cast with a higher slot ------------------------------------------------------
+
+/**
+ * A formula plus `times` of another, dice of the same size and sign counted together: Fireball's 8d6 with 2 slot
+ * levels of 1d6 more is 10d6, not "8d6+1d6+1d6". MPMB writes it "8d6+3+1d6/SL" on the sheet.
+ */
+export function plus(base: Formula, more: Formula, times: number): Formula {
+  if (times <= 0) return base;
+  const groups = more.groups.reduce<DiceGroup[]>(
+    (all, g) => {
+      const same = all.findIndex((a) => a.sides === g.sides && a.sign === g.sign);
+      if (same < 0) return [...all, { ...g, count: g.count * times }];
+      return all.map((a, i) => (i === same ? { ...a, count: a.count + g.count * times } : a));
+    },
+    base.groups.map((g) => ({ ...g })),
+  );
+  return { groups, bonus: base.bonus + more.bonus * times };
+}
