@@ -469,8 +469,16 @@
     border: 0;
     border-radius: 0;
     line-height: 1.2;
-    hyphens: auto;
+    /* Our own short words: at a pinch "Im Lager" breaks at its space, never "La-ger". */
     overflow-wrap: anywhere;
+  }
+
+  /* The smallest phones: a little less room around the words, so "Getragen" and "Im Lager" stay on one line. */
+  @media (max-width: 359px) {
+    .filter button {
+      padding-inline: 0.125rem;
+      font-size: 0.875rem;
+    }
   }
 
   /* The count on its own line under the word, on every width, so all four sit at the same height (review 05). */
