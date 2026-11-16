@@ -41,6 +41,7 @@ export type Op =
   | { op: 'addGroup'; id: string; name: string; kind: GroupKind }
   | { op: 'renameGroup'; id: string; name: string }
   | { op: 'removeGroup'; id: string }
+  | { op: 'orderGroups'; ids: string[] }
   | { op: 'add'; id: string; group: string; name: string; count: number; place: string; note: string }
   | { op: 'count'; id: string; by: number }
   | { op: 'set'; id: string; name?: string; place?: string; note?: string; group?: string }
@@ -179,6 +180,7 @@ const STEPS: { [K in Op['op']]: Step<K> } = {
     groups: lager.groups.filter((group) => group.id !== op.id),
     items: lager.items.filter((item) => item.group !== op.id),
   }),
+  orderGroups: (lager, op) => ({ ...lager, groups: orderedGroups(lager.groups, op.ids) }),
   add: (lager, op, stamp) => {
     if (lager.items.some((item) => item.id === op.id) || !lager.groups.some((group) => group.id === op.group)) {
       return lager;
@@ -204,6 +206,25 @@ const STEPS: { [K in Op['op']]: Step<K> } = {
   }),
   goldNote: (lager, op) => ({ ...lager, goldNote: op.note }),
 };
+
+/** The groups in the order `ids` names them; any it doesn't name (added meanwhile) follow, as server/lager.ts. */
+function orderedGroups(groups: readonly LagerGroup[], ids: readonly string[]): LagerGroup[] {
+  const at = (group: LagerGroup) => {
+    const index = ids.indexOf(group.id);
+    return index < 0 ? ids.length + groups.indexOf(group) : index;
+  };
+  return [...groups].sort((a, b) => at(a) - at(b));
+}
+
+/** The group order after moving one group a step up (-1) or down (+1), or null at the end of the list. */
+export function movedGroup(lager: Lager, id: string, by: -1 | 1): string[] | null {
+  const ids = lager.groups.map((group) => group.id);
+  const from = ids.indexOf(id);
+  const to = from + by;
+  if (from < 0 || to < 0 || to >= ids.length) return null;
+  [ids[from], ids[to]] = [ids[to] as string, ids[from] as string];
+  return ids;
+}
 
 function applyOne(lager: Lager, op: Op, by: string, now: number): Lager {
   // TypeScript can't pair a member of the union with its entry in the table, hence the cast.

@@ -52,6 +52,7 @@ export type Op =
   | { op: 'addGroup'; id: string; name: string; kind: GroupKind }
   | { op: 'renameGroup'; id: string; name: string }
   | { op: 'removeGroup'; id: string }
+  | { op: 'orderGroups'; ids: string[] }
   | { op: 'add'; id: string; group: string; name: string; count: number; place: string; note: string }
   | { op: 'count'; id: string; by: number }
   | { op: 'set'; id: string; name?: string; place?: string; note?: string; group?: string }
@@ -138,6 +139,13 @@ const PARSERS: Record<Op['op'], (value: Body, index: number, id: () => string) =
     name: textOf(value.name, LIMITS.groupName, index, 'name', true),
   }),
   removeGroup: (_value, _index, id) => ({ op: 'removeGroup', id: id() }),
+  orderGroups: (value, index) => {
+    const ids = value.ids;
+    if (!Array.isArray(ids) || !ids.length || ids.length > LIMITS.groups) throw bad(index, 'ids');
+    const order = ids.map((id) => idOf(id, index));
+    if (new Set(order).size !== order.length) throw bad(index, 'ids');
+    return { op: 'orderGroups', ids: order };
+  },
   add: (value, index, id) => ({
     op: 'add',
     id: id(),
@@ -298,6 +306,21 @@ const APPLY: { [K in Op['op']]: Apply<K> } = {
     // Its items go with it (the app asks first when the group isn't empty).
     await db.change('DELETE FROM lager_items WHERE group_id = ?', [op.id]);
     await db.change('DELETE FROM lager_groups WHERE id = ?', [op.id]);
+  },
+  /**
+   * The groups in this order (Nick, 2026-11-16: the group's own order, the same for everyone). A group the request
+   * doesn't name (one added meanwhile) keeps its place relative to the others, after the named ones.
+   */
+  orderGroups: async (db, op) => {
+    const named = op.ids.map(() => '?').join(', ');
+    await db.change(`UPDATE lager_groups SET position = position + ? WHERE id NOT IN (${named})`, [
+      op.ids.length,
+      ...op.ids,
+    ]);
+    await op.ids.reduce(async (done: Promise<void>, id, at) => {
+      await done;
+      await db.change('UPDATE lager_groups SET position = ? WHERE id = ?', [at + 1, id]);
+    }, Promise.resolve());
   },
   add: async (db, op, stamp) => {
     if ((await countOf(db, 'lager_items')) >= LIMITS.items) throw new Refusal(BAD_REQUEST, 'too many items');
