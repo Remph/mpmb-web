@@ -9,10 +9,10 @@
 <script lang="ts">
   import { fill } from '../../i18n.ts';
   import type { Texts } from '../../i18n.ts';
-  import { natural } from '../../dice/dice.ts';
+  import { formulaText, natural } from '../../dice/dice.ts';
   import type { RollMode } from '../../dice/dice.ts';
   import { damageText, dice, isCritical, titleOf, totalOf } from '../../play/dice.svelte.ts';
-  import type { Shown } from '../../play/dice.svelte.ts';
+  import type { HealShown, Shown } from '../../play/dice.svelte.ts';
 
   interface Props {
     shown: Shown;
@@ -33,10 +33,25 @@
   const total = $derived(totalOf(shown));
   /** "+ 8", "- 1", or nothing for a bonus of 0. */
   const signed = (n: number): string => (n < 0 ? `− ${Math.abs(n)}` : `+ ${n}`);
-  const bonus = $derived(shown.kind === 'd20' ? shown.ask.bonus : shown.roll.formula.bonus);
+  const bonus = $derived.by(() => {
+    if (shown.kind === 'd20') return shown.ask.bonus;
+    return shown.roll ? shown.roll.formula.bonus : 0;
+  });
+  /** A drunk potion's total is healing: "+7". */
+  const totalText = $derived(shown.kind === 'heal' ? `+${total}` : String(total));
   /** "d20 + 8 · with advantage" under the dice. */
   const line = $derived.by(() => {
     if (shown.kind === 'damage') return damageText(shown.ask, shown.crit);
+    if (shown.kind === 'heal') {
+      const formula = formulaText(shown.formula);
+      return [
+        shown.roll ? formula : fill(t.diceHealFull, { formula }),
+        fill(t.diceHealNow, { hp: shown.hp, max: shown.max }),
+        shown.left === null ? '' : fill(t.potionLeft, { count: shown.left }),
+      ]
+        .filter(Boolean)
+        .join(' · ');
+    }
     const word = MODE_WORD[shown.roll.mode];
     const formula = shown.ask.bonus ? `d20 ${signed(shown.ask.bonus)}` : 'd20';
     return word ? `${formula} · ${fill(t.diceWith, { mode: t[word] })}` : formula;
@@ -47,7 +62,13 @@
 
   function again(mode?: RollMode) {
     if (shown.kind === 'd20') dice.d20(shown.ask, { mode });
-    else dice.damage(shown.ask, { crit: shown.crit });
+    else if (shown.kind === 'damage') dice.damage(shown.ask, { crit: shown.crit });
+  }
+
+  /** Undo a drunk potion: the hit points and the count go back, the card closes and the focus returns. */
+  function undo(heal: HealShown) {
+    heal.undo();
+    close();
   }
 
   let card: HTMLElement | undefined = $state();
@@ -101,7 +122,7 @@
 
   {#key dice.count}
     <div class="result">
-      <span class="total">{total}</span>
+      <span class="total" class:heal={shown.kind === 'heal'}>{totalText}</span>
       <span class="what">
         <span class="dice">
           {#if shown.kind === 'd20'}
@@ -115,7 +136,7 @@
                 >{die}{#if !kept}<span class="sr"> ({t.diceDropped})</span>{/if}</span
               >
             {/each}
-          {:else}
+          {:else if shown.roll}
             {#each shown.roll.rolls as group, g (g)}
               {#if group.group.sign < 0}<span aria-hidden="true">−</span>{:else if g > 0}<span aria-hidden="true"
                   >+</span
@@ -123,7 +144,7 @@
               {#each group.dice as die, i (i)}<span class="die">{die}</span>{/each}
             {/each}
           {/if}
-          {#if bonus}<span>{signed(bonus)}</span>{/if}
+          {#if bonus && (shown.kind !== 'heal' || shown.roll)}<span>{signed(bonus)}</span>{/if}
         </span>
         <span class="line"
           >{line}{#if nat}
@@ -152,6 +173,12 @@
           >{t.diceAgainDis}</button
         >
       </span>
+    {:else if shown.kind === 'heal'}
+      {@const heal = shown}
+      <!-- Drinking already healed: Undo is the way back from a mis-tap, nothing rolls again. -->
+      <button type="button" aria-label={fill(t.diceUndoLabel, { name: title })} onclick={() => undo(heal)}
+        >{t.diceUndo}</button
+      >
     {:else}
       <button type="button" aria-label={t.diceAgainLabel} onclick={() => again()}>{t.diceAgain}</button>
     {/if}
@@ -285,6 +312,11 @@
   b.nat1 {
     border-color: var(--danger);
     color: var(--danger);
+  }
+
+  /* Healing in the hit points' colour, like the HP number it adds to. */
+  .total.heal {
+    color: var(--hp);
   }
 
   .line {
