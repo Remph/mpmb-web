@@ -6,6 +6,7 @@ import {
   modeOf,
   natural,
   parseFormula,
+  plus,
   randomInt,
   rollD20,
   rollFormula,
@@ -131,5 +132,15 @@ describe('rollFormula', () => {
     const rolled = parsed && rollFormula(parsed, fixed(dice));
     expect(rolled?.rolls.map((r) => r.dice)).toEqual(groups);
     expect(rolled?.total).toBe(total);
+  });
+});
+
+describe('a higher slot level', () => {
+  const read = (text: string) => parseFormula(text) ?? { groups: [], bonus: 0 };
+
+  it('adds the per-level dice to the same dice, once per level', () => {
+    expect(formulaText(plus(read('8d6+3'), read('1d6'), 2))).toBe('10d6+3');
+    expect(formulaText(plus(read('2d8'), read('1d8'), 0))).toBe('2d8');
+    expect(formulaText(plus(read('3d6'), read('1d8+2'), 1))).toBe('3d6+1d8+2');
   });
 });

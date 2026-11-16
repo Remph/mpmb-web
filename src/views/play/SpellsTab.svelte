@@ -26,6 +26,15 @@
   import type { Step } from '../../session.svelte.ts';
   import type { FieldViews } from '../../worker/views.ts';
   import Dots from './Dots.svelte';
+  import RollBadge from './RollBadge.svelte';
+  import { bonusOf, formulaText, modeOf } from '../../dice/dice.ts';
+  import { dice } from '../../play/dice.svelte.ts';
+  import type { DamageAsk } from '../../play/dice.svelte.ts';
+  import { edgeOf, isDouble } from '../../play/edge.ts';
+  import type { DoubleMarks } from '../../play/edge.ts';
+  import { readRollMarks } from '../../play/read.ts';
+  import { spellRolls } from '../../play/spell-rolls.ts';
+  import { homebrew } from '../../homebrew/switches.svelte.ts';
 
   interface Props {
     fields: FieldViews;
@@ -33,10 +42,35 @@
     characterId: string;
     disabled: boolean;
     change: (steps: Step[]) => void;
+    /** Which advantage marks mean double advantage (the group's house rule), for spell attacks. */
+    doubles?: DoubleMarks;
     t: Texts;
   }
 
-  let { fields, characterId, disabled, change, t }: Props = $props();
+  let { fields, characterId, disabled, change, doubles = {}, t }: Props = $props();
+
+  // Spell attacks and damage roll on the dice card (M17, M14's follow-up 2). A spell attack is an attack roll, so
+  // the sheet's mark for attack rolls counts, as on the Combat tab.
+  const attackEdge = $derived(edgeOf(readRollMarks(fields).attacks));
+  const attackMode = $derived(modeOf(attackEdge, homebrew.switches.doubleEdge && isDouble(doubles, 'Att', attackEdge)));
+
+  /** What a spell can roll, with the damage as the card asks for it; a cantrip's dice don't grow with a slot. */
+  function rollsOf(entry: Entry): { attack: number | null; damage: DamageAsk | null } {
+    const rolls = spellRolls(entry.spell.summary);
+    const d = rolls.damage;
+    const per = d?.perLevel && entry.level > 0 ? { level: entry.level, per: d.perLevel } : undefined;
+    return {
+      attack: rolls.attack ? bonusOf(entry.source.attack) : null,
+      damage: d
+        ? { name: entry.spell.fullName, formula: d.formula, type: d.type, ...(per ? { upcast: per } : {}) }
+        : null,
+    };
+  }
+
+  function rollAttack(entry: Entry, bonus: number, damage: DamageAsk | null, from: HTMLButtonElement) {
+    const title = fill(t.spellAttackOf, { name: entry.spell.fullName });
+    dice.d20({ title, bonus, mode: attackMode, ...(damage ? { damage } : {}) }, { from });
+  }
 
   const sources = $derived(readSpells(fields));
   const slots = $derived(readSpellSlotUse(fields));
@@ -208,6 +242,38 @@
   {#if spell.ritual}<span class="tag plain">{t.spellRitual}</span>{/if}
 {/snippet}
 
+{#snippet rolls(entry: Entry)}
+  {@const r = rollsOf(entry)}
+  {#if r.attack !== null || r.damage}
+    <span class="rolls">
+      {#if r.attack !== null}
+        {@const bonus = r.attack}
+        <RollBadge
+          label={fill(t.diceRollLabel, {
+            title: fill(t.spellAttackOf, { name: entry.spell.fullName }),
+            bonus: entry.source.attack,
+          })}
+          text={entry.source.attack}
+          onroll={(from) => rollAttack(entry, bonus, r.damage, from)}
+        />
+      {/if}
+      {#if r.damage}
+        {@const damage = r.damage}
+        <RollBadge
+          label={fill(t.diceRollLabel, {
+            title: fill(t.diceDamageTitle, { name: entry.spell.fullName }),
+            bonus: `${formulaText(damage.formula)} ${damage.type}`,
+          })}
+          text={formulaText(damage.formula)}
+          small={damage.type}
+          damage
+          onroll={(from) => dice.damage(damage, { from })}
+        />
+      {/if}
+    </span>
+  {/if}
+{/snippet}
+
 {#snippet free(spell: Spell)}
   {#if spell.mark.free !== null}
     <button
@@ -299,6 +365,7 @@
             {/if}
           </button>
           {@render free(spell)}
+          {@render rolls(entry)}
         </li>
       {/each}
     </ul>
@@ -656,6 +723,27 @@
     .meta {
       display: block;
       white-space: normal;
+    }
+  }
+
+  /* The spell's rolls at the row's end, like an attack's on the Combat tab. */
+  .rolls {
+    display: flex;
+    flex: none;
+    align-self: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0;
+  }
+
+  /* A phone or a narrow column: the rolls go on a line of their own under the summary, so it keeps its width. */
+  @container (max-width: 34rem) {
+    li {
+      flex-wrap: wrap;
+    }
+
+    .rolls {
+      width: 100%;
+      padding: 0 0 0.375rem 48px;
     }
   }
 

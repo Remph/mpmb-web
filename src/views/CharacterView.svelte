@@ -563,7 +563,7 @@
   <!-- Open in another tab from the start: no sheet here, only the line offering to take it over. -->
   {#if !elsewhereOnly}
     {#if companion}
-      <div class="play" class:gone={gone.includes(companion.prefix)}>
+      <div class="play" class:gone={gone.includes(companion.prefix)} class:rolling={!!dice.shown}>
         <div class="side left">
           <CompanionVitals
             {companion}
@@ -615,7 +615,7 @@
         {/if}
       </div>
     {:else if shownForm && formShape}
-      <div class="play">
+      <div class="play" class:rolling={!!dice.shown}>
         <div class="side left">
           <FormPanel
             form={shownForm}
@@ -755,7 +755,7 @@
                 {t}
               />
             {:else if shownTab === 'spells'}
-              <SpellsTab {fields} characterId={open.meta.id} {disabled} {change} {t} />
+              <SpellsTab {fields} characterId={open.meta.id} {disabled} {change} {doubles} {t} />
             {:else if shownTab === 'checks'}
               <Checks {fields} {disabled} {change} {doubles} {ondouble} {t} />
             {:else if shownTab === 'inventory'}
@@ -806,12 +806,13 @@
           >
         </nav>
       {/if}
-      <p class="sr" aria-live="polite">
-        {#key dice.count}{spokenOf(dice.shown, t)}{/key}
-      </p>
-      {#if dice.shown}
-        <DiceCard shown={dice.shown} {t} />
-      {/if}
+    {/if}
+    <!-- The roll card serves the character, a companion and a Wild Shape form alike (M17). -->
+    <p class="sr" aria-live="polite">
+      {#key dice.count}{spokenOf(dice.shown, t)}{/key}
+    </p>
+    {#if dice.shown}
+      <DiceCard shown={dice.shown} onTabBar={phone && !companion && !(shownForm && formShape)} {t} />
     {/if}
   {/if}
 
