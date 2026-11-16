@@ -12,12 +12,15 @@
 //   DELETE /characters/:id            {version} -> {version, updated}
 //   POST   /characters/:id/lease      {takeOver?} -> {since, until}; 423 when another device holds it
 //   DELETE /characters/:id/lease      let go
+//   GET    /lager?since=n             the group's Lager (M16); only {version} when it is still at n
+//   POST   /lager                     {ops: [...], request?} -> the Lager after them (a request id counts once)
 //   GET    /admin, POST /admin        the admin page (players and their codes)
 // Everything but /health, /login and /admin needs "Authorization: Bearer <token>".
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ADMIN_HEADERS, adminPage, adminPost, langOf, noDatabaseView } from './admin.ts';
 import { connect, migrate, type Db } from './db.ts';
+import { changeLager, readLager, sinceOf } from './lager.ts';
 import { databaseDebug, health, type DatabaseDebug, type DatabaseState } from './health.ts';
 import {
   addressOf,
@@ -103,6 +106,8 @@ async function signedIn(context: Context, device: Device, req: IncomingMessage, 
     if (!Number.isSafeInteger(number)) throw new Refusal(BAD_REQUEST, 'bad id');
     return forgetDevice(context, device, number);
   }
+  if (what === 'lager' && id === undefined && method === 'GET') return readLager(context, sinceOf(req.url));
+  if (what === 'lager' && id === undefined && method === 'POST') return changeLager(context, device, body);
   if (what !== 'characters') throw new Refusal(NOT_FOUND, 'not found');
   if (id === undefined && method === 'GET') return listCharacters(context, device);
   const character = characterId(id ?? '');

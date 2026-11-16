@@ -25,7 +25,17 @@ const settings = {
   DB_PASSWORD: env.TEST_DB_PASSWORD,
 };
 const ADMIN = 'admin secret';
-const TABLES = ['characters', 'devices', 'attempts', 'players', 'schema_version'];
+const TABLES = [
+  'lager_requests',
+  'lager_items',
+  'lager_groups',
+  'lager',
+  'characters',
+  'devices',
+  'attempts',
+  'players',
+  'schema_version',
+];
 const ID = '1b4e28ba-2fa1-11d2-883f-0016d3cca427';
 
 let db: Db;

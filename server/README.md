@@ -21,6 +21,15 @@ IndexedDB as the copy it works on and sends changes here at most every 5 seconds
   so); a lease lapses 2 minutes after its last renewal, for example when a laptop goes to sleep. Another device gets
   `423` with who holds it and since when, and can read the character or take it over. The first device learns
   this at its next renewal.
+- **The Lager** (M16): the group's storage, one list for everyone with a code: groups of items (each either with a
+  place per item, like magic items, or with counts, like materials) and the group's gold (kept in copper, so
+  1,234.5 gp is exact). Changes come as small steps (`ops`): `addGroup`, `renameGroup`, `removeGroup`, `add`,
+  `count` (by a difference), `set` (name, place, note, group), `remove`, `gold` (`by` or `to`, in copper),
+  `goldNote`. Counts and gold move by differences, so two players' "+1" at the same moment both count; for a
+  name, place or note the last change wins. A request counts whole or not at all. With `request` (an id the app
+  makes once per request and sends again with a retry) the service applies it once, however often it arrives (it
+  remembers the ids for 30 days). Every change moves the Lager's `version` on; the app asks with `?since=` every
+  few seconds while the Lager is open, and an unchanged Lager answers with its version only.
 
 | Route                          | Body                    | Answer                                                     |
 | ------------------------------ | ----------------------- | ---------------------------------------------------------- |
@@ -34,6 +43,8 @@ IndexedDB as the copy it works on and sends changes here at most every 5 seconds
 | `DELETE /characters/:id`       | `{version}`             | `{version, updated}`                                       |
 | `POST /characters/:id/lease`   | `{takeOver?}`           | `{since, until}`; `423` with `lease` when held elsewhere   |
 | `DELETE /characters/:id/lease` |                         | `204`                                                      |
+| `GET /lager?since=n`           |                         | the group's Lager; only `{version}` while it is still at n |
+| `POST /lager`                  | `{ops: [...], request}` | the Lager after the ops; `400` with the bad op's `index`   |
 | `GET`, `POST /admin`           | the form                | the admin page                                             |
 
 All but `/health`, `/login` and `/admin` need `Authorization: Bearer <token>`. Errors are `{error: "…"}`. Paths may
@@ -69,7 +80,7 @@ Nick set up the subdomain, Node.js and the database for the hosting test (#101).
    keeps its own copies in its browser).
 
 **Later updates** (a new `dist/app.cjs` only): upload `dist/app.cjs` over the old one, then Restart App and check
-`/health`. The database tables stay as they are.
+`/health`. The database tables stay as they are; new ones (the Lager's, M16) are added on the first request after the restart.
 
 No npm install: `pnpm build:server` bundles the service with its two libraries into `dist/app.cjs`.
 
@@ -95,6 +106,14 @@ apt-get update && apt-get install -y mariadb-server && service mariadb start
 mariadb -e "CREATE DATABASE mpmb_test; CREATE USER 'mpmb'@'localhost' IDENTIFIED BY 'mpmb-test';
   GRANT ALL ON mpmb_test.* TO 'mpmb'@'localhost';"
 TEST_DB_HOST=localhost TEST_DB_NAME=mpmb_test TEST_DB_USER=mpmb TEST_DB_PASSWORD=mpmb-test pnpm test server
+```
+
+`lager.test.ts` drives the Lager (M16) the same way, in a third empty database, `TEST_LAGER_DB_NAME`:
+
+```sh
+mariadb -e "CREATE DATABASE mpmb_lager_test; GRANT ALL ON mpmb_lager_test.* TO 'mpmb'@'localhost';"
+TEST_DB_HOST=localhost TEST_DB_NAME=mpmb_test TEST_LAGER_DB_NAME=mpmb_lager_test TEST_DB_USER=mpmb \
+  TEST_DB_PASSWORD=mpmb-test pnpm test server
 ```
 
 `test/sync-real.test.ts` runs the app's sync (`src/sync/`) against this service on the same database server, so
