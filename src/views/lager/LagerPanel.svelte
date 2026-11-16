@@ -542,8 +542,8 @@
     overflow-wrap: anywhere;
   }
 
-  /* Hyphens only in German, whose long compounds need them; in English they split names that would fit on the
-     next line ("Ti-decaller", UI review of M16, finding 09). */
+  /* Hyphens only in German, whose long compounds need them; in English they split short names that would fit on
+     the next line (UI review of M16, finding 09). */
   :global(:lang(de)) .fold,
   :global(:lang(de)) .name span {
     hyphens: auto;
