@@ -759,7 +759,7 @@
             {:else if shownTab === 'checks'}
               <Checks {fields} {disabled} {change} {doubles} {ondouble} {t} />
             {:else if shownTab === 'inventory'}
-              <InventoryTab {fields} {disabled} {change} load={() => session.builderInfo()} {t} />
+              <InventoryTab {fields} {disabled} {change} load={() => session.builderInfo()} lager={session.lager} {t} />
             {:else if shownTab === 'features'}
               <FeaturesTab {fields} characterId={open.meta.id} {t} />
             {:else if shownTab === 'profile'}

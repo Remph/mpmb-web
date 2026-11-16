@@ -39,7 +39,9 @@ import { TabLock, browserLocks } from './store/tab-lock.ts';
 import type { Locks } from './store/tab-lock.ts';
 import { Sync } from './sync/sync.svelte.ts';
 import type { Clash } from './sync/sync.svelte.ts';
+import { SyncApi } from './sync/api.ts';
 import type { Fetch, Lease } from './sync/api.ts';
+import { LagerStore } from './lager/lager.svelte.ts';
 import type { KeyValues } from './sync/account.ts';
 import type { UltCharges } from './homebrew/ult.ts';
 import type { CharacterHomebrew, CharacterMeta, PreviousVersion, StoredCharacter } from './store/characters.ts';
@@ -191,6 +193,8 @@ export class Session {
   private readonly tabLock: TabLock;
   /** The sync with the player's other devices (M15); off until the player types their code. */
   readonly sync: Sync;
+  /** The group's Lager (M16): needs the sync code, read and changed at the same service. */
+  readonly lager: LagerStore;
   /** The device that has the open character open, while this one only shows it (`readonly`). */
   private watching: Lease | null = null;
 
@@ -223,6 +227,10 @@ export class Session {
       syncWith.fetcher,
       syncWith.storage,
       syncWith.base,
+    );
+    this.lager = new LagerStore(
+      new SyncApi(() => this.sync.account?.token ?? null, syncWith.base, syncWith.fetcher),
+      () => this.sync.account?.player ?? null,
     );
     this.client = new EngineClient(this.popUps, newWorker);
     this.client.onFields = () => {

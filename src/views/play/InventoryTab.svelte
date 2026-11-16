@@ -14,6 +14,8 @@
   import Stepper from './Stepper.svelte';
   import MagicItemsWindow from './MagicItemsWindow.svelte';
   import type { BuilderInfo } from '../../engine/builder.ts';
+  import type { LagerStore } from '../../lager/lager.svelte.ts';
+  import LagerLine from '../lager/LagerLine.svelte';
 
   interface Props {
     fields: FieldViews;
@@ -21,10 +23,12 @@
     change: (steps: Step[]) => void;
     /** MPMB's lists, for "Change magic items" (session feedback, 2026-11-04). */
     load: () => Promise<BuilderInfo | null>;
+    /** The group's Lager (M16): its line ends the tab. */
+    lager?: LagerStore;
     t: Texts;
   }
 
-  let { fields, disabled, change, load, t }: Props = $props();
+  let { fields, disabled, change, load, lager, t }: Props = $props();
   let changingMagic = $state(false);
   const inventory = $derived(readInventory(fields));
   const attuned = $derived(inventory.magicItems.filter((item) => item.attuned).length);
@@ -424,6 +428,8 @@
     </label>
   </section>
 {/if}
+
+{#if lager}<LagerLine store={lager} {t} />{/if}
 
 <style>
   .columns {

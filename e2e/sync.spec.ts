@@ -3,49 +3,13 @@
 // answers in place of https://sync.remph.de. The real service's own tests are in server/sync.test.ts, the app
 // against it in test/sync-real.test.ts.
 import { expect, test } from '@playwright/test';
-import type { BrowserContext, Page } from '@playwright/test';
 import { FakeSync } from '../test/fake-sync.ts';
+import { CODE, connect, routeSync } from './fake-service.ts';
 
 /** Loading MPMB's scripts on a blank sheet takes a while in a fresh browser. */
 const STARTUP = 120_000;
-const CODE = 'orbit-hazard-melt-ripple';
-const NO_CONTENT = 204;
 /** A change goes out within the sync's pace (5 s) plus a moment. */
 const SYNCED = 20_000;
-
-/** Answers the app's calls to the sync service from `service`, with the headers the real one sends (CORS, CORP). */
-async function routeSync(context: BrowserContext, service: FakeSync): Promise<void> {
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-    'Cross-Origin-Resource-Policy': 'cross-origin',
-  };
-  await context.route('https://sync.remph.de/**', async (route) => {
-    const request = route.request();
-    if (request.method() === 'OPTIONS') {
-      await route.fulfill({ status: NO_CONTENT, headers });
-      return;
-    }
-    const { status, body } = service.handle(request.method(), request.url(), request.headers(), request.postDataJSON());
-    await route.fulfill({
-      status,
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: status === NO_CONTENT ? '' : JSON.stringify(body),
-    });
-  });
-}
-
-/** Types the code on the start page and names the device. */
-async function connect(page: Page, name: string): Promise<void> {
-  await page.goto('./');
-  await page.getByRole('button', { name: 'Type your code' }).click();
-  const window = page.getByRole('dialog', { name: 'Sync with your code' });
-  await window.getByRole('textbox', { name: 'Your code' }).fill(CODE.replaceAll('-', ' '));
-  await window.getByRole('textbox', { name: 'This device’s name, shown to your other devices' }).fill(name);
-  await window.getByRole('button', { name: 'Connect' }).click();
-  await expect(page.getByText('Connected as Anna: your characters are syncing.')).toBeVisible();
-}
 
 test('a character made on the laptop shows on the iPad, read only while open there, then taken over', async ({
   browser,

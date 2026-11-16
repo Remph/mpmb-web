@@ -23,6 +23,8 @@
     widest?: boolean;
     /** Phones: sits on top of the play view's tab bar instead of covering it (the More sheet). */
     aboveTabBar?: boolean;
+    /** From 700 px: a panel down the right edge, full height (the Lager, M16); a bottom sheet on phones. */
+    side?: boolean;
     children: Snippet;
     actions?: Snippet;
   }
@@ -34,6 +36,7 @@
     wide = false,
     widest = false,
     aboveTabBar = false,
+    side = false,
     children,
     actions,
   }: Props = $props();
@@ -89,6 +92,7 @@
   class:wide
   class:widest
   class:above-bar={aboveTabBar}
+  class:side
   aria-labelledby={titleId}
   oncancel={cancel}
   onclose={closed}
@@ -150,6 +154,21 @@
     width: fit-content;
     min-width: min(56rem, calc(100vw - 2rem));
     max-width: min(96rem, calc(100vw - 2rem));
+  }
+
+  /*
+   * The Lager's panel (mock-up round 2, Nick's pick): down the right edge over the right column, so the hit points
+   * and the tabs on the left stay in view. Phones keep the bottom sheet below.
+   */
+  @media (min-width: 700px) {
+    dialog.side {
+      width: min(32rem, 100vw);
+      height: 100svh;
+      max-height: 100svh;
+      margin: 0 0 0 auto;
+      border-width: 0 0 0 1px;
+      border-radius: 0;
+    }
   }
 
   dialog::backdrop {
