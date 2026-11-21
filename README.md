@@ -119,12 +119,13 @@ own, the only one with the FTP login: it gets just the built `dist/` and runs no
 holds this build and the previous one; characters are not on the server (they live in each player's browser), so a
 deploy never touches them.
 
-- Last, the deploy checks that the live page arrives with the Content Security Policy and the isolation headers
-  exactly as `public/.htaccess` sets them, and that one of the build's scripts is there (`tools/live-headers.ts`;
-  by hand after `pnpm build`: `node tools/live-headers.ts`). Red there means the upload went through but the server
-  doesn't apply `.htaccess` to the page as before: the app may be unprotected (no CSP) or broken (no isolation, no
-  pop-ups). Look at Plesk's Apache and nginx settings for the domain first. (The scripts and styles come from nginx
-  without these headers, which is fine: only the page's count.)
+- Last, the deploy checks that the live page (as `/mpmb/` and as `index.html`, the copy the service worker keeps for
+  offline use) arrives with the Content Security Policy and the isolation headers exactly as `public/.htaccess` sets
+  them, and that one of the build's scripts is there (`tools/live-headers.ts`; by hand after `pnpm build`:
+  `node tools/live-headers.ts`). Red there means the upload went through but the server doesn't apply `.htaccess` to
+  the page as before: the app may be unprotected (no CSP) or broken (no isolation, no pop-ups). Look at Plesk's Apache
+  and nginx settings for the domain first. (The scripts and styles come from nginx without these headers, which is
+  fine: only the page's count.)
 - The folder needs Apache with `mod_headers`: `public/.htaccess` sends the two cross-origin isolation
   headers the pop-ups depend on, keeps `index.html` fresh and caches the hashed build files.
 - Setup, once: an FTP user whose base folder is the app's folder (so it can't reach the rest of the
