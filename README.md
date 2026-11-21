@@ -19,17 +19,24 @@ can:
 - play them at the table: hit points, conditions, attacks, ammunition, spell slots and prepared spells,
   limited features, rests, checks, experience, inventory, features, notes and the portrait; effects you
   switch on and off (an AC bonus, weapon attacks with another ability); companions such as a familiar or
-  a steed on their own pages;
+  a steed on their own pages; Wild Shape forms to change into and back;
+- roll dice: a tap on a check, a save, an attack's to hit or damage or a spell rolls it, with advantage and
+  disadvantage; drink a healing potion from the inventory;
+- sync: with a code from the group's service, a player's characters follow them to every device (one device
+  edits a character at a time; the others can read it or take it over), and the group shares one storage
+  list, the Lager, with its gold;
 - print them on A4, or fill a blank MPMB PDF you supply;
-- keep them in the browser and move them between devices with backup files. Each character keeps three
-  restore points from earlier (taken when it opens and before big changes) to roll back to. Characters
-  saved on an older version of MPMB's sheet are updated when they open, with MPMB's own import; the
-  version before is kept;
+- keep them in the browser, with or without sync, and save backup files. Each character keeps three restore
+  points from earlier (taken when it opens and before big changes) to roll back to. Characters saved on an
+  older version of MPMB's sheet are updated when they open, with MPMB's own import; the version before is
+  kept;
 - use it without network once it has been opened, and add it to the iPad's home screen;
+- switch on the group's house rules (per browser): ult charges, no ammunition counting, half hit points
+  on a short rest, background boosts on any ability, double advantage;
 - pick a look: the app's purple, Campfire or OLED black, light or dark, with each character in its
-  sheet's colour.
+  sheet's colour; and read the About window (thanks, credits, the source).
 
-Laptops and the iPad come first. The engine (MPMB's scripts on a stand-in for Acrobat) matches Acrobat
+Laptops and the iPad come first; phones work too (a tab bar at the bottom, one column). The engine (MPMB's scripts on a stand-in for Acrobat) matches Acrobat
 on the reference characters.
 
 The font is [Atkinson Hyperlegible Next](https://www.brailleinstitute.org/freefont/) by the Braille
@@ -70,7 +77,17 @@ The smoke test needs Firefox for Playwright once: `pnpm exec playwright install 
   the build's file list. `public/manifest.webmanifest` and the icons (drawn by `node tools/make-icons.ts`
   from `tools/app-icon.svg`) let the iPad add the app to its home screen.
 - `src/homebrew/`: house rules the app adds on top of MPMB's sheet, each behind a switch in "Homebrew
-  rules" (per browser). They stay in the app and never go into a PDF. So far: ult charges.
+  rules" (per browser). They stay in the app and never go into a PDF. Five so far: ult charges, no
+  ammunition counting, half hit points on a short rest, background boosts on any ability, double advantage.
+- `src/dice/`: the dice (fair crypto random numbers, advantage, the double advantage house rule); the dice
+  card and the places that roll are in `src/views/play/`, potions in `src/play/potions.ts`.
+- `src/sync/`: the app's side of sync: the code, the device's token, the plan of what to send and fetch,
+  leases, clashes (the losing copy becomes a restore point). `src/views/sync/` has the code window and the
+  start page's line.
+- `src/lager/`: the group's Lager as the app sees it (search, places, the small changes it sends), its panel in
+  `src/views/lager/`.
+- `server/`: the sync service behind both, on its own subdomain (Node and MySQL on the webspace, not
+  uploaded by the deploy). How it works, how to upload it and its tests: `server/README.md`.
 - `src/popups/`: the page's side of MPMB's pop-ups (alerts, menus, dialogs) and the app's own questions.
 - `src/views/`, `src/App.svelte`, `src/session.svelte.ts`: the pages and what they do.
 - `src/look.ts`, `src/app.css`: the themes. Every colour is a token in `app.css`, set by `data-theme` and
@@ -78,7 +95,10 @@ The smoke test needs Firefox for Playwright once: `pnpm exec playwright install 
   never their own colours.
 - `test/`: the reference characters (made in Acrobat, SRD only) and the tests that compare the engine
   with them. `test/browser/engine-check.html` runs one of them through the worker in a browser: open it
-  under `pnpm dev`.
+  under `pnpm dev`. `test/fake-sync.ts` is an in-memory stand-in for the service that the unit and browser
+  tests use; `test/sync-real.test.ts` checks the app against the real one.
+- `e2e/`: the browser tests (Playwright, Firefox) against a test build: start page, Build screen, play view,
+  phones, dice, sync and the Lager (against `e2e/fake-service.ts`), offline use, the worker's lockdown.
 
 Sheet data from a PDF (Node 22 runs the TypeScript directly):
 
