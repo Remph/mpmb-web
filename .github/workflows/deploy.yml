@@ -141,7 +141,7 @@ jobs:
         with:
           node-version: 22
 
-      # The live site must send the headers public/.htaccess sets (CSP, COOP, COEP) on the page and on a script:
+      # The live page must send the headers public/.htaccess sets (CSP, COOP, COEP), and a script of the build be there:
       # a red step here means the upload went through but the app is unprotected or broken (README.md, "Deploy").
       - name: Check the live headers
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
