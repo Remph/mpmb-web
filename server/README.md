@@ -148,3 +148,27 @@ TEST_DB_HOST=localhost TEST_DB_NAME=mpmb_test TEST_APP_DB_NAME=mpmb_app_test TES
   limited to 12 MB.
 - A character open for editing holds a lease, renewed every 45 seconds. Another device asks "Read only or Take
   over?"; a device that loses its lease turns read only.
+
+## Backups
+
+What lives where, and how each part comes back:
+
+- **Characters** are safe without the service: every device keeps its own copy in its browser, players can save
+  backup files, and the service keeps only the newest copy of each. A lost database costs no character; the
+  devices send theirs again after the players type their codes once more.
+- **Players, codes and devices** are only in the database. Without it, add the players again on `/admin` and hand
+  out new codes.
+- **The Lager is only in the database.** Its way back without the database: "Save a copy" at the end of the Lager
+  panel downloads the whole list as a file; into an empty Lager, "Import a list" reads such a file back. Save a
+  copy after each session that changed the Lager, until a database backup is known to work.
+
+The database itself (the one `DB_NAME` names, on its own server, see "Updating it in Plesk"):
+
+1. **Backups:** Plesk's Backup Manager can include databases. Whether its scheduled backups take this database
+   (it runs on another server than the webspace), and how far back they go, is still to be checked in Plesk
+   (tech review 3, finding 02). Until then, phpMyAdmin's "Export" (SQL) of the database is a by-hand backup.
+2. **Restore:** in Plesk, Backup Manager, restore only that database from a backup (or import the exported SQL in
+   phpMyAdmin into the emptied database), then Restart App and check `/health`. The service keeps its tables as
+   they are and adds missing ones on the first request.
+3. **After a restore,** the Lager is as old as the backup: changes since then come back only from a newer saved
+   copy (into an empty Lager) or by hand. Characters lose nothing: every device still has its own copy.
