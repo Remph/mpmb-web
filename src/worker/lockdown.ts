@@ -35,8 +35,10 @@ export const REMOVED_GLOBALS = [
  * private file system (`getDirectory()`): no network, but files there outlive the worker, so one sheet's
  * add-on script could leave something for the next character's scripts to read (tech review 2026-11-04,
  * finding 8). `locks` would let a script hold the page's per-character locks (see store/tab-lock.ts).
+ * `serviceWorker`: Firefox gives workers the site's service worker registrations (Chromium doesn't); a script
+ * could unregister the app's own and so take away offline use (security audit 2026-11-20, finding 05).
  */
-export const REMOVED_FROM_NAVIGATOR = ['storage', 'locks'] as const;
+export const REMOVED_FROM_NAVIGATOR = ['storage', 'locks', 'serviceWorker'] as const;
 
 /**
  * Removes the globals from the scope and from the prototypes it inherits from (browsers put some on

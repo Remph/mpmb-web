@@ -38,7 +38,7 @@ import { CharacterStore, copyHomebrew, describeCharacter, keepStorage } from './
 import { TabLock, browserLocks } from './store/tab-lock.ts';
 import type { Locks } from './store/tab-lock.ts';
 import { Sync } from './sync/sync.svelte.ts';
-import type { Clash } from './sync/sync.svelte.ts';
+import type { Clash, SyncConnect } from './sync/sync.svelte.ts';
 import { SyncApi } from './sync/api.ts';
 import type { Fetch, Lease } from './sync/api.ts';
 import { LagerStore } from './lager/lager.svelte.ts';
@@ -1366,7 +1366,7 @@ export class Session {
   // ---- Sync with the player's other devices (M15) ----
 
   /** Signs this device in with the player's code; on success a line says so and the first round runs. */
-  async connectSync(code: string, name: string): Promise<'ok' | 'wrong' | 'wait' | 'offline'> {
+  async connectSync(code: string, name: string): Promise<SyncConnect> {
     await this.started;
     this.clearNotes();
     const result = await this.sync.connect(code, name);

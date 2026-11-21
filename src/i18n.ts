@@ -90,6 +90,8 @@ export const ui = {
     syncConnecting: 'Wird verbunden …',
     syncWrongCode: 'Dieser Code stimmt nicht. Prüf die vier Wörter und versuch es noch einmal.',
     syncWait: 'Zu viele falsche Codes: versuch es in einer Viertelstunde noch einmal.',
+    syncTooManyDevices:
+      'Dein Code ist schon auf {max} Geräten verbunden, mehr geht nicht. Vergiss auf einem davon unter „Deine Geräte“ eins, das du nicht mehr benutzt, und versuch es dann noch einmal.',
     syncNoAnswer: 'Der Abgleich hat nicht geantwortet. Prüf die Verbindung und versuch es noch einmal.',
     syncConnected: 'Verbunden als {player}: deine Charaktere werden abgeglichen.',
     syncDevicesTitle: 'Deine Geräte',
@@ -171,6 +173,8 @@ export const ui = {
     syncAgainHint: 'Den abgeglichenen holen: dieser hier bleibt als früherer Stand.',
     syncAgainButton: 'Einschalten',
     syncWaitsOpenOn: '{name} ist auf {device} offen: die Änderungen von hier warten, bis er dort geschlossen ist.',
+    syncTooManyCharacters:
+      '{name} bleibt vorerst nur auf diesem Gerät: dein Code gleicht schon {max} Charaktere ab, mehr geht nicht. Lösch einen, den du nicht mehr brauchst, dann geht er beim nächsten Abgleich mit.',
     noCharacters: 'Noch keine Charaktere.',
     unnamed: 'Ohne Namen',
     addOnCountOne: '1 Zusatzskript',
@@ -294,6 +298,8 @@ export const ui = {
     pastedScript: 'Eingefügtes Skript',
     addOnsIntro:
       'Skripte ergänzen die Listen dieses Charakters um Klassen, Spezies, Zauber und mehr. Sie bleiben in diesem Browser, gespeichert mit dem Charakter und in seiner Sicherung.',
+    addOnsTrust:
+      'Zusatzskripte laufen wie die eigenen Skripte des Bogens. Füge nur Dateien von Leuten hinzu, denen du vertraust.',
     addOnsReading: 'Skripte werden gelesen …',
     addOnsEmpty: 'Noch keine Zusatzskripte.',
     addOnsAddedOn: 'hinzugefügt am {date} · {size} KB',
@@ -1664,6 +1670,8 @@ export const ui = {
     syncConnecting: 'Connecting …',
     syncWrongCode: 'That code isn’t right. Check the four words and try again.',
     syncWait: 'Too many wrong codes: try again in a quarter of an hour.',
+    syncTooManyDevices:
+      'Your code is already connected on {max} devices, the most there can be. On one of them, forget a device you no longer use under “Your devices”, then try again.',
     syncNoAnswer: 'The sync didn’t answer. Check the connection and try again.',
     syncConnected: 'Connected as {player}: your characters are syncing.',
     syncDevicesTitle: 'Your devices',
@@ -1740,6 +1748,8 @@ export const ui = {
     syncAgainHint: 'Take the synced copy: this one is kept as a restore point.',
     syncAgainButton: 'Turn on',
     syncWaitsOpenOn: '{name} is open on {device}: the changes from here wait until it is closed there.',
+    syncTooManyCharacters:
+      '{name} stays on this device only for now: your code already syncs {max} characters, the most there can be. Delete one you no longer need, and it goes out with the next sync.',
     noCharacters: 'No characters yet.',
     unnamed: 'Unnamed',
     addOnCountOne: '1 add-on script',
@@ -1861,6 +1871,7 @@ export const ui = {
     pastedScript: 'Pasted script',
     addOnsIntro:
       'Scripts add classes, species, spells and more to this character’s lists. They stay in this browser, saved with the character and in its backup.',
+    addOnsTrust: 'Add-on scripts run like the sheet’s own. Add only files from people you trust.',
     addOnsReading: 'Reading the scripts …',
     addOnsEmpty: 'No add-on scripts yet.',
     addOnsAddedOn: 'added {date} · {size} KB',

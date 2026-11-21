@@ -18,6 +18,7 @@ import type { CharacterStore } from '../store/characters.ts';
 import { ACCOUNT_KEY, readAccount, writeAccount } from './account.ts';
 import type { Account, KeyValues } from './account.ts';
 import {
+  CAP_REACHED,
   NEWER_VERSION,
   NOT_FOUND,
   OPEN_ELSEWHERE,
@@ -95,6 +96,12 @@ export interface Clash {
   device: string | null;
 }
 
+/** How signing in went; `full`: the code already has the most devices there can be (that many). */
+export type SyncConnect = 'ok' | 'wrong' | 'wait' | 'offline' | { full: number };
+
+/** The cap the service named in a 403 (0 when it didn't say). */
+const capOf = (err: SyncRefused): number => (typeof err.body.max === 'number' ? err.body.max : 0);
+
 /** Whether an error is this status from the service. */
 const refused = (err: unknown, status: number): err is SyncRefused =>
   err instanceof SyncRefused && err.status === status;
@@ -131,6 +138,8 @@ export class Sync {
   private wanted: string | null = null;
   /** Clashes the player put off ("Not now"): left alone until the page loads again. */
   private readonly postponed = new Set<string>();
+  /** Characters the service turned away at the cap: said once per page load, not at every round. */
+  private readonly capped = new Set<string>();
   private roundTimer: ReturnType<typeof setInterval> | null = null;
   /** The round running is one the player asked for: a push refused because it's open elsewhere says so. */
   private byHand = false;
@@ -373,6 +382,13 @@ export class Sync {
           const name = character.meta.name || this.texts().unnamed;
           this.host.note('info', fill(this.texts().syncWaitsOpenOn, { name, device: err.lease.device }));
         }
+      } else if (err.status === CAP_REACHED) {
+        // The character stays here, unsent; each round tries again, so it goes out once there is room.
+        if (!this.capped.has(id)) {
+          this.capped.add(id);
+          const name = character.meta.name || this.texts().unnamed;
+          this.host.note('error', fill(this.texts().syncTooManyCharacters, { name, max: capOf(err) }));
+        }
       } else console.warn('Sync refused a save:', err);
     }
     return false;
@@ -614,7 +630,7 @@ export class Sync {
   // ---- The code, the devices ----
 
   /** Signs this device in with the player's code and syncs; the reason when it didn't work. */
-  async connect(code: string, name: string): Promise<'ok' | 'wrong' | 'wait' | 'offline'> {
+  async connect(code: string, name: string): Promise<SyncConnect> {
     try {
       const answer = await this.api.login(code, name);
       this.account = {
@@ -627,7 +643,10 @@ export class Sync {
       };
       writeAccount(this.account, this.storage);
     } catch (err) {
-      if (err instanceof SyncRefused) return err.status === TOO_MANY_TRIES ? 'wait' : 'wrong';
+      if (err instanceof SyncRefused) {
+        if (err.status === CAP_REACHED) return { full: capOf(err) };
+        return err.status === TOO_MANY_TRIES ? 'wait' : 'wrong';
+      }
       return 'offline';
     }
     this.state = 'waiting';

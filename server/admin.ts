@@ -2,9 +2,9 @@
 // player a new code, or removes a player (after a second press: no scripts, so no confirm() either). Behind ADMIN_PASSWORD, which lives in Plesk's Secrets. A plain form without
 // scripts: every button posts the form, and the answer is the page again.
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { checkTries, clearFailures, countFailure } from './attempts.ts';
+import { ADMIN_ALL_KEY, ADMIN_OVERALL, clearTries, takeTry, triesKey } from './attempts.ts';
 import { hashCode, newCode } from './codes.ts';
-import { Refusal } from './http.ts';
+import { Refusal, TOO_MANY } from './http.ts';
 import { BUILD, type BuildInfo } from './build-info.ts';
 import { cleanName, type Context } from './sync.ts';
 
@@ -28,6 +28,7 @@ const TEXT = {
     codeNote: 'Shown only now. Hand it to the player; they type it once on each device.',
     wrong: 'Wrong password.',
     tooMany: 'Too many wrong tries. Wait a quarter of an hour.',
+    tooManyAll: 'Too many wrong passwords from everyone together. Wait up to an hour.',
     noPassword: 'There is no admin password yet. Add ADMIN_PASSWORD under Secrets on the Node.js page in Plesk.',
     noDatabase: 'The database isn’t set up (DB_HOST, DB_NAME, DB_USER, DB_PASSWORD).',
     taken: 'That name is taken.',
@@ -60,6 +61,7 @@ const TEXT = {
     codeNote: 'Wird nur jetzt gezeigt. Gib ihn dem Spieler; er tippt ihn auf jedem Gerät einmal ein.',
     wrong: 'Falsches Passwort.',
     tooMany: 'Zu viele falsche Versuche. Warte eine Viertelstunde.',
+    tooManyAll: 'Zu viele falsche Passwörter von allen zusammen. Warte bis zu einer Stunde.',
     noPassword:
       'Es gibt noch kein Admin-Passwort. Lege ADMIN_PASSWORD unter Secrets auf der Node.js-Seite in Plesk an.',
     noDatabase: 'Die Datenbank ist nicht eingerichtet (DB_HOST, DB_NAME, DB_USER, DB_PASSWORD).',
@@ -244,19 +246,17 @@ export async function adminPost(
 ): Promise<AdminView> {
   const t = TEXT[lang];
   if (!adminPassword) return { message: t.noPassword };
-  const key = `admin:${address}`;
-  try {
-    await checkTries(context.db, key, context.now);
-  } catch (error) {
-    if (!(error instanceof Refusal)) throw error;
-    return { message: t.tooMany };
+  const key = triesKey('admin', address);
+  // The address's own count first: an address that has to wait doesn't use up the overall ceiling as well.
+  if (!(await tryTaken(() => takeTry(context.db, key, context.now)))) return { message: t.tooMany };
+  if (!(await tryTaken(() => takeTry(context.db, ADMIN_ALL_KEY, context.now, ADMIN_OVERALL)))) {
+    return { message: t.tooManyAll };
   }
   const password = form.get('password') ?? '';
-  if (!samePassword(password, adminPassword)) {
-    await countFailure(context.db, key, context.now);
-    return { message: t.wrong };
-  }
-  await clearFailures(context.db, key);
+  if (!samePassword(password, adminPassword)) return { message: t.wrong };
+  // Only Nick knows the password, so a right one may forget the overall count as well (his own typos).
+  await clearTries(context.db, key);
+  await clearTries(context.db, ADMIN_ALL_KEY);
   const view: AdminView = { password };
   const newCodeFor = playerId(form.get('newCode'));
   const removeAsk = playerId(form.get('remove'));
@@ -299,6 +299,17 @@ export async function adminPost(
     }
   }
   return { ...view, players: await players(context) };
+}
+
+/** Whether a try was counted and may go on; false when its count says wait (a 429 Refusal). */
+async function tryTaken(take: () => Promise<void>): Promise<boolean> {
+  try {
+    await take();
+    return true;
+  } catch (error) {
+    if (error instanceof Refusal && error.status === TOO_MANY) return false;
+    throw error;
+  }
 }
 
 export const noDatabaseView = (lang: Lang): AdminView => ({ message: TEXT[lang].noDatabase });

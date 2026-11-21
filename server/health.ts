@@ -21,8 +21,8 @@ export interface Health {
    * the kind of failure without any of the settings. Only while `database` is "unreachable".
    */
   databaseError?: string;
-  /** Only with DB_DEBUG=1, while setting the database up: see DatabaseDebug. */
-  databaseDebug?: DatabaseDebug;
+  /** Only with DB_DEBUG=1, while setting the database up: see DatabaseDebug and ConnectedDebug. */
+  databaseDebug?: DatabaseDebug | ConnectedDebug;
   time: string;
 }
 
@@ -41,6 +41,15 @@ export interface DatabaseDebug {
   user: string;
   passwordLength: number;
   passwordHasOuterSpaces: boolean;
+}
+
+/**
+ * What /health adds with DB_DEBUG=1 while the database is connected: the user and the address the database sees the
+ * service come from (MySQL's USER(), "k123456_mpmb@203.0.113.7"). That address is the one to allow in Plesk instead
+ * of "any host" (security audit 2026-11-20, finding 03; server/README.md, "Allow only the service's address").
+ */
+export interface ConnectedDebug {
+  connectedAs: string;
 }
 
 /** The debug details for an error, from the DB_* settings. */
@@ -64,7 +73,7 @@ export function health(
   now: Date,
   database: DatabaseState,
   databaseError?: string,
-  debug?: DatabaseDebug,
+  debug?: DatabaseDebug | ConnectedDebug,
   build: BuildInfo = BUILD,
 ): Health {
   return {
