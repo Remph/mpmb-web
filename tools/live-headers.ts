@@ -4,7 +4,14 @@
 // skips it (Plesk's "serve static files directly by nginx", say) would drop them without anything failing
 // (security audit 2026-11-20, finding 06). The deploy's last step runs this; by hand:
 //   node tools/live-headers.ts [https://remph.de/mpmb/] [dist]
-// It fetches the page and one script of the build and fails when a header is missing or differs from the file.
+// It fails when the page lacks a header or sends one that differs from the file, or when one of the build's scripts
+// isn't there.
+//
+// Only the page is checked for the headers. remph.de's nginx serves the .js, .css and .txt files itself, without
+// Apache and so without .htaccess's `always set` headers (seen on the first run, 2026-11-21: nginx's ETag, no CSP,
+// COOP or COEP on any script; the page and the manifest had them). That is fine: the page's policy governs what its
+// scripts do, same-origin files need no COEP of their own, and the engine worker starts from a blob: URL and so takes
+// the page's policy. A worker ever started from a script's own URL would need them on that script.
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -49,6 +56,7 @@ export function assetOf(dist: string): string {
   return `assets/${script}`;
 }
 
+/** The headers of a 200 answer for `url` (a few tries for a network hiccup); anything else throws. */
 async function fetchHeaders(url: string, triesLeft = TRIES): Promise<Headers> {
   try {
     const response = await fetch(url, { cache: 'no-store', redirect: 'manual' });
@@ -64,14 +72,16 @@ async function fetchHeaders(url: string, triesLeft = TRIES): Promise<Headers> {
 async function main(): Promise<void> {
   const [base = 'https://remph.de/mpmb/', dist = 'dist'] = process.argv.slice(ARGS_START);
   const expected = expectedHeaders(readFileSync(new URL('../public/.htaccess', import.meta.url), 'utf8'));
-  const urls = [base, new URL(assetOf(dist), base).href];
-  const found = (await Promise.all(urls.map(async (url) => problems(url, await fetchHeaders(url), expected)))).flat();
+  const script = new URL(assetOf(dist), base).href;
+  // The script only has to be there (a 200); its headers come from nginx, see above.
+  const [page] = await Promise.all([fetchHeaders(base), fetchHeaders(script)]);
+  const found = problems(base, page, expected);
   if (found.length) {
-    console.error(`The live site doesn't send the headers public/.htaccess sets:\n${found.join('\n')}`);
+    console.error(`The live page doesn't send the headers public/.htaccess sets:\n${found.join('\n')}`);
     console.error('See README.md, "Deploy": the upload went through, but the app may be unprotected or broken.');
     process.exit(1);
   }
-  console.log(`${urls.join(' and ')}: ${CHECKED.join(', ')} as in public/.htaccess.`);
+  console.log(`${base}: ${CHECKED.join(', ')} as in public/.htaccess; ${script} is there.`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) await main();
