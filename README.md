@@ -120,11 +120,10 @@ holds this build and the previous one; characters are not on the server (they li
 deploy never touches them.
 
 - Last, the deploy checks that the live page and one of its scripts arrive with the Content Security Policy and the
-  isolation headers exactly as `public/.htaccess` sets them (`tools/live-headers.ts`; by hand: `node
-tools/live-headers.ts` after `pnpm build`). Red there means the upload went through but the server doesn't apply
-  `.htaccess` as before: the app may be unprotected (no CSP) or broken (no isolation, no pop-ups). Look at Plesk's
-  Apache and nginx settings for the domain (for example "serve static files directly by nginx") first.
-
+  isolation headers exactly as `public/.htaccess` sets them (`tools/live-headers.ts`; by hand after `pnpm build`:
+  `node tools/live-headers.ts`). Red there means the upload went through but the server doesn't apply `.htaccess`
+  as before: the app may be unprotected (no CSP) or broken (no isolation, no pop-ups). Look at Plesk's Apache and
+  nginx settings for the domain first (for example "serve static files directly by nginx").
 - The folder needs Apache with `mod_headers`: `public/.htaccess` sends the two cross-origin isolation
   headers the pop-ups depend on, keeps `index.html` fresh and caches the hashed build files.
 - Setup, once: an FTP user whose base folder is the app's folder (so it can't reach the rest of the
