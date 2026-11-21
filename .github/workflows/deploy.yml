@@ -17,17 +17,17 @@ on:
 permissions:
   contents: read
 
+# Two quick pushes must not deploy at the same time, nor out of order: the whole run waits for the one before.
+concurrency:
+  group: deploy-remph-de
+  cancel-in-progress: false
+
 jobs:
-  deploy:
+  # Everything that runs the dependencies' code (install, tests, browser tests, build) runs here, without the FTP
+  # login: this job has no environment and so no secrets. It hands on only the built dist/ (security audit
+  # 2026-11-20, finding 09).
+  build:
     runs-on: ubuntu-24.04
-    # The login lives in this environment's secrets, which GitHub hands only to jobs on main (its
-    # deployment branch rule). Branches are pushed here by more than one hand, and a workflow on
-    # any branch could otherwise read plain repository secrets.
-    environment: remph.de
-    # Two quick pushes must not upload at the same time.
-    concurrency:
-      group: deploy-remph-de
-      cancel-in-progress: false
     # An empty MariaDB next to the job for the database tests (pnpm test:db), gone when the job ends. Pinned by
     # digest like the actions below: mariadb:10.11 as of 2026-11-21 (to update: the tag's digest on Docker Hub).
     # The passwords are for this throwaway container only; nothing outside the job can reach it.
@@ -42,8 +42,8 @@ jobs:
         options: >-
           --health-cmd="healthcheck.sh --connect --innodb_initialized"
           --health-interval=5s --health-timeout=5s --health-retries=24
-    # The actions are pinned to commits (what v4 pointed to on 2026-11-02), so a moved tag can't change
-    # what runs next to the FTP login. To update: look up the new tag's commit and change both.
+    # The actions are pinned to commits (what the tag pointed to when it was added), so a moved tag can't change
+    # what runs. To update: look up the new tag's commit and change every use.
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -56,6 +56,7 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      # minimumReleaseAge (pnpm-workspace.yaml) keeps versions out that are less than a day old.
       - name: Install
         run: pnpm install --frozen-lockfile
 
@@ -93,6 +94,34 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # include-hidden-files: dist/.htaccess (the headers) starts with a dot, which the action leaves out otherwise.
+      - name: Hand the build to the upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dist
+          path: dist/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  # The upload: the only job with the FTP login. It runs no dependency code: a fresh checkout for
+  # scripts/deploy.sh and the header check (plain Node, no packages), and the build from the job above.
+  upload:
+    needs: build
+    runs-on: ubuntu-24.04
+    # The login lives in this environment's secrets, which GitHub hands only to jobs on main (its
+    # deployment branch rule). Branches are pushed here by more than one hand, and a workflow on
+    # any branch could otherwise read plain repository secrets.
+    environment: remph.de
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Take the build
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: dist/
+
       - name: Install lftp
         run: sudo apt-get update && sudo apt-get install -y lftp
 
@@ -105,3 +134,15 @@ jobs:
           # Pushes upload for real; a manual run is a dry run unless unticked.
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
         run: bash scripts/deploy.sh dist
+
+      # Node 22 for tools/live-headers.ts (it runs TypeScript directly); no packages are installed.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        with:
+          node-version: 22
+
+      # The live site must send the headers public/.htaccess sets (CSP, COOP, COEP) on the page and on a script:
+      # a red step here means the upload went through but the app is unprotected or broken (README.md, "Deploy").
+      - name: Check the live headers
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        run: node tools/live-headers.ts https://remph.de/mpmb/ dist

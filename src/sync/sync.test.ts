@@ -117,11 +117,42 @@ describe('connecting', () => {
     expect(laptop.sync.mark((await laptop.store.list())[0]!)).toBe('synced');
   });
 
+  test('a code at its device cap says how many, and nothing is remembered', async () => {
+    service.caps.devices = 1;
+    await (await Device.on(service)).sync.connect(CODE, 'Laptop');
+    const ipad = await Device.on(service);
+    expect(await ipad.sync.connect(CODE, 'iPad')).toEqual({ full: 1 });
+    expect(ipad.sync.on).toBe(false);
+  });
+
   test('offline, connecting says so and nothing is remembered', async () => {
     const laptop = await Device.on(service);
     service.offline = true;
     expect(await laptop.sync.connect(CODE, 'Laptop')).toBe('offline');
     expect(laptop.sync.on).toBe(false);
+  });
+});
+
+describe('the character cap', () => {
+  test('a character over it stays here, unsent, says so once, and goes out once there is room', async () => {
+    service.caps.characters = 1;
+    const laptop = await Device.on(service);
+    await laptop.store.put(character('a', '20'));
+    await laptop.store.put(character('b', '18'));
+    await laptop.sync.connect(CODE, 'Laptop');
+    // The newest change goes out first: 'b' takes the one place.
+    expect(service.characters.get(1)?.get('b')?.version).toBe(1);
+    expect(service.characters.get(1)?.has('a')).toBe(false);
+    expect(laptop.notes).toEqual([
+      'Anna stays on this device only for now: your code already syncs 1 characters, the most there can be. Delete one you no longer need, and it goes out with the next sync.',
+    ]);
+    // Still here, and still counted as not sent; the next round asks again but says nothing new.
+    expect(await laptop.hp('a')).toBe('20');
+    await laptop.sync.round(true);
+    expect(laptop.notes).toHaveLength(1);
+    service.caps.characters = 2;
+    await laptop.sync.round(true);
+    expect(service.characters.get(1)?.get('a')?.version).toBe(1);
   });
 });
 

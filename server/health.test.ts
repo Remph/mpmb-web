@@ -68,6 +68,14 @@ describe('database debugging (DB_DEBUG=1)', () => {
     );
     expect(health(env, UPTIME, NOW, 'unreachable', 'ER_ACCESS_DENIED_ERROR')).not.toHaveProperty('databaseDebug');
   });
+
+  it('shows, once connected, who the database sees the service as (the address to allow in Plesk)', () => {
+    const debug = { connectedAs: 'k1_mpmb@203.0.113.7' };
+    expect(health({}, UPTIME, NOW, 'connected', undefined, debug)).toMatchObject({
+      database: 'connected',
+      databaseDebug: debug,
+    });
+  });
 });
 
 describe('requests', () => {
@@ -94,6 +102,20 @@ describe('requests', () => {
       const res = await fetch(`http://localhost:${(server.address() as AddressInfo).port}/characters/%`);
       expect(res.status).toBe(BAD_REQUEST);
       expect(await res.json()).toEqual({ error: 'bad path' });
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it('sends its own HTTPS-only header on every answer, errors too', async () => {
+    // remph.de's Strict-Transport-Security leaves out its subdomains (security audit 2026-11-20, finding 11).
+    const { handle } = service({}, null);
+    const server = createServer((req, res) => void handle(req, res));
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    try {
+      const base = `http://localhost:${(server.address() as AddressInfo).port}`;
+      const answers = await Promise.all([fetch(`${base}/health`), fetch(`${base}/characters`), fetch(`${base}/admin`)]);
+      answers.forEach((res) => expect(res.headers.get('strict-transport-security')).toBe('max-age=31536000'));
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }

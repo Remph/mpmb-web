@@ -21,7 +21,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ADMIN_HEADERS, adminPage, adminPost, langOf, noDatabaseView } from './admin.ts';
 import { connect, migrate, type Db } from './db.ts';
 import { changeLager, readLager, sinceOf } from './lager.ts';
-import { databaseDebug, health, type DatabaseDebug, type DatabaseState } from './health.ts';
+import { databaseDebug, health, type ConnectedDebug, type DatabaseDebug, type DatabaseState } from './health.ts';
 import {
   addressOf,
   allowedOrigins,
@@ -31,6 +31,7 @@ import {
   NO_CONTENT,
   NOT_FOUND,
   OK,
+  PAYLOAD_TOO_LARGE,
   readJson,
   readText,
   Refusal,
@@ -61,7 +62,7 @@ const DEFAULT_PORT = 3000;
 const MIB = 1_048_576;
 const BODY_MIB = 12;
 const BODY_LIMIT = BODY_MIB * MIB;
-/** The admin form is a few short fields. */
+/** The admin form is a few short fields; a /login body is a code and a device name. */
 const FORM_LIMIT = 4096;
 /** Paths may start with /api, in case the service ends up mounted under it. */
 const PREFIX = '/api';
@@ -142,12 +143,20 @@ export function service(env: Env, db: Db | null, clock: () => number = Date.now)
   };
 
   /** The database's state, and the error code when it can't be reached (logged in full for Plesk's log). */
-  async function databaseState(): Promise<{ state: DatabaseState; error?: string; debug?: DatabaseDebug }> {
+  async function databaseState(): Promise<{
+    state: DatabaseState;
+    error?: string;
+    debug?: DatabaseDebug | ConnectedDebug;
+  }> {
     if (!db) return { state: 'not configured' };
     try {
       await ready();
-      await db.rows('SELECT 1');
-      return { state: 'connected' };
+      if (env.DB_DEBUG !== '1') {
+        await db.rows('SELECT 1');
+        return { state: 'connected' };
+      }
+      const [row] = await db.rows<{ seen: string }>('SELECT USER() AS seen');
+      return { state: 'connected', debug: { connectedAs: row?.seen ?? '' } };
     } catch (error) {
       console.error(error);
       const debug = env.DB_DEBUG === '1' ? databaseDebug(env, error) : undefined;
@@ -181,14 +190,19 @@ export function service(env: Env, db: Db | null, clock: () => number = Date.now)
       // `ready` rejects without a database, so it is there from here on.
       const context: Context = { db: db as Db, now: clock() };
       if (parts[0] === 'login' && parts.length === 1 && req.method === 'POST') {
-        const body = await readJson(req, BODY_LIMIT);
+        // Anyone may call /login, so it reads no more than a sign-in needs (security audit 2026-11-20, finding 04).
+        const body = await readJson(req, FORM_LIMIT);
         return sendJson(res, OK, await login(context, body, addressOf(req)), cors);
       }
       const device = await deviceOf(context, bearer(req));
       const answer = await signedIn(context, device, req, parts);
       return answer === undefined ? sendJson(res, NO_CONTENT, undefined, cors) : sendJson(res, OK, answer, cors);
     } catch (error) {
-      if (error instanceof Refusal) return sendJson(res, error.status, { error: error.reason, ...error.details }, cors);
+      if (error instanceof Refusal) {
+        // A body over the limit was left unread (http.ts readText): close the connection after the answer.
+        const close: Record<string, string> = error.status === PAYLOAD_TOO_LARGE ? { Connection: 'close' } : {};
+        return sendJson(res, error.status, { error: error.reason, ...error.details }, { ...cors, ...close });
+      }
       // Passenger writes this into the app's log, which Plesk shows on the Node.js page.
       console.error(error);
       return sendJson(res, SERVER_ERROR, { error: 'server error' }, cors);

@@ -27,7 +27,7 @@ RequiredSheetVersion("24.0.0");
     "SharedWorker", "BroadcastChannel"].forEach(function (name) {
     if (typeof scope[name] !== "undefined") open.push(name);
   });
-  ["storage", "locks"].forEach(function (name) {
+  ["storage", "locks", "serviceWorker"].forEach(function (name) {
     if (typeof nav[name] !== "undefined") open.push("navigator." + name);
   });
   Value("PC Name", "Probe: " + (open.length ? "open " + open.join(" ") : "all blocked"));

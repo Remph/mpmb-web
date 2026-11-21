@@ -5,6 +5,8 @@ export const OK = 200;
 export const NO_CONTENT = 204;
 export const BAD_REQUEST = 400;
 export const UNAUTHORIZED = 401;
+/** A player reached a cap (sync.ts CAPS): too many characters or devices. */
+export const FORBIDDEN = 403;
 export const NOT_FOUND = 404;
 export const CONFLICT = 409;
 export const PAYLOAD_TOO_LARGE = 413;
@@ -28,10 +30,17 @@ export class Refusal extends Error {
   }
 }
 
+/** How long browsers keep to HTTPS for the service's host: a year, in seconds. */
+const HSTS_SECONDS = 31_536_000;
+
 /** Headers every answer carries. */
 const COMMON = {
   'Cache-Control': 'no-store',
   'X-Content-Type-Options': 'nosniff',
+  // HTTPS only for sync.remph.de: remph.de's own Strict-Transport-Security (its root .htaccess) leaves out the
+  // subdomains, so the service sends its own (security audit 2026-11-20, finding 11). Browsers ignore it over plain
+  // http://, where Plesk's redirect to https:// answers anyway.
+  'Strict-Transport-Security': `max-age=${HSTS_SECONDS}`,
   // The app sends Cross-Origin-Embedder-Policy; a response it reads from another origin needs this (and CORS).
   'Cross-Origin-Resource-Policy': 'cross-origin',
 };
@@ -83,8 +92,11 @@ export function readText(req: IncomingMessage, limit: number): Promise<string> {
     req.on('data', (chunk: Buffer) => {
       size += chunk.length;
       if (size > limit) {
+        // Stop reading, but leave the connection open so the 413 still reaches the caller: the answer closes it
+        // (app.ts sends it with "Connection: close"). Destroying the request here cut the answer off as well.
+        req.removeAllListeners('data');
+        req.pause();
         reject(new Refusal(PAYLOAD_TOO_LARGE, 'too large'));
-        req.destroy();
         return;
       }
       chunks.push(chunk);
@@ -123,6 +135,12 @@ export function bearer(req: IncomingMessage): string | null {
 /**
  * The caller's address. Passenger sits behind the webspace's web server, which passes the browser's address on
  * in X-Forwarded-For; the last entry is the one that server added (earlier ones the browser could fake).
+ *
+ * Checked live on 2026-11-21 (security audit 2026-11-20, finding 01): with a made-up X-Forwarded-For every wrong
+ * code still got "wait", an 81-character header still counted, and a phone on mobile data was counted apart from
+ * the PC. So Plesk's nginx appends the real address, and the last entry is it. A hosting change (another proxy in
+ * front, nginx off, a new webspace) must check this again: if a caller's own header reached the service unchanged,
+ * every made-up address would get fresh tries. The admin page's overall ceiling (attempts.ts) still holds then.
  */
 export function addressOf(req: IncomingMessage): string {
   const forwarded = String(req.headers['x-forwarded-for'] ?? '')

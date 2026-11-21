@@ -12,6 +12,7 @@ const OK = 200;
 const NO_CONTENT = 204;
 const BAD_REQUEST = 400;
 const UNAUTHORIZED = 401;
+const FORBIDDEN = 403;
 const NOT_FOUND = 404;
 const CONFLICT = 409;
 const LOCKED = 423;
@@ -83,6 +84,8 @@ export class FakeSync {
   now = START;
   readonly players: { id: number; name: string; code: string }[] = [];
   readonly devices: FakeDevice[] = [];
+  /** Caps per player as the service has them (server/sync.ts CAPS); none unless a test sets them. */
+  caps = { characters: Infinity, devices: Infinity };
   /** By player, then character id. */
   readonly characters = new Map<number, Map<string, FakeCharacter>>();
   /** Every request, for tests that count them ("PUT /characters/abc"). */
@@ -155,6 +158,9 @@ export class FakeSync {
         this.failures++;
         return refuse(UNAUTHORIZED, 'wrong code');
       }
+      if (this.devices.filter((d) => d.player === player.id).length >= this.caps.devices) {
+        return refuse(FORBIDDEN, 'too many devices', { max: this.caps.devices });
+      }
       const device: FakeDevice = {
         id: this.nextDevice++,
         player: player.id,
@@ -219,6 +225,8 @@ export class FakeSync {
     const version = input.version;
     if (typeof version !== 'number') return refuse(BAD_REQUEST, 'bad body');
     if (method === 'PUT') {
+      const live = [...mine.values()].filter((other) => !other.deleted && other.id !== id).length;
+      if (live >= this.caps.characters) return refuse(FORBIDDEN, 'too many characters', { max: this.caps.characters });
       if (version === 0) {
         if (c) return this.refusal(c, device);
         mine.set(id, {
