@@ -1,5 +1,5 @@
-# Temporary: does the live app load in Firefox with the new CSP (#118)? Read-only visits, no secrets.
-# Delete with the branch.
+# Temporary: which of remph.de/mpmb/'s answers carry .htaccess's headers, and does the app keep them offline
+# (the service worker serves index.html by name)? PR #119 review. Read-only visits, no secrets. Delete with the branch.
 name: Header probe
 on:
   push:
@@ -10,27 +10,53 @@ jobs:
   probe:
     runs-on: ubuntu-24.04
     steps:
-      - name: Open remph.de/mpmb/ in Firefox
+      - name: Headers of each kind of file
+        run: |
+          base=https://remph.de/mpmb/
+          page=$(curl -s "$base")
+          script=$(printf '%s' "$page" | grep -o 'assets/[^"]*\.js' | head -1)
+          style=$(printf '%s' "$page" | grep -o 'assets/[^"]*\.css' | head -1)
+          for path in "" index.html sw.js look.js manifest.webmanifest favicon.svg icon-192.png "$script" "$style" deploy-files.txt; do
+            echo "=== /mpmb/$path"
+            curl -s -o /dev/null -D - -H 'Accept-Encoding: gzip, br' "$base$path" \
+              | grep -iE '^(HTTP|content-security|cross-origin|cache-control|etag|server|content-type|x-powered)' \
+              | sed -E 's/^(content-security-policy: .{60}).*/\1.../I'
+          done
+      - name: Firefox online, then offline from the service worker
         run: |
           mkdir probe && cd probe && npm init -y >/dev/null && npm install --silent playwright@1.56.1 >/dev/null
           npx playwright install --with-deps firefox >/dev/null
           cat > probe.mjs <<'JS'
           import { firefox } from 'playwright';
           const browser = await firefox.launch();
-          const page = await browser.newPage();
-          const notes = [];
-          page.on('console', (m) => { if (m.type() === 'error' || /Content.Security|CSP/i.test(m.text())) notes.push(`console ${m.type()}: ${m.text()}`); });
-          page.on('pageerror', (e) => notes.push(`pageerror: ${e.message}`));
-          page.on('requestfailed', (r) => notes.push(`failed: ${r.url()} ${r.failure()?.errorText}`));
+          const context = await browser.newContext();
+          const page = await context.newPage();
+          page.on('pageerror', (e) => console.log(`pageerror: ${e.message}`));
+          // CSP present? An inline script runs only without one (script-src has no 'unsafe-inline').
+          const state = async (label) => {
+            const s = await page.evaluate(() => {
+              const tag = document.createElement('script');
+              tag.textContent = 'window.__inlineRan = true';
+              document.head.append(tag);
+              return {
+                isolated: crossOriginIsolated,
+                inlineScriptRan: window.__inlineRan === true,
+                controlled: !!navigator.serviceWorker?.controller,
+              };
+            });
+            console.log(label, JSON.stringify(s));
+          };
           await page.goto('https://remph.de/mpmb/', { waitUntil: 'networkidle' });
-          await page.waitForTimeout(3000);
-          console.log('crossOriginIsolated:', await page.evaluate(() => crossOriginIsolated));
-          console.log('heading:', await page.locator('h1, h2').first().textContent());
-          // The engine: a new character starts MPMB's scripts in the worker.
+          await state('online, first visit:');
+          await page.evaluate(() => navigator.serviceWorker.ready);
+          await page.reload({ waitUntil: 'networkidle' });
+          await state('online, second visit:');
+          await context.setOffline(true);
+          await page.reload({ waitUntil: 'load' }).catch((e) => console.log('offline reload failed:', e.message));
+          await state('offline (page from the service worker cache):');
           await page.getByRole('button', { name: /New character|Neuer Charakter/ }).click();
           const apply = page.getByRole('dialog').getByRole('button', { name: /Apply|Übernehmen/ });
-          await apply.waitFor({ timeout: 120000 }).then(() => console.log('engine: source selection shown'), () => console.log('engine: no source selection in 120 s'));
-          console.log(notes.length ? notes.join('\n') : 'no console errors');
+          await apply.waitFor({ timeout: 120000 }).then(() => console.log('offline engine: source selection shown'), () => console.log('offline engine: no source selection in 120 s'));
           await browser.close();
           JS
           node probe.mjs
