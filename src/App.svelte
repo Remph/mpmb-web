@@ -5,7 +5,6 @@
   import { Session } from './session.svelte.ts';
   import CharacterList from './views/CharacterList.svelte';
   import CharacterView from './views/CharacterView.svelte';
-  import BuildView from './views/build/BuildView.svelte';
   import HomebrewWindow from './views/HomebrewWindow.svelte';
   import LookWindow from './views/LookWindow.svelte';
   import AboutWindow from './views/AboutWindow.svelte';
@@ -104,6 +103,23 @@
   void session.start().then(route);
 
   /**
+   * The Build screen comes as a script of its own, loaded the first time it opens (tech review 3, finding 11): it
+   * isn't needed to play, and it kept the app's main script over the build's size warning. The service worker
+   * stores that file with the rest, so it opens offline too, and a deploy keeps the previous build's files (#108),
+   * so a tab from before a deploy still finds it. A failed load is forgotten, so the next try loads again.
+   */
+  let buildView: ReturnType<typeof loadBuildView> | null = null;
+  const loadBuildView = () => import('./views/build/BuildView.svelte');
+  function buildViewModule() {
+    buildView ??= loadBuildView().catch((err: unknown) => {
+      buildView = null;
+      throw err;
+    });
+    return buildView;
+  }
+  const reasonOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+  /**
    * An error nothing else caught, shown as a note instead of only in the console (tech review finding 6).
    * Chrome reports a ResizeObserver that needed a second pass as an error; it is harmless, so it is left out.
    */
@@ -130,7 +146,14 @@
 {#if session.current}
   <!-- The play view brings its own top bar and uses the whole width; the language sits in its menu. -->
   {#if building}
-    <BuildView {session} open={session.current} choice={choiceOf} at={stepOf} {toggleLanguage} {t} />
+    {#await buildViewModule() then { default: BuildView }}
+      <BuildView {session} open={session.current} choice={choiceOf} at={stepOf} {toggleLanguage} {t} />
+    {:catch err}
+      <p class="load-failed" role="alert">
+        {fill(t.unexpectedError, { reason: reasonOf(err) })}
+        <button type="button" onclick={() => location.reload()}>{t.reload}</button>
+      </p>
+    {/await}
   {:else}
     <CharacterView {session} open={session.current} {toggleLanguage} {t} />
   {/if}
@@ -198,6 +221,18 @@
 <PopUpLayer popUps={session.popUps} {t} />
 
 <style>
+  /* Only when the Build screen's script didn't load (offline before it was ever stored, say). */
+  .load-failed {
+    max-width: var(--page-max);
+    margin: 2rem auto;
+    padding: 0 1rem;
+  }
+
+  .load-failed button {
+    min-height: 44px;
+    margin-inline-start: 0.5rem;
+  }
+
   header {
     display: flex;
     align-items: center;

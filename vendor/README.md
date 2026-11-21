@@ -7,9 +7,10 @@ The document-level JavaScript of
 by Joost Wijnen (morepurplemorebetter), Flapkan Productions, GPL-3.0 (see `mpmb/LICENSE` and
 `mpmb/README.md`). The app runs these scripts unchanged on its stand-in for Acrobat's JavaScript API.
 
-- Upstream commit: `c1044f61032228963fac637fe11f6476eebe583a` (2026-11-05, v24.2.0-4-gc1044f6).
+- Upstream commit: `6e52abad4f9dfaee004faf2296e07cfc4cbc107f` (2026-11-09, v24.2.0-5-g6e52aba).
 - Copied: `_functions/`, `_variables/`, `LICENSE`, `README.md`. Nothing in them is changed.
-- To update: see "Updating" below.
+- To update: see "Updating" below. `.github/workflows/upstream-check.yml` goes red once a week while upstream
+  has commits newer than the one above (GitHub mails the owner); run it by hand under Actions any time.
 
 The blank-sheet data in `src/engine/data/colorful-a4.json` (field names, field scripts, calculation
 order, templates, bookmarks) comes from MPMB's Colorful A4 PDF v24.2.0, which MPMB distributes under

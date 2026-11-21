@@ -39,10 +39,11 @@ function git(...args: string[]): string {
 const FONT_FILE = /\.woff2?$/;
 
 /**
- * When the build warns that a script is big, in kB. The app's own script is about 575 kB (178 kB gzip,
- * 2026-11-08), above Vite's default of 500. Splitting it wouldn't help: the service worker stores every file
- * on the first visit anyway, and the app then opens from that copy. 700 still warns when something big slips
- * in by mistake, such as the PDF library, which belongs in the engine worker.
+ * When the build warns that a script is big, in kB. The app's own script is about 612 kB (191 kB gzip,
+ * 2026-11-21), above Vite's default of 500; the Build screen comes as a script of its own since then
+ * (App.svelte, tech review 3), after organic growth took the main one to 732 kB. 700 still warns when something
+ * big slips in by mistake, such as the PDF library, which belongs in the engine worker. Don't raise it to
+ * silence the warning: find what grew (a build with source maps) and load what play doesn't need on demand.
  */
 const SCRIPT_WARNING_KB = 700;
 

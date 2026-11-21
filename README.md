@@ -47,6 +47,7 @@ pnpm check          # type checks
 pnpm build          # static build in dist/
 pnpm format:check   # Prettier
 pnpm e2e            # browser smoke test (Playwright, Firefox; builds first)
+pnpm test:db        # the sync service's tests on a real MariaDB/MySQL (server/README.md, "Tests")
 ```
 
 The smoke test needs Firefox for Playwright once: `pnpm exec playwright install firefox`.
@@ -92,9 +93,10 @@ How to take a new upstream version: `vendor/README.md`, "Updating".
 ## Deploy
 
 The live app is at <https://remph.de/mpmb/>. Every push to `main` (a merged pull request) runs
-`.github/workflows/deploy.yml`: install, unit tests, type check, browser tests, build, then `scripts/deploy.sh` uploads
-`dist/` into that folder over FTP with TLS. The folder then holds this build and the previous one; characters are
-not on the server (they live in each player's browser), so a deploy never touches them.
+`.github/workflows/deploy.yml`: install, unit tests, database tests (a MariaDB container), type check, browser tests,
+build, then `scripts/deploy.sh` uploads `dist/` into that folder over FTP with TLS. The folder then holds this build
+and the previous one; characters are not on the server (they live in each player's browser), so a deploy never
+touches them.
 
 - The folder needs Apache with `mod_headers`: `public/.htaccess` sends the two cross-origin isolation
   headers the pop-ups depend on, keeps `index.html` fresh and caches the hashed build files.

@@ -1,0 +1,57 @@
+# Goes red once a week while MPMB's repository has commits newer than the one the app ships (the commit in
+# vendor/README.md), so an upstream fix doesn't wait until someone happens to look (tech review 3, finding 05).
+# A red run makes GitHub mail the repository's owner; the run's summary lists the new commits. What to do then:
+# "Updating" in vendor/README.md. It reads public repositories only: no secrets, read-only token.
+# GitHub pauses scheduled workflows in a public repository after 60 days without a commit; a push wakes it again.
+name: Upstream check
+
+on:
+  schedule:
+    # Mondays, 05:17 UTC (a minute off the hour, when GitHub's scheduler is less busy).
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upstream:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # Pinned to a commit like deploy.yml's actions.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Compare with MPMB's repository
+        env:
+          UPSTREAM: https://github.com/morepurplemorebetter/2024_MPMBs-Character-Record-Sheet
+        run: |
+          # The full commit hash on the "Upstream commit" line. Try it:
+          # https://regex101.com/?regex=Upstream%20commit%3A%20%60%5B0-9a-f%5D%7B40%7D&testString=-%20Upstream%20commit%3A%20%606e52abad4f9dfaee004faf2296e07cfc4cbc107f%60
+          shipped=$(grep -oE 'Upstream commit: `[0-9a-f]{40}' vendor/README.md | grep -oE '[0-9a-f]{40}' || true)
+          if [ -z "$shipped" ]; then
+            echo "::error::No 'Upstream commit' line with a full hash in vendor/README.md"
+            exit 1
+          fi
+          # History only, no file contents: a few MB.
+          git clone --quiet --bare --filter=blob:none "$UPSTREAM" upstream.git
+          if ! git -C upstream.git cat-file -e "$shipped^{commit}" 2>/dev/null; then
+            echo "::error::Upstream no longer has $shipped (rewritten history?): check vendor/README.md by hand"
+            exit 1
+          fi
+          newer=$(git -C upstream.git log --format='%h %as %s' "$shipped..HEAD")
+          if [ -z "$newer" ]; then
+            echo "Up to date with upstream ($shipped)." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "### MPMB's repository has $(echo "$newer" | wc -l) commit(s) newer than vendor/mpmb"
+            echo
+            echo "Shipped: \`$shipped\`. To update: \"Updating\" in vendor/README.md."
+            echo
+            echo "$newer" | sed 's/^/- /'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "::error::Upstream has newer commits than vendor/README.md names"
+          exit 1

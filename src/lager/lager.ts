@@ -1,74 +1,12 @@
 // The group's storage, the "Lager" (M16, decisions.md 2026-11-15), as the app sees it: the service's answer, the
 // small changes ("ops") the app sends, and what the panel shows (search, the place filter, suggestions). Pure, so
 // it runs in the tests as it runs in the panel. The service's side is server/lager.ts; the two must agree on the
-// ops, which test/sync-real.test.ts checks against the real service.
+// ops, which test/sync-real.test.ts checks against the real service. Types and limits come from protocol.ts,
+// which the service imports too.
+import { LAGER_LIMITS, type GroupKind, type Lager, type LagerGroup, type LagerItem, type Op } from './protocol.ts';
 
-/** A group shows a place per item (magic items: in the Lager, with a character, gone) or a count (materials). */
-export type GroupKind = 'place' | 'count';
-
-export interface LagerGroup {
-  id: string;
-  name: string;
-  kind: GroupKind;
-}
-
-export interface LagerItem {
-  id: string;
-  group: string;
-  name: string;
-  count: number;
-  /** Where it is: '' or "Lager" in the Lager, a character's name, or a word for gone ("Gone", "m.i.a"). */
-  place: string;
-  /** A note or the item's whole text. */
-  note: string;
-  /** When it changed last (ms since 1970), and who changed it ('' when that player was removed). */
-  updated: number;
-  by: string;
-}
-
-export interface Lager {
-  version: number;
-  /** The group's gold in copper: 123450 is 1,234.5 gp. */
-  copper: number;
-  goldNote: string;
-  updated: number;
-  by: string;
-  groups: LagerGroup[];
-  items: LagerItem[];
-}
-
-export type Op =
-  | { op: 'addGroup'; id: string; name: string; kind: GroupKind }
-  | { op: 'renameGroup'; id: string; name: string }
-  | { op: 'removeGroup'; id: string }
-  | { op: 'orderGroups'; ids: string[] }
-  | { op: 'add'; id: string; group: string; name: string; count: number; place: string; note: string }
-  | { op: 'count'; id: string; by: number }
-  | { op: 'set'; id: string; name?: string; place?: string; note?: string; group?: string }
-  | { op: 'remove'; id: string }
-  | { op: 'gold'; by?: number; to?: number }
-  | { op: 'goldNote'; note: string };
-
-/** The same limits as the service's (server/lager.ts), so the app never sends what it would refuse. */
-const MAX_OPS = 1000;
-const GROUP_NAME_MAX = 80;
-const ITEM_NAME_MAX = 200;
-const PLACE_MAX = 80;
-const NOTE_MAX = 20_000;
-const GOLD_NOTE_MAX = 200;
-const COUNT_MAX = 1_000_000;
-const COPPER_MAX = 1_000_000_000_000;
-
-export const LAGER_LIMITS = {
-  ops: MAX_OPS,
-  groupName: GROUP_NAME_MAX,
-  itemName: ITEM_NAME_MAX,
-  place: PLACE_MAX,
-  note: NOTE_MAX,
-  goldNote: GOLD_NOTE_MAX,
-  count: COUNT_MAX,
-  copper: COPPER_MAX,
-} as const;
+export type { GroupKind, Lager, LagerGroup, LagerItem, Op };
+export { LAGER_LIMITS };
 
 /** Gold has at most two decimals: copper is a hundredth of a gold piece. */
 const GOLD_DECIMALS = 2;
