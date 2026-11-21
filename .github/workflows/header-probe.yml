@@ -1,5 +1,5 @@
-# Temporary: what remph.de/mpmb/ sends for each kind of file (deploy run 82's live header check failed on a script).
-# Read-only requests, no secrets. Delete with the branch.
+# Temporary: does the live app load in Firefox with the new CSP (#118)? Read-only visits, no secrets.
+# Delete with the branch.
 name: Header probe
 on:
   push:
@@ -10,14 +10,27 @@ jobs:
   probe:
     runs-on: ubuntu-24.04
     steps:
-      - name: Headers per file
+      - name: Open remph.de/mpmb/ in Firefox
         run: |
-          base=https://remph.de/mpmb/
-          page="$(curl -s "$base")"
-          files="$(printf '%s\n' "$page" | grep -oE '(assets/[A-Za-z0-9._-]+\.(js|css)|look\.js)' | sort -u)"
-          for f in "" $files sw.js manifest.webmanifest deploy-files.txt assets/BuildView-DWO1f7Wx.js; do
-            echo "=== ${base}${f}"
-            curl -s -o /dev/null -D - "${base}${f}" | grep -iE '^(HTTP|server|content-type|content-security|cross-origin|cache-control|age|x-cache|x-powered|etag|last-modified|vary|strict|x-content)' || true
-          done
-          echo "=== listed in deploy-files.txt (first lines)"
-          curl -s "${base}deploy-files.txt" | head -40
+          mkdir probe && cd probe && npm init -y >/dev/null && npm install --silent playwright@1.56.1 >/dev/null
+          npx playwright install --with-deps firefox >/dev/null
+          cat > probe.mjs <<'JS'
+          import { firefox } from 'playwright';
+          const browser = await firefox.launch();
+          const page = await browser.newPage();
+          const notes = [];
+          page.on('console', (m) => { if (m.type() === 'error' || /Content.Security|CSP/i.test(m.text())) notes.push(`console ${m.type()}: ${m.text()}`); });
+          page.on('pageerror', (e) => notes.push(`pageerror: ${e.message}`));
+          page.on('requestfailed', (r) => notes.push(`failed: ${r.url()} ${r.failure()?.errorText}`));
+          await page.goto('https://remph.de/mpmb/', { waitUntil: 'networkidle' });
+          await page.waitForTimeout(3000);
+          console.log('crossOriginIsolated:', await page.evaluate(() => crossOriginIsolated));
+          console.log('heading:', await page.locator('h1, h2').first().textContent());
+          // The engine: a new character starts MPMB's scripts in the worker.
+          await page.getByRole('button', { name: /New character|Neuer Charakter/ }).click();
+          const apply = page.getByRole('dialog').getByRole('button', { name: /Apply|Übernehmen/ });
+          await apply.waitFor({ timeout: 120000 }).then(() => console.log('engine: source selection shown'), () => console.log('engine: no source selection in 120 s'));
+          console.log(notes.length ? notes.join('\n') : 'no console errors');
+          await browser.close();
+          JS
+          node probe.mjs
