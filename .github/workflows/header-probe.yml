@@ -1,0 +1,23 @@
+# Temporary: what remph.de/mpmb/ sends for each kind of file (deploy run 82's live header check failed on a script).
+# Read-only requests, no secrets. Delete with the branch.
+name: Header probe
+on:
+  push:
+    branches: [feature/live-header-probe]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Headers per file
+        run: |
+          base=https://remph.de/mpmb/
+          page="$(curl -s "$base")"
+          files="$(printf '%s\n' "$page" | grep -oE '(assets/[A-Za-z0-9._-]+\.(js|css)|look\.js)' | sort -u)"
+          for f in "" $files sw.js manifest.webmanifest deploy-files.txt assets/BuildView-DWO1f7Wx.js; do
+            echo "=== ${base}${f}"
+            curl -s -o /dev/null -D - "${base}${f}" | grep -iE '^(HTTP|server|content-type|content-security|cross-origin|cache-control|age|x-cache|x-powered|etag|last-modified|vary|strict|x-content)' || true
+          done
+          echo "=== listed in deploy-files.txt (first lines)"
+          curl -s "${base}deploy-files.txt" | head -40
