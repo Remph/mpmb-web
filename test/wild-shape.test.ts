@@ -37,7 +37,7 @@ class Picking extends ScriptedHost {
 }
 
 describe('Wild Shape forms', () => {
-  test("a form with traits gets them (MPMB's pop/prop slip is mended)", () => {
+  test('a form with traits gets them (MPMB fixed its pop/prop slip in 6e52aba)', () => {
     const engine = openSheet(referenceSheet('wizard10-evoker'));
     engine.evaluate('DoTemplate("WSfront", "Add")');
     const prefix = String(engine.evaluate('What("Template.extras.WSfront")')).split(',')[1];
@@ -48,7 +48,7 @@ describe('Wild Shape forms', () => {
     const fields = viewsOf(engine.doc);
     expect(valueOf(fields, `${prefix}Wildshape.Race.1`)).toBe('Wolf');
     expect(valueOf(fields, `${prefix}Wildshape.1.Attack.1.Weapon`)).toBe('Bite');
-    // Without the fix this box stays empty and the add throws "pop is not defined".
+    // Before MPMB's fix (6e52aba) this box stayed empty and the add threw "pop is not defined".
     expect(valueOf(fields, `${prefix}Wildshape.1.Traits`)).toContain('Pack Tactics');
   });
 
@@ -79,7 +79,7 @@ describe('Wild Shape forms', () => {
     expect(bear?.attacks.map((a) => a.name)).toEqual(['Bite', 'Claw']);
     const perception = wolf?.skills.find((s) => s.key === 'Perc');
     expect(perception?.mark).not.toBe('nothing');
-    // MPMB's slip in the field's name made every form's Passive Perception 10.
+    // Before MPMB's fix (6e52aba), a slip in the field's name made every form's Passive Perception 10.
     expect(Number(wolf?.passivePerception)).toBe(10 + Number(perception?.bonus));
     // A wizard has no Wild Shape, so MPMB's page shows no rules for it.
     expect(readWildShapeRules(fields)).toBeNull();

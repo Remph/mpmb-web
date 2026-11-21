@@ -394,6 +394,7 @@ describe.skipIf(!settings.DB_HOST || !settings.DB_NAME)('the Lager on a real dat
     // Two transactions lock the two groups in opposite order, each waiting until the other holds its first lock:
     // MySQL ends one of them as a deadlock, and it runs again after the other commits.
     let runs = 0;
+    let holding = 0;
     let release = () => {};
     const bothHold = new Promise<void>((resolve) => {
       release = resolve;
@@ -401,9 +402,15 @@ describe.skipIf(!settings.DB_HOST || !settings.DB_NAME)('the Lager on a real dat
     const lockBoth = (first: string, second: string, name: string) =>
       db.transaction(async (tx) => {
         runs += 1;
+        // The run again after the deadlock goes straight through. `runs` is read before the first await: read after
+        // it, it may already count the other transaction.
+        const again = runs > 2;
         await tx.change('UPDATE lager_groups SET name = ? WHERE id = ?', [name, first]);
-        if (runs <= 2) {
-          if (runs === 2) release();
+        if (!again) {
+          // Both wait until both hold their first lock (a barrier). Letting go as soon as the second one held its
+          // lock was flaky: it could take both locks before the first one's UPDATE reached MySQL.
+          holding += 1;
+          if (holding === 2) release();
           await bothHold;
         }
         await tx.change('UPDATE lager_groups SET name = ? WHERE id = ?', [name, second]);

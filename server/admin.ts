@@ -5,6 +5,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { checkTries, clearFailures, countFailure } from './attempts.ts';
 import { hashCode, newCode } from './codes.ts';
 import { Refusal } from './http.ts';
+import { BUILD, type BuildInfo } from './build-info.ts';
 import { cleanName, type Context } from './sync.ts';
 
 export type Lang = 'de' | 'en';
@@ -38,6 +39,9 @@ const TEXT = {
     removeYes: (name: string) => `Yes, remove ${name}`,
     cancel: 'Cancel',
     removed: (name: string) => `${name} was removed.`,
+    build: 'Service build',
+    builtAt: 'built',
+    unknownBuild: 'unknown (not built with pnpm build:server)',
   },
   de: {
     title: 'MPMB Web Sync: Spieler',
@@ -68,6 +72,9 @@ const TEXT = {
     removeYes: (name: string) => `Ja, ${name} entfernen`,
     cancel: 'Abbrechen',
     removed: (name: string) => `${name} wurde entfernt.`,
+    build: 'Stand des Dienstes',
+    builtAt: 'gebaut',
+    unknownBuild: 'unbekannt (nicht mit pnpm build:server gebaut)',
   },
 } as const;
 
@@ -154,8 +161,25 @@ function playerTable(list: PlayerRow[], lang: Lang, t: Texts): string {
     <p>${t.newCodeNote}</p>`;
 }
 
+/** Git's short commit hash. */
+const SHORT_HASH = 7;
+const SOURCE = 'https://github.com/Remph/mpmb-web/tree/';
+
+/**
+ * Which build runs (finding 09): the short commit, linked to its source unless the bundle was built from changed
+ * files, and when it was built. /health has the same in full.
+ */
+function buildLine(build: BuildInfo, lang: Lang, t: Texts): string {
+  if (!build.commit) return `<p class="facts">${t.build}: ${t.unknownBuild}</p>`;
+  const [hash = ''] = build.commit.split('-');
+  const short = escapeHtml(build.commit.replace(hash, hash.slice(0, SHORT_HASH)));
+  const name = build.commit === hash ? `<a href="${SOURCE}${escapeHtml(hash)}">${short}</a>` : short;
+  const built = build.built ? `, ${t.builtAt} ${when(Date.parse(build.built), lang, t)} UTC` : '';
+  return `<p class="facts">${t.build}: ${name}${built}</p>`;
+}
+
 /** The whole page. */
-export function adminPage(lang: Lang, view: AdminView = {}): string {
+export function adminPage(lang: Lang, view: AdminView = {}, build: BuildInfo = BUILD): string {
   const t = TEXT[lang];
   const password = escapeHtml(view.password ?? '');
   const code = view.code
@@ -183,7 +207,7 @@ export function adminPage(lang: Lang, view: AdminView = {}): string {
       <label>${t.name}<input name="name" maxlength="80" autocomplete="off"></label>
       <button name="action" value="add">${t.add}</button>
       ${table}
-    </form></body></html>`;
+    </form>${buildLine(build, lang, t)}</body></html>`;
 }
 
 async function players(context: Context): Promise<PlayerRow[]> {

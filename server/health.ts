@@ -1,6 +1,7 @@
 // What GET /health reports: how the webspace runs the service, and whether it reaches its database. The Node
 // version, which the hosting spike (#101) needed, is left out now that the hosting is settled: no need to tell it.
 // Pure, so a test can call it with a made-up environment.
+import { BUILD, type BuildInfo } from './build-info.ts';
 
 /** The answer of GET /health, as JSON. */
 export interface Health {
@@ -10,6 +11,9 @@ export interface Health {
   runner: 'passenger' | 'plain';
   /** Seconds since the process started: shows whether Passenger keeps it running between requests. */
   uptime: number;
+  /** The commit the running bundle was built from, and when (server/build-info.ts): which upload is live. */
+  commit: BuildInfo['commit'];
+  built: BuildInfo['built'];
   /** Whether the database settings are there and the service reaches it (the settings never leave the server). */
   database: DatabaseState;
   /**
@@ -61,6 +65,7 @@ export function health(
   database: DatabaseState,
   databaseError?: string,
   debug?: DatabaseDebug,
+  build: BuildInfo = BUILD,
 ): Health {
   return {
     ok: true,
@@ -68,6 +73,8 @@ export function health(
     // Passenger sets PASSENGER_APP_ENV (and IN_PASSENGER) for the apps it starts.
     runner: env.PASSENGER_APP_ENV || env.IN_PASSENGER ? 'passenger' : 'plain',
     uptime: Math.round(uptime),
+    commit: build.commit,
+    built: build.built,
     database,
     ...(databaseError ? { databaseError } : {}),
     ...(debug ? { databaseDebug: debug } : {}),

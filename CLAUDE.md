@@ -16,7 +16,8 @@ TypeScript, built with pnpm. Public repo, GPL-3.0-or-later.
 
 In the repo root: `pnpm install`, `pnpm test` (Vitest), `pnpm check` (svelte-check and tsc),
 `pnpm build`, `pnpm format:check` (`pnpm format` fixes; Prettier, config in `.prettierrc.json`).
-`pnpm e2e` runs the browser tests (Playwright, Firefox; it builds first). `pnpm dev` serves the app locally.
+`pnpm e2e` runs the browser tests (Playwright, Firefox; it builds first). `pnpm test:db` runs the tests that need
+a MySQL or MariaDB (`server/README.md`, "Tests"). `pnpm dev` serves the app locally.
 
 ## Git (human in the loop)
 
@@ -42,6 +43,11 @@ GitHub doesn't check pull requests here. Before reporting done, run `pnpm test`,
 anything that could not run, with the reason). A review runs them again on the branch. `pnpm e2e` needs
 Firefox for Playwright once (`pnpm exec playwright install firefox`); the deploy runs it too, so a red
 browser test stops the upload.
+
+For any change in `server/`, `src/sync/`, `src/lager/` or `test/fake-sync.ts`, also run `pnpm test:db` (`pnpm test`
+skips those tests without a database, so it stays green without them). In a cloud session it needs MariaDB once:
+the setup lines in `server/README.md`, "Tests" (about a minute). The deploy runs it too, against a MariaDB
+container.
 
 ## Reviews
 

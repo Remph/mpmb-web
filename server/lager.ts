@@ -9,85 +9,17 @@
 import type { Param, Queries } from './db.ts';
 import { BAD_REQUEST, isRecord, Refusal } from './http.ts';
 import type { Context, Device } from './sync.ts';
+// The ops, the Lager's shape and the limits are shared with the app (src/lager/protocol.ts), so they can't drift.
+import { LAGER_LIMITS, type GroupKind, type Lager, type Op } from '../src/lager/protocol.ts';
 
-/** How a group shows its items: a place per item (magic items) or a count per item (materials). */
-export type GroupKind = 'place' | 'count';
-
-/** Ops in one request: the app's import of a whole list sends a few hundred at once. */
-const MAX_OPS = 1000;
-const MAX_GROUPS = 50;
-const MAX_ITEMS = 3000;
-const GROUP_NAME_MAX = 80;
-const ITEM_NAME_MAX = 200;
-const PLACE_MAX = 80;
-/** Item texts (a magic item's description) run to a few hundred words. */
-const NOTE_MAX = 20_000;
-const GOLD_NOTE_MAX = 200;
-const COUNT_MAX = 1_000_000;
-/** Gold in copper (1 gp = 100 cp, so "1234.5 gp" is exact); a trillion copper is plenty. */
-const COPPER_MAX = 1_000_000_000_000;
-/** As long as a character's id (crypto.randomUUID is 36). */
-const ID_MAX = 64;
 /**
  * How long the service remembers a request's id, so the same request sent again changes nothing. A retry comes
  * seconds later; a laptop that slept with a request on its way may send it again days later.
  */
 const REQUEST_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
 
-export const LIMITS = {
-  ops: MAX_OPS,
-  groups: MAX_GROUPS,
-  items: MAX_ITEMS,
-  groupName: GROUP_NAME_MAX,
-  itemName: ITEM_NAME_MAX,
-  place: PLACE_MAX,
-  note: NOTE_MAX,
-  goldNote: GOLD_NOTE_MAX,
-  count: COUNT_MAX,
-  copper: COPPER_MAX,
-  id: ID_MAX,
-} as const;
-
-export type Op =
-  | { op: 'addGroup'; id: string; name: string; kind: GroupKind }
-  | { op: 'renameGroup'; id: string; name: string }
-  | { op: 'removeGroup'; id: string }
-  | { op: 'orderGroups'; ids: string[] }
-  | { op: 'add'; id: string; group: string; name: string; count: number; place: string; note: string }
-  | { op: 'count'; id: string; by: number }
-  | { op: 'set'; id: string; name?: string; place?: string; note?: string; group?: string }
-  | { op: 'remove'; id: string }
-  | { op: 'gold'; by?: number; to?: number }
-  | { op: 'goldNote'; note: string };
-
-export interface LagerGroup {
-  id: string;
-  name: string;
-  kind: GroupKind;
-}
-
-export interface LagerItem {
-  id: string;
-  group: string;
-  name: string;
-  count: number;
-  place: string;
-  note: string;
-  updated: number;
-  /** The player who changed it last, or '' when that player has been removed. */
-  by: string;
-}
-
-export interface Lager {
-  version: number;
-  /** In copper: 123450 is 1,234.5 gp. */
-  copper: number;
-  goldNote: string;
-  updated: number;
-  by: string;
-  groups: LagerGroup[];
-  items: LagerItem[];
-}
+/** The limits it enforces: the same ones the app keeps to, from the shared protocol file. */
+export const LIMITS = LAGER_LIMITS;
 
 const isIdChar = (char: string) =>
   (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char === '-';

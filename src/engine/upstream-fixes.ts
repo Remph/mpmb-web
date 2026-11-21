@@ -17,29 +17,9 @@ export interface UpstreamFix {
   edits: readonly UpstreamEdit[];
 }
 
-export const UPSTREAM_FIXES: readonly UpstreamFix[] = [
-  {
-    // v24.2.0, Functions2.js, the function that fills a Wild Shape form.
-    name: 'ApplyWildshape',
-    edits: [
-      {
-        // The loop that writes the form's traits reads `pop` where it means its loop variable `prop`, so every
-        // form with a trait, action or feature throws "pop is not defined" there: the Traits box stays empty and
-        // MPMB's progress bar never closes. `\bpop\.` matches only the misspelt reads ("pop.name"), never
-        // "prop.name" or "arr.pop()". Try it:
-        // https://regex101.com/?regex=%5Cbpop%5C.&flags=g&testString=pop.name%20prop.name%20arr.pop()
-        find: /\bpop\./g,
-        replace: 'prop.',
-      },
-      {
-        // Passive Perception reads the form's Perception from "P6.WSfront.Wildshape.1Skills.Perc" (the dot after
-        // the form's number is missing), a field that doesn't exist, so every form shows 10.
-        find: /fldBase \+ "Skills\.Perc"/g,
-        replace: 'fldBase + ".Skills.Perc"',
-      },
-    ],
-  },
-];
+// Empty for now. The last two (v24.2.0, ApplyWildshape: `pop.` for `prop.`, and the Perception field name without
+// its dot) were fixed upstream in 6e52aba (2026-11-09) and dropped with that update. The next slip goes here.
+export const UPSTREAM_FIXES: readonly UpstreamFix[] = [];
 
 /** Applies the fixes whose faulty text is still in the loaded scripts; returns the names of those it applied. */
 export function applyUpstreamFixes(realm: Realm, fixes: readonly UpstreamFix[] = UPSTREAM_FIXES): string[] {

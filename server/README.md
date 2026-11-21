@@ -31,21 +31,21 @@ IndexedDB as the copy it works on and sends changes here at most every 5 seconds
   remembers the ids for 30 days). Every change moves the Lager's `version` on; the app asks with `?since=` every
   few seconds while the Lager is open, and an unchanged Lager answers with its version only.
 
-| Route                          | Body                    | Answer                                                     |
-| ------------------------------ | ----------------------- | ---------------------------------------------------------- |
-| `GET /health`                  |                         | `runner`, `uptime`, `database`: no login needed            |
-| `POST /login`                  | `{code, device}`        | `{token, player, device}`; `401` wrong code, `429` waiting |
-| `GET /devices`                 |                         | `{player, devices: [{id, name, lastSeen, current}]}`       |
-| `DELETE /devices/:id`          |                         | `204`: that device is signed out ("Forget this device")    |
-| `GET /characters`              |                         | `{characters: [{id, version, deleted, meta, lease, …}]}`   |
-| `GET /characters/:id`          |                         | the same, plus `data`                                      |
-| `PUT /characters/:id`          | `{version, meta, data}` | `{version, updated}`; `409` newer version, `423` held      |
-| `DELETE /characters/:id`       | `{version}`             | `{version, updated}`                                       |
-| `POST /characters/:id/lease`   | `{takeOver?}`           | `{since, until}`; `423` with `lease` when held elsewhere   |
-| `DELETE /characters/:id/lease` |                         | `204`                                                      |
-| `GET /lager?since=n`           |                         | the group's Lager; only `{version}` while it is still at n |
-| `POST /lager`                  | `{ops: [...], request}` | the Lager after the ops; `400` with the bad op's `index`   |
-| `GET`, `POST /admin`           | the form                | the admin page                                             |
+| Route                          | Body                    | Answer                                                             |
+| ------------------------------ | ----------------------- | ------------------------------------------------------------------ |
+| `GET /health`                  |                         | `runner`, `uptime`, `commit`, `built`, `database`: no login needed |
+| `POST /login`                  | `{code, device}`        | `{token, player, device}`; `401` wrong code, `429` waiting         |
+| `GET /devices`                 |                         | `{player, devices: [{id, name, lastSeen, current}]}`               |
+| `DELETE /devices/:id`          |                         | `204`: that device is signed out ("Forget this device")            |
+| `GET /characters`              |                         | `{characters: [{id, version, deleted, meta, lease, …}]}`           |
+| `GET /characters/:id`          |                         | the same, plus `data`                                              |
+| `PUT /characters/:id`          | `{version, meta, data}` | `{version, updated}`; `409` newer version, `423` held              |
+| `DELETE /characters/:id`       | `{version}`             | `{version, updated}`                                               |
+| `POST /characters/:id/lease`   | `{takeOver?}`           | `{since, until}`; `423` with `lease` when held elsewhere           |
+| `DELETE /characters/:id/lease` |                         | `204`                                                              |
+| `GET /lager?since=n`           |                         | the group's Lager; only `{version}` while it is still at n         |
+| `POST /lager`                  | `{ops: [...], request}` | the Lager after the ops; `400` with the bad op's `index`           |
+| `GET`, `POST /admin`           | the form                | the admin page                                                     |
 
 All but `/health`, `/login` and `/admin` need `Authorization: Bearer <token>`. Errors are `{error: "…"}`. Paths may
 also start with `/api`.
@@ -81,6 +81,10 @@ Nick set up the subdomain, Node.js and the database for the hosting test (#101).
 
 **Later updates** (a new `dist/app.cjs` only): upload `dist/app.cjs` over the old one, then Restart App and check
 `/health`. The database tables stay as they are; new ones (the Lager's, M16) are added on the first request after the restart.
+Last, **check the commit on `/health`**: `commit` must be the one the zip was built from (the build prints it, and
+the zip's name or its thread says it), and `built` its build time. An old commit there means the old bundle still
+runs: Restart App again. The admin page names the same build at its foot. A commit ending in `-modified` was
+built from files that differed from that commit; upload only bundles built from a pushed commit.
 
 No npm install: `pnpm build:server` bundles the service with its two libraries into `dist/app.cjs`.
 
@@ -97,34 +101,30 @@ Content-Security-Policy only applies on the webspace, through `public/.htaccess`
 
 ## Tests
 
-`pnpm test` runs the pure tests (`codes.test.ts`, `health.test.ts`) everywhere. `sync.test.ts` drives the whole
-service against a real MySQL or MariaDB and runs only when `TEST_DB_HOST`, `TEST_DB_NAME`, `TEST_DB_USER` and
-`TEST_DB_PASSWORD` name an empty database it may wipe; otherwise it is skipped. In a cloud session:
+`pnpm test` runs the pure tests (`codes.test.ts`, `health.test.ts`) everywhere. The tests that drive the service
+against a real MySQL or MariaDB run with **`pnpm test:db`** (`tools/test-db.ts`), and `pnpm test` skips them:
+
+- `sync.test.ts`: the whole service, in `TEST_DB_NAME`.
+- `lager.test.ts`: the Lager (M16), in `TEST_LAGER_DB_NAME`.
+- `test/sync-real.test.ts`: the app's sync (`src/sync/`) and Lager against this service, so the two can't drift
+  apart while each passes its own tests against a stand-in (`test/fake-sync.ts`), in `TEST_APP_DB_NAME`.
+
+Each wipes its tables, so each needs an empty database of its own (Vitest runs the files side by side). `pnpm
+test:db` uses these local defaults unless the `TEST_*` variables are set (the deploy runs it against a MariaDB
+service container, `.github/workflows/deploy.yml`), and fails rather than skips when the database isn't there. Run
+it for every change in `server/`, `src/sync/`, `src/lager/` or `test/fake-sync.ts` (`CLAUDE.md`, "Checks"). Set up
+once, in a cloud session:
 
 ```sh
 apt-get update && apt-get install -y mariadb-server && service mariadb start
-mariadb -e "CREATE DATABASE mpmb_test; CREATE USER 'mpmb'@'localhost' IDENTIFIED BY 'mpmb-test';
-  GRANT ALL ON mpmb_test.* TO 'mpmb'@'localhost';"
-TEST_DB_HOST=localhost TEST_DB_NAME=mpmb_test TEST_DB_USER=mpmb TEST_DB_PASSWORD=mpmb-test pnpm test server
+mariadb -e "CREATE DATABASE mpmb_test; CREATE DATABASE mpmb_lager_test; CREATE DATABASE mpmb_app_test;
+  CREATE USER 'mpmb'@'localhost' IDENTIFIED BY 'mpmb-test'; GRANT ALL ON mpmb_test.* TO 'mpmb'@'localhost';
+  GRANT ALL ON mpmb_lager_test.* TO 'mpmb'@'localhost'; GRANT ALL ON mpmb_app_test.* TO 'mpmb'@'localhost';"
+pnpm test:db
 ```
 
-`lager.test.ts` drives the Lager (M16) the same way, in a third empty database, `TEST_LAGER_DB_NAME`:
-
-```sh
-mariadb -e "CREATE DATABASE mpmb_lager_test; GRANT ALL ON mpmb_lager_test.* TO 'mpmb'@'localhost';"
-TEST_DB_HOST=localhost TEST_DB_NAME=mpmb_test TEST_LAGER_DB_NAME=mpmb_lager_test TEST_DB_USER=mpmb \
-  TEST_DB_PASSWORD=mpmb-test pnpm test server
-```
-
-`test/sync-real.test.ts` runs the app's sync (`src/sync/`) against this service on the same database server, so
-the two can't drift apart while each passes its own tests against a stand-in. It needs a second empty database in
-`TEST_APP_DB_NAME`, because test files run side by side and each wipes its tables:
-
-```sh
-mariadb -e "CREATE DATABASE mpmb_app_test; GRANT ALL ON mpmb_app_test.* TO 'mpmb'@'localhost';"
-TEST_DB_HOST=localhost TEST_DB_NAME=mpmb_test TEST_APP_DB_NAME=mpmb_app_test TEST_DB_USER=mpmb \
-  TEST_DB_PASSWORD=mpmb-test pnpm test server test/sync-real
-```
+The Lager's ops, its shape and its limits are written once, in `src/lager/protocol.ts`, which both
+`server/lager.ts` and the app's `src/lager/lager.ts` import.
 
 ## Why it's built this way
 

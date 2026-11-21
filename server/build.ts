@@ -2,6 +2,7 @@
 // with its libraries inside, so the webspace needs no npm install and Passenger's require() loads it on any Node.
 // Next to it, dist/LICENSES.txt holds the licence of every library that went into the bundle (MIT and Apache-2.0,
 // both fine with the GPL): both ask that their notice travels with every copy.
+import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +27,22 @@ function licenceOf(folder: string): string {
   return file ? readFileSync(join(folder, file), 'utf8').trim() : '(no licence file in the package)';
 }
 
+/** Git's answer, or '' without git (a downloaded zip of the source). */
+function git(...args: string[]): string {
+  try {
+    return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch {
+    return '';
+  }
+}
+
+// The commit /health and /admin name (server/build-info.ts). A bundle built from changed files isn't that commit,
+// so it says so: "-modified" (tracked files only; untracked ones are never part of the service).
+const head = git('rev-parse', 'HEAD');
+const modified = head && git('status', '--porcelain', '--untracked-files=no') ? '-modified' : '';
+const commit = head + modified;
+const built = new Date().toISOString();
+
 const result = await build({
   entryPoints: [join(here, 'main.ts')],
   outfile: join(here, 'dist/app.cjs'),
@@ -37,6 +54,7 @@ const result = await build({
   legalComments: 'eof',
   metafile: true,
   logLevel: 'info',
+  define: { __SYNC_COMMIT__: JSON.stringify(commit), __SYNC_BUILT__: JSON.stringify(built) },
 });
 
 const folders = [...new Set(Object.keys(result.metafile.inputs).map(packageOf))].filter((f): f is string => !!f);
@@ -52,3 +70,4 @@ const header =
   'Libraries bundled into app.cjs, MPMB Web sync service (GPL-3.0-or-later, source: github.com/Remph/mpmb-web)';
 writeFileSync(join(here, 'dist/LICENSES.txt'), `${header}\n\n${notices.join('\n\n-----\n\n')}\n`);
 console.log(`dist/LICENSES.txt: ${folders.length} libraries`);
+console.log(`Built from ${commit || 'an unknown commit'} at ${built}: check that /health names it after the upload.`);

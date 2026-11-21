@@ -18,10 +18,18 @@ describe('health', () => {
       service: 'mpmb-web-sync',
       runner: 'plain',
       uptime: ROUNDED,
+      // Outside a bundle nothing is written in (server/build-info.ts).
+      commit: '',
+      built: '',
       database: 'not configured',
       time: NOW.toISOString(),
     });
     expect(health({}, UPTIME, NOW, 'connected').database).toBe('connected');
+  });
+
+  it('names the build that runs', () => {
+    const build = { commit: 'a'.repeat(40), built: '2026-11-21T10:00:00.000Z' };
+    expect(health({}, UPTIME, NOW, 'connected', undefined, undefined, build)).toMatchObject(build);
   });
 
   it('names why the database is unreachable by its code only', () => {
@@ -106,6 +114,18 @@ describe('the admin page', () => {
     expect(langOf('en-GB,de;q=0.5')).toBe('en');
     expect(langOf(undefined)).toBe('en');
     expect(adminPage('de')).toContain('Spieler hinzufügen');
+  });
+
+  it('names the build that runs, linked to its source unless it was built from changed files', () => {
+    const commit = '0123456789abcdef0123456789abcdef01234567';
+    const built = '2026-11-21T10:00:00.000Z';
+    const page = adminPage('en', {}, { commit, built });
+    expect(page).toContain(`<a href="https://github.com/Remph/mpmb-web/tree/${commit}">0123456</a>`);
+    expect(page).toContain('21/11/2026, 10:00:00 UTC');
+    const changed = adminPage('de', {}, { commit: `${commit}-modified`, built });
+    expect(changed).toContain('Stand des Dienstes: 0123456-modified');
+    expect(changed).not.toContain('<a href');
+    expect(adminPage('en', {}, { commit: '', built: '' })).toContain('Service build: unknown');
   });
 
   it('shows names as text, never as markup', () => {
