@@ -12,9 +12,14 @@ const ISOLATION_HEADERS = {
   'Cross-Origin-Embedder-Policy': 'require-corp',
 };
 
+/** Where the live app is; the live policy names it as the only place scripts come from. */
+const LIVE_FOLDER = 'https://remph.de/mpmb/';
+
 /**
  * The live site's Content Security Policy, read from public/.htaccess so `pnpm preview` tests the same
- * one. Not in `pnpm dev`: Vite's dev server needs more (its own live-reload connection).
+ * one. Not in `pnpm dev`: Vite's dev server needs more (its own live-reload connection). `pnpm preview`
+ * runs on localhost, where the live folder's address would block every script: there it reads 'self'
+ * (the preview serves nothing but the app). The deploy checks the live answer against the file itself.
  */
 function sitePolicy(): string {
   const htaccess = readFileSync(new URL('./public/.htaccess', import.meta.url), 'utf8');
@@ -22,7 +27,7 @@ function sitePolicy(): string {
   // it takes `a; b`. Try it: https://regex101.com/?regex=Content-Security-Policy%20%22(%5B%5E%22%5D%2B)%22&testString=Header%20always%20set%20Content-Security-Policy%20%22default-src%20%27self%27%22
   const policy = /Content-Security-Policy "([^"]+)"/.exec(htaccess)?.[1];
   if (!policy) throw new Error('public/.htaccess has no Content-Security-Policy header');
-  return policy;
+  return policy.replaceAll(LIVE_FOLDER, "'self'");
 }
 
 // The commit the build comes from, shown and linked on the start page (src/version.ts).

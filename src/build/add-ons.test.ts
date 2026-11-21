@@ -29,11 +29,11 @@ describe('what a script adds', () => {
     const text = `
       ClassList["alchemist"] = { name: "Alchemist" };
       AddSubClass("alchemist", "mixer", {});
-      AddSubClass('paladin', 'oath of zeal', {});
+      AddSubClass('paladin', 'oath of brine', {});
       RaceList["sea folk"] = {}; RaceList.skyfolk={}; RaceList["sea folk"].trait = "x";
       SpellsList["test spark"] = {};
       if (RaceList["sea folk"] == undefined) {}
-      MagicItemsList["lantern"] = {};`;
+      MagicItemsList["test lamp"] = {};`;
     expect(scriptAdds(text)).toEqual({ classes: 1, subclasses: 2, species: 2, spells: 1, items: 1 });
   });
 

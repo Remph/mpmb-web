@@ -31,6 +31,10 @@ function workerLikeScope(): Record<string, unknown> {
     get locks() {
       return {};
     },
+    // Firefox only: the site's service worker registrations.
+    get serviceWorker() {
+      return { getRegistrations: () => Promise.resolve([]) };
+    },
     get userAgent() {
       return 'test';
     },
@@ -48,7 +52,7 @@ describe('lockDown', () => {
     expect('fonts' in scope).toBe(false);
   });
 
-  test('removes the file system and the locks from navigator, keeping the rest', () => {
+  test('removes the file system, the locks and the service workers from navigator, keeping the rest', () => {
     const scope = workerLikeScope();
     expect(lockDown(scope)).toEqual([]);
     const navigator = scope.navigator as Record<string, unknown>;

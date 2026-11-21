@@ -173,6 +173,9 @@
 
 <Modal title={t.addOnsTitle} onescape={onclose} closeLabel={t.close} wide>
   <p class="intro">{t.addOnsIntro}</p>
+  <!-- What a script can do, said once where scripts come in (security audit 2026-11-20, finding 08): inside the
+       sandbox it can't read other characters or send anything, but it can change this one and show pop-ups. -->
+  <p class="intro">{t.addOnsTrust}</p>
 
   {#if !loaded}
     <p class="muted">{t.addOnsReading}</p>

@@ -1,0 +1,4 @@
+# pnpm's settings for this project (no workspace packages: the app is the only one).
+# A version published less than a day ago is not installed, not even through a lockfile update: most malicious
+# releases are found and pulled within hours (security audit 2026-11-20, finding 09). In minutes.
+minimumReleaseAge: 1440

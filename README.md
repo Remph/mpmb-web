@@ -94,9 +94,16 @@ How to take a new upstream version: `vendor/README.md`, "Updating".
 
 The live app is at <https://remph.de/mpmb/>. Every push to `main` (a merged pull request) runs
 `.github/workflows/deploy.yml`: install, unit tests, database tests (a MariaDB container), type check, browser tests,
-build, then `scripts/deploy.sh` uploads `dist/` into that folder over FTP with TLS. The folder then holds this build
-and the previous one; characters are not on the server (they live in each player's browser), so a deploy never
-touches them.
+build, then `scripts/deploy.sh` uploads `dist/` into that folder over FTP with TLS. The upload runs in a job of its
+own, the only one with the FTP login: it gets just the built `dist/` and runs no dependency code. The folder then
+holds this build and the previous one; characters are not on the server (they live in each player's browser), so a
+deploy never touches them.
+
+- Last, the deploy checks that the live page and one of its scripts arrive with the Content Security Policy and the
+  isolation headers exactly as `public/.htaccess` sets them (`tools/live-headers.ts`; by hand: `node
+tools/live-headers.ts` after `pnpm build`). Red there means the upload went through but the server doesn't apply
+  `.htaccess` as before: the app may be unprotected (no CSP) or broken (no isolation, no pop-ups). Look at Plesk's
+  Apache and nginx settings for the domain (for example "serve static files directly by nginx") first.
 
 - The folder needs Apache with `mod_headers`: `public/.htaccess` sends the two cross-origin isolation
   headers the pop-ups depend on, keeps `index.html` fresh and caches the hashed build files.

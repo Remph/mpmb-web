@@ -5,10 +5,10 @@
 //
 // The service never looks inside a character: `meta` (what the character list shows) and `data` (the sheet) are
 // the app's business. All it checks is their size.
-import { checkTries, clearFailures, countFailure } from './attempts.ts';
+import { clearTries, takeTry, triesKey } from './attempts.ts';
 import { codeMatches, hashToken, newToken, normalCode } from './codes.ts';
 import type { Db, Param } from './db.ts';
-import { BAD_REQUEST, CONFLICT, isRecord, LOCKED, NOT_FOUND, Refusal, UNAUTHORIZED } from './http.ts';
+import { BAD_REQUEST, CONFLICT, FORBIDDEN, isRecord, LOCKED, NOT_FOUND, Refusal, UNAUTHORIZED } from './http.ts';
 
 /** A device holds a character this long after its last renewal; the app renews well before (every 45 s or so). */
 export const LEASE_MS = 120_000;
@@ -18,6 +18,15 @@ const SEEN_EVERY_MS = 60_000;
 export const META_LIMIT = 262_144;
 export const NAME_MAX = 80;
 const ID_MAX = 64;
+
+/**
+ * What one player may keep at the service, so a code that got out (or a bug in the app) can't fill the database's
+ * quota and stop sync and the Lager for everyone (security audit 2026-11-20, finding 10). Far above what the group
+ * uses (a handful of characters and devices each, 2026-11-21). `characters`: ones not deleted; `rows`: with the
+ * marks deleted ones leave (each keeps its list entry), so deleting and adding again can't grow without end.
+ * Over a cap the service answers 403 with `max`, and the app says so (src/sync/sync.svelte.ts).
+ */
+export const CAPS = { characters: 100, rows: 1000, devices: 30 };
 
 export interface Device {
   id: number;
@@ -56,8 +65,9 @@ export async function login(
   body: Record<string, unknown>,
   address: string,
 ): Promise<{ token: string; player: string; device: number }> {
-  const key = `login:${address}`;
-  await checkTries(db, key, now);
+  const key = triesKey('login', address);
+  // Counted before the check, forgotten again when the code was right (attempts.ts).
+  await takeTry(db, key, now);
   const code = normalCode(typeof body.code === 'string' ? body.code : '');
   const players = code
     ? await db.rows<{ id: number; name: string; code_hash: string }>('SELECT id, name, code_hash FROM players')
@@ -65,11 +75,10 @@ export async function login(
   // A handful of players, so trying each hash is quick enough (about 50 ms each), and only once per device.
   const matches = await Promise.all(players.map((player) => codeMatches(code ?? '', player.code_hash)));
   const player = players.find((_, index) => matches[index]);
-  if (!player) {
-    await countFailure(db, key, now);
-    throw new Refusal(UNAUTHORIZED, 'wrong code');
-  }
-  await clearFailures(db, key);
+  if (!player) throw new Refusal(UNAUTHORIZED, 'wrong code');
+  await clearTries(db, key);
+  const [devices] = await db.rows<{ n: number }>('SELECT COUNT(*) AS n FROM devices WHERE player_id = ?', [player.id]);
+  if (Number(devices?.n) >= CAPS.devices) throw new Refusal(FORBIDDEN, 'too many devices', { max: CAPS.devices });
   const token = newToken();
   const { insertId } = await db.change(
     'INSERT INTO devices (player_id, token_hash, name, created, last_seen) VALUES (?, ?, ?, ?, ?)',
@@ -209,7 +218,26 @@ export async function saveCharacter(
   if (!isVersion(version) || !isRecord(meta) || typeof data !== 'string') throw new Refusal(BAD_REQUEST, 'bad body');
   const metaText = JSON.stringify(meta);
   if (metaText.length > META_LIMIT) throw new Refusal(BAD_REQUEST, 'meta too large');
+  await checkCaps(db, device, id, version);
   return write(db, device, id, now, version, { deleted: 0, meta: metaText, data });
+}
+
+/**
+ * Refuses a save that would take the player over CAPS: one more character that isn't deleted (a new one, or one
+ * brought back), or a new row past `rows`. Saving a character that is already there and not deleted always works.
+ * Two new characters saved at the same moment can both pass at the cap and end one over it; a cap, not a count.
+ */
+async function checkCaps(db: Db, device: Device, id: string, from: number): Promise<void> {
+  // SUM of a comparison comes back as a DECIMAL, which mysql2 hands over as a string: hence Number().
+  const [row] = await db.rows<{ live: number | string | null; total: number | string }>(
+    'SELECT SUM(deleted = 0 AND id <> ?) AS live, COUNT(*) AS total FROM characters WHERE player_id = ?',
+    [id, device.playerId],
+  );
+  const live = Number(row?.live ?? 0);
+  const total = Number(row?.total ?? 0);
+  if (live >= CAPS.characters || (from === 0 && total >= CAPS.rows)) {
+    throw new Refusal(FORBIDDEN, 'too many characters', { max: CAPS.characters });
+  }
 }
 
 /** DELETE /characters/:id {version}: marks the character deleted (the row stays, so other devices learn of it). */

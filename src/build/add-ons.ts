@@ -64,10 +64,10 @@ const LISTS: [AddKind, string[]][] = [
 
 /**
  * The regex built below, for one list name. An entry being defined: `RaceList["sea folk"] =`, `RaceList.seafolk=` (minified files), or a call
- * `AddSubClass("paladin", "oath of zeal", {`. The key is what's counted, so a script that sets an entry
+ * `AddSubClass("paladin", "oath of brine", {`. The key is what's counted, so a script that sets an entry
  * twice counts it once. Entries built in a loop or under a variable name aren't seen, so the counts are
  * what the script plainly defines, which is all the window claims.
- * Try it: https://regex101.com/?regex=%5Cb(RaceList%7CAddSubClass)(%3F%3A%5Cs*%5B%5B(%5D%5Cs*(%5B%22%27%5D)(%5B%5E%22%27%5D%2B)%5C2(%3F%3A%5Cs*%5C%5D%5Cs*%3D(%3F!%3D)%7C%5Cs*%2C%5Cs*(%5B%22%27%5D)(%5B%5E%22%27%5D%2B)%5C5)%7C%5C.(%5Cw%2B)%5Cs*%3D(%3F!%3D))&testString=RaceList%5B%22sea%20folk%22%5D%20%3D%20%7B%7D%3B%20RaceList.elf%3D%7B%7D%3B%20AddSubClass(%22paladin%22%2C%20%22zeal%22%2C%20%7B%7D)
+ * Try it: https://regex101.com/?regex=%5Cb(RaceList%7CAddSubClass)(%3F%3A%5Cs*%5B%5B(%5D%5Cs*(%5B%22%27%5D)(%5B%5E%22%27%5D%2B)%5C2(%3F%3A%5Cs*%5C%5D%5Cs*%3D(%3F!%3D)%7C%5Cs*%2C%5Cs*(%5B%22%27%5D)(%5B%5E%22%27%5D%2B)%5C5)%7C%5C.(%5Cw%2B)%5Cs*%3D(%3F!%3D))&testString=RaceList%5B%22sea%20folk%22%5D%20%3D%20%7B%7D%3B%20RaceList.elf%3D%7B%7D%3B%20AddSubClass(%22paladin%22%2C%20%22brine%22%2C%20%7B%7D)
  */
 function definitions(text: string, name: string): Set<string> {
   const re = new RegExp(

@@ -17,8 +17,13 @@
   # because MPMB's scripts run through eval, as in Acrobat. Svelte sets style attributes, hence
   # 'unsafe-inline' for styles only. The page also talks to the sync service (M15, src/sync/api.ts), on
   # its own subdomain; the worker can't, since lockdown.ts takes fetch away before a script runs.
-  # vite.config.ts reads this line, so `pnpm preview` sends it too.
-  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' https://sync.remph.de; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
+  # script-src names the app's own folder rather than 'self' (all of remph.de): no script from another
+  # part of the site can be loaded by the page or by an add-on script. form-action: the app posts no
+  # forms. (Security audit 2026-11-20, finding 11. HSTS and nosniff come from remph.de's root
+  # .htaccess for the whole domain; this file doesn't repeat them.)
+  # vite.config.ts reads this line, so `pnpm preview` sends it too (with 'self' for the folder, since
+  # it runs on localhost); the deploy checks that remph.de sends exactly this one.
+  Header always set Content-Security-Policy "default-src 'self'; script-src https://remph.de/mpmb/ 'unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' https://sync.remph.de; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'self'"
 
   # The page itself is checked on every visit, so a new version shows up at once (so are the service
   # worker, which stores the app for offline use, the web app manifest, and look.js, which sets the

@@ -88,6 +88,24 @@ built from files that differed from that commit; upload only bundles built from 
 
 No npm install: `pnpm build:server` bundles the service with its two libraries into `dist/app.cjs`.
 
+## Allow only the service's address at the database
+
+The database runs on netcup's MySQL server. While its user may log in from "any host", the password is all that
+keeps the internet out (security audit 2026-11-20, finding 03). Limit it to the service's address, with a bundle
+from the security fix round or later (older ones don't show `connectedAs`):
+
+1. On the subdomain's Node.js page, Environment: add `DB_DEBUG` with the value `1`, OK, Restart App.
+2. Open `https://sync.remph.de/health`. With `database: connected` it shows `databaseDebug.connectedAs`, like
+   `k123456_mpmb@203.0.113.7`: the part after the `@` is the address the database sees the service come from.
+3. In Plesk, Databases, the database's user (`DB_USER`): under the hosts allowed to connect, replace "any host"
+   (`%`) with that address. Keep the user's password as it is.
+4. Back on the Node.js page: delete `DB_DEBUG`, OK, Restart App. `/health` must show `database: connected` and no
+   `databaseDebug`.
+
+If `/health` then says `unreachable` with `ER_ACCESS_DENIED_ERROR`, the service came from another address than
+step 2 showed (netcup moved the webspace, say): set `DB_DEBUG=1` again, and MySQL's message on `/health` names the
+address it saw; allow that one instead. A move of the webspace needs this again.
+
 ## Try it locally
 
 ```sh

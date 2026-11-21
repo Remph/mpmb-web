@@ -4,7 +4,7 @@
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
-  import type { Texts } from '../../i18n.ts';
+  import { fill, type Texts } from '../../i18n.ts';
   import Modal from '../../popups/Modal.svelte';
   import type { Session } from '../../session.svelte.ts';
   import { guessDeviceName } from '../../sync/account.ts';
@@ -42,6 +42,7 @@
     const result = await session.connectSync(code, name.trim() || guessDeviceName('', 0));
     busy = false;
     if (result === 'ok') onclose();
+    else if (typeof result === 'object') problem = fill(t.syncTooManyDevices, { max: result.full });
     else problem = { wrong: t.syncWrongCode, wait: t.syncWait, offline: t.syncNoAnswer }[result];
   }
 </script>

@@ -13,6 +13,8 @@ const TIMEOUT_MS = 20_000;
 
 /** The service's answers the app tells apart. */
 export const SIGNED_OUT = 401;
+/** A cap per player (server/sync.ts CAPS): too many characters or devices; the body's `max` says how many. */
+export const CAP_REACHED = 403;
 export const NOT_FOUND = 404;
 export const NEWER_VERSION = 409;
 export const OPEN_ELSEWHERE = 423;
