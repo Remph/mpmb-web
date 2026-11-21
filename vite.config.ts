@@ -12,8 +12,8 @@ const ISOLATION_HEADERS = {
   'Cross-Origin-Embedder-Policy': 'require-corp',
 };
 
-/** Where the live app is; the live policy names it as the only place scripts come from. */
-const LIVE_FOLDER = 'https://remph.de/mpmb/';
+/** Where the live app is, under both host names; the live policy names it as the only place scripts come from. */
+const LIVE_FOLDER = 'https://remph.de/mpmb/ https://www.remph.de/mpmb/';
 
 /**
  * The live site's Content Security Policy, read from public/.htaccess so `pnpm preview` tests the same

@@ -41,7 +41,9 @@ describe('the policy in public/.htaccess (security audit 2026-11-20, finding 11)
       .find((part) => part.startsWith(`${name} `));
 
   test('loads scripts only from the app’s own folder, and allows no form posts', () => {
-    expect(directive('script-src')).toBe("script-src https://remph.de/mpmb/ 'unsafe-eval' blob:");
+    expect(directive('script-src')).toBe(
+      "script-src https://remph.de/mpmb/ https://www.remph.de/mpmb/ 'unsafe-eval' blob:",
+    );
     expect(directive('form-action')).toBe("form-action 'none'");
   });
 
